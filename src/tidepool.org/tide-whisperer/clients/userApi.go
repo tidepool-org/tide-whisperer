@@ -7,8 +7,9 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"tidepool.org/tide-whisperer/errors"
+	"tidepool.org/common/errors"
 	"time"
+	"net/url"
 )
 
 // UserApiClient manages the local data for a client. A client is intended to be shared among multiple
@@ -94,7 +95,11 @@ func (client *UserApiClient) Close() {
 // secret that was passed in on the creation of the client object. If
 // successful, it stores the returned token in ServerToken.
 func (client *UserApiClient) serverLogin() error {
-	host := client.hostGetter.HostGet()
+	host := client.getHost()
+	if host == nil {
+		return errors.New("No known user-api hosts.")
+	}
+
 	host.Path += "/serverlogin"
 
 	req, _ := http.NewRequest("POST", host.String(), nil)
@@ -126,7 +131,11 @@ func extractUserData(r io.Reader) (*UserData, error) {
 // Login logs in a user with a username and password. Returns a UserData object if successful
 // and also stores the returned login token into ClientToken.
 func (client *UserApiClient) Login(username, password string) (*UserData, string, error) {
-	host := client.hostGetter.HostGet()
+	host := client.getHost()
+	if host == nil {
+		return nil, "", errors.New("No known user-api hosts.")
+	}
+
 	host.Path += "/login"
 
 	req, _ := http.NewRequest("POST", host.String(), nil)
@@ -156,7 +165,11 @@ func (client *UserApiClient) Login(username, password string) (*UserData, string
 // CheckToken tests a token with the user-api to make sure it's current;
 // if so, it returns the data encoded in the token.
 func (client *UserApiClient) CheckToken(token string) *TokenData {
-	host := client.hostGetter.HostGet()
+	host := client.getHost()
+	if host == nil {
+		return nil
+	}
+
 	host.Path += "/token/" + token
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
@@ -186,4 +199,12 @@ func (client *UserApiClient) CheckToken(token string) *TokenData {
 
 func (client *UserApiClient) TokenProvide() string {
 	return client.serverToken
+}
+
+func (client *UserApiClient) getHost() *url.URL {
+	if hostArr := client.hostGetter.HostGet(); len(hostArr) > 0 {
+		return &hostArr[0]
+	} else {
+		return nil
+	}
 }

@@ -50,7 +50,7 @@ type PrivatePair struct {
 }
 
 func (client *seagullClient) GetPrivatePair(userID, hashName, token string) *PrivatePair {
-	host := client.hostGetter.HostGet()
+	host := client.hostGetter.HostGet()[0]
 	host.Path += fmt.Sprintf("%s/private/%s", userID, hashName)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)

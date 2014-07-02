@@ -2,53 +2,45 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/gorilla/pat"
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
 	"log"
 	"net/http"
-	"net/url"
 	"tidepool.org/tide-whisperer/clients"
+	"tidepool.org/tide-whisperer/clients/hakken"
 	"time"
 )
 
 func main() {
 	httpClient := http.DefaultClient
 
-	userApiHost, err := url.Parse("http://localhost:9107")
+	hakkenClient := hakken.NewHakkenBuilder().
+		WithHost("localhost:8000").
+		Build()
+
+	err := hakkenClient.Start()
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer hakkenClient.Close()
 
 	userAPI := clients.NewApiClient(
-		clients.HostGetterFunc(func() url.URL { return *userApiHost }),
+		hakkenClient.Watch("user-api-local").Random(),
 		clients.UserApiConfig(
 			"tide-whisperer",
 			"This needs to be the same secret everywhere. YaHut75NsK1f9UKUXuWqxNN0RUwHFBCy",
 			1*time.Hour),
 		httpClient)
-	err = userAPI.Start()
-	if err != nil {
-		log.Fatal(err)
-	}
 
-	seagullHost, err := url.Parse("http://localhost:9120")
-	if err != nil {
-		log.Fatal(err)
-	}
 	seagullClient := clients.NewSeagullClientBuilder().
-		WithHostGetter(clients.HostGetterFunc(func() url.URL { return *seagullHost })).
+		WithHostGetter(hakkenClient.Watch("seagull-local").Random()).
 		WithHttpClient(httpClient).
 		Build()
 
-	gatekeeperHost, err := url.Parse("http://localhost:9123")
-	if err != nil {
-		log.Fatal(err)
-	}
 	gatekeeperClient := clients.NewGatekeeperClientBuilder().
-		WithHostGetter(clients.HostGetterFunc(func() url.URL { return *gatekeeperHost })).
+		WithHostGetter(hakkenClient.Watch("gatekeeper-local").Random()).
 		WithHttpClient(httpClient).
 		WithTokenProvider(userAPI).
 		Build()
@@ -65,6 +57,11 @@ func main() {
 		}
 
 		return !(perms["root"] == nil && perms["view"] == nil)
+	}
+
+	err = userAPI.Start()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	session, err := mgo.Dial("mongodb://localhost/streams")
@@ -93,27 +90,31 @@ func main() {
 
 		groupId := pair.ID
 
-		enc := json.NewEncoder(res)
-
 		iter := session.DB("").C("deviceData").
 			Find(bson.M{"groupId": groupId}).
-			Sort("-deviceTime").
+			Sort("deviceTime").
 			Iter()
 
 		first := false
-		res.Write([]byte("["))
 		var result map[string]interface{}
 		for iter.Next(&result) {
 			if !first {
+				res.Header().Add("content-type", "application/json")
+				res.Write([]byte("["))
 				first = true
 			} else {
-				res.Write([]byte(","))
+				res.Write([]byte(",\n"))
 			}
-			fmt.Println(result)
-			enc.Encode(result)
+			delete(result, "groupId")
+			bytes, err := json.Marshal(result)
+			if err != nil {
+				log.Fatal(err)
+			}
+			res.Write(bytes)
 		}
 		res.Write([]byte("]"))
 		if err := iter.Close(); err != nil {
+			log.Println("HUH?")
 			log.Fatal(err)
 		}
 	})))

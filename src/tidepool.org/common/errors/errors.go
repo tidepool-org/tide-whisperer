@@ -18,6 +18,10 @@ func New(message string) error {
 	return errors.New(message)
 }
 
+func Newf(message string, args ...interface{}) error {
+	return errors.New(fmt.Sprintf(message, args...))
+}
+
 func Wrap(e error, m string) error {
 	return &WrappedError{error: e, m: m}
 }
