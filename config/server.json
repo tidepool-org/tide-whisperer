@@ -1,0 +1,7 @@
+{
+  "service": {
+    "service": "pool-whisperer-local",
+    "protocol": "http",
+    "host": "localhost:17071"
+  }
+}

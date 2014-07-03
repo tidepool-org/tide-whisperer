@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"tidepool.org/common/jepson"
+	"strings"
 )
 
 type ServiceListing struct {
@@ -53,6 +54,10 @@ func (sl *ServiceListing) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(objs)
+}
+
+func (sl *ServiceListing) getPort() string {
+	return sl.Host[strings.Index(sl.Host, ":"):]
 }
 
 func (sl *ServiceListing) getProperty(property string) string {

@@ -23,3 +23,9 @@ func LoadConfig(filenames []string, obj interface{}) error {
 	}
 	return nil
 }
+
+type ServiceConfig struct {
+	Addr string `json:"address"`
+	Service string `json:"service"`
+
+}

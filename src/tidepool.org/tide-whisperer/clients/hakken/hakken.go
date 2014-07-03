@@ -124,7 +124,7 @@ func (client *HakkenClient) Watch(service string) *disc.Watch {
 	}
 
 	go func() {
-		timer := time.After(time.Duration(client.config.HeartbeatInterval) * time.Millisecond)
+		timer := time.After(time.Duration(client.config.HeartbeatInterval))
 		for {
 			select {
 			case <-client.stopChan:
@@ -140,10 +140,28 @@ func (client *HakkenClient) Watch(service string) *disc.Watch {
 					}
 				}
 
-				timer = time.After(time.Duration(client.config.HeartbeatInterval) * time.Millisecond)
+				timer = time.After(time.Duration(client.config.HeartbeatInterval))
 			}
 		}
 	}()
 
 	return retVal
+}
+
+func (client *HakkenClient) Publish(sl *disc.ServiceListing) {
+	log.Printf("Publishing service[%s]", sl.Service)
+	 go func() {
+		 timer := time.After(0)
+		 for {
+			 select {
+			 case <-client.stopChan:
+				 break
+			 case <-timer:
+				 for _, coo := range *client.cooMan.getClients() {
+					 coo.listingHearbeat(sl)
+				 }
+				 timer = time.After(time.Duration(client.config.HeartbeatInterval))
+			 }
+		 }
+	 }()
 }

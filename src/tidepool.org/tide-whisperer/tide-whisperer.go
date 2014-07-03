@@ -10,11 +10,16 @@ import (
 	"net/http"
 	"tidepool.org/tide-whisperer/clients"
 	"tidepool.org/tide-whisperer/clients/hakken"
+	"tidepool.org/tide-whisperer/clients/disc"
 	"tidepool.org/common"
+	"os/signal"
+	"syscall"
+	"os"
 )
 
 type Config struct {
 	clients.Config
+	Service disc.ServiceListing `json:"service"`
 }
 
 func main() {
@@ -124,10 +129,28 @@ func main() {
 		}
 	})))
 
-	server := &http.Server{
+	done := make(chan bool)
+	server := common.NewServer(&http.Server{
 		Addr:    ":17071",
 		Handler: router,
-	}
-	log.Print("Starting server at ", server.Addr)
-	log.Fatal(server.ListenAndServe())
+	})
+	server.ListenAndServe()
+	log.Printf("%+v", config.Service)
+	hakkenClient.Publish(&config.Service)
+
+	signals := make(chan os.Signal, 40)
+	signal.Notify(signals)
+	go func(){
+		for {
+			sig := <-signals;
+			log.Printf("Got signal [%s]", sig)
+
+			if sig == syscall.SIGINT {
+				server.Close()
+				done <- true
+			}
+		}
+	}()
+
+	<-done
 }

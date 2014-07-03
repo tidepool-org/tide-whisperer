@@ -3,10 +3,11 @@ package hakken
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"tidepool.org/common/errors"
 	"tidepool.org/tide-whisperer/clients/disc"
+	"log"
+	"bytes"
 )
 
 type coordinatorClient struct {
@@ -51,12 +52,15 @@ func (client *coordinatorClient) getListings(service string) ([]disc.ServiceList
 	return retVal, nil
 }
 
-func (client *coordinatorClient) listingHearbeat(sl disc.ServiceListing) error {
+func (client *coordinatorClient) listingHearbeat(sl *disc.ServiceListing) error {
 	url := fmt.Sprintf("%s/v1/listings?heartbeat=true", client.coordinator.URL.String())
 
-	out, in := io.Pipe()
-	json.NewEncoder(in).Encode(sl)
-	res, err := http.Post(url, "application/json", out)
+	marshaled, err := json.Marshal(sl)
+	if err != nil {
+		return err
+	}
+
+	res, err := http.Post(url, "application/json", bytes.NewReader(marshaled))
 	if err != nil {
 		return errors.Wrapf(err, "Problem when updating heartbeat for service[%s] at [%s].", sl.Service, url)
 	}

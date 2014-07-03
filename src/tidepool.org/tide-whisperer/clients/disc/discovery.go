@@ -5,4 +5,5 @@ package disc
 
 type Discovery interface {
 	Watch(service string) *Watch
+	Publish(sl *ServiceListing)
 }
