@@ -5,16 +5,18 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"tidepool.org/tide-whisperer/clients/disc"
+	"net/url"
 )
 
 type seagullClient struct {
 	httpClient *http.Client // store a reference to the http client so we can reuse it
-	hostGetter HostGetter   // The getter that provides the host to talk to for the client
+	hostGetter disc.HostGetter   // The getter that provides the host to talk to for the client
 }
 
 type seagullClientBuilder struct {
 	httpClient *http.Client
-	hostGetter HostGetter
+	hostGetter disc.HostGetter
 }
 
 func NewSeagullClientBuilder() *seagullClientBuilder {
@@ -26,7 +28,7 @@ func (b *seagullClientBuilder) WithHttpClient(httpClient *http.Client) *seagullC
 	return b
 }
 
-func (b *seagullClientBuilder) WithHostGetter(hostGetter HostGetter) *seagullClientBuilder {
+func (b *seagullClientBuilder) WithHostGetter(hostGetter disc.HostGetter) *seagullClientBuilder {
 	b.hostGetter = hostGetter
 	return b
 }
@@ -50,7 +52,10 @@ type PrivatePair struct {
 }
 
 func (client *seagullClient) GetPrivatePair(userID, hashName, token string) *PrivatePair {
-	host := client.hostGetter.HostGet()[0]
+	host := client.getHost()
+	if host == nil {
+		return nil
+	}
 	host.Path += fmt.Sprintf("%s/private/%s", userID, hashName)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
@@ -75,4 +80,14 @@ func (client *seagullClient) GetPrivatePair(userID, hashName, token string) *Pri
 		return nil
 	}
 	return &retVal
+}
+
+func (client *seagullClient) getHost() *url.URL {
+	if hostArr := client.hostGetter.HostGet(); len(hostArr) > 0 {
+		cpy := new(url.URL)
+		*cpy = hostArr[0]
+		return cpy
+	} else {
+		return nil
+	}
 }

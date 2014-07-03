@@ -10,13 +10,15 @@ import (
 	"tidepool.org/common/errors"
 	"time"
 	"net/url"
+	"tidepool.org/tide-whisperer/clients/disc"
+	"tidepool.org/common/jepson"
 )
 
 // UserApiClient manages the local data for a client. A client is intended to be shared among multiple
 // goroutines so it's OK to treat it as a singleton (and probably a good idea).
 type UserApiClient struct {
 	httpClient *http.Client         // store a reference to the http client so we can reuse it
-	hostGetter HostGetter           // The getter that provides the host to talk to for the client
+	hostGetter disc.HostGetter           // The getter that provides the host to talk to for the client
 	config     *UserApiClientConfig // Configuration for the client
 
 	serverToken string         // stores the most recently received server token
@@ -24,9 +26,9 @@ type UserApiClient struct {
 }
 
 type UserApiClientConfig struct {
-	name                 string        // The name of this server for use in obtaining a server token
-	secret               string        // The secret used along with the name to obtain a server token
-	tokenRefreshInterval time.Duration // The amount of time between refreshes of the server token
+	Name                 string `json:"name"`       // The name of this server for use in obtaining a server token
+	Secret               string `json:"secret"`       // The secret used along with the name to obtain a server token
+	TokenRefreshInterval jepson.Duration `json:"tokenRefreshInterval"` // The amount of time between refreshes of the server token
 }
 
 // UserData is the data structure returned from a successful Login query.
@@ -43,7 +45,7 @@ type TokenData struct {
 }
 
 // NewApiClient constructs an api client object.
-func NewApiClient(hostGetter HostGetter, config *UserApiClientConfig, httpClient *http.Client) *UserApiClient {
+func NewApiClient(hostGetter disc.HostGetter, config *UserApiClientConfig, httpClient *http.Client) *UserApiClient {
 	return &UserApiClient{
 		hostGetter: hostGetter,
 		config:     config,
@@ -51,11 +53,11 @@ func NewApiClient(hostGetter HostGetter, config *UserApiClientConfig, httpClient
 	}
 }
 
-func UserApiConfig(name, secret string, tokenRefreshInterval time.Duration) *UserApiClientConfig {
+func NewUserApiConfig(name, secret string, tokenRefreshInterval jepson.Duration) *UserApiClientConfig {
 	return &UserApiClientConfig{
-		name:                 name,
-		secret:               secret,
-		tokenRefreshInterval: tokenRefreshInterval,
+		Name:                 name,
+		Secret:               secret,
+		TokenRefreshInterval: tokenRefreshInterval,
 	}
 }
 
@@ -68,7 +70,7 @@ func (client *UserApiClient) Start() error {
 
 	go func() {
 		for {
-			timer := time.After(client.config.tokenRefreshInterval)
+			timer := time.After(time.Duration(client.config.TokenRefreshInterval) * time.Millisecond)
 			select {
 			case twoWay := <-client.closed:
 				twoWay <- true
@@ -103,8 +105,8 @@ func (client *UserApiClient) serverLogin() error {
 	host.Path += "/serverlogin"
 
 	req, _ := http.NewRequest("POST", host.String(), nil)
-	req.Header.Add("x-tidepool-server-name", client.config.name)
-	req.Header.Add("x-tidepool-server-secret", client.config.secret)
+	req.Header.Add("x-tidepool-server-name", client.config.Name)
+	req.Header.Add("x-tidepool-server-secret", client.config.Secret)
 
 	res, err := client.httpClient.Do(req)
 	if err != nil {
@@ -203,7 +205,9 @@ func (client *UserApiClient) TokenProvide() string {
 
 func (client *UserApiClient) getHost() *url.URL {
 	if hostArr := client.hostGetter.HostGet(); len(hostArr) > 0 {
-		return &hostArr[0]
+		cpy := new(url.URL)
+		*cpy = hostArr[0]
+		return cpy
 	} else {
 		return nil
 	}

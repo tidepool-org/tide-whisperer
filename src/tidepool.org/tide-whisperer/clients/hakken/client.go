@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"tidepool.org/common/errors"
+	"tidepool.org/tide-whisperer/clients/disc"
 )
 
 type coordinatorClient struct {
@@ -31,7 +32,7 @@ func (client *coordinatorClient) getCoordinators() ([]Coordinator, error) {
 	return retVal, nil
 }
 
-func (client *coordinatorClient) getListings(service string) ([]ServiceListing, error) {
+func (client *coordinatorClient) getListings(service string) ([]disc.ServiceListing, error) {
 	url := fmt.Sprintf("%s/v1/listings/%s", client.coordinator.URL.String(), service)
 	res, err := http.Get(url)
 	if err != nil {
@@ -43,14 +44,14 @@ func (client *coordinatorClient) getListings(service string) ([]ServiceListing, 
 		return nil, errors.Newf("Unknown response code[%s] from url[%s]", res.StatusCode, url)
 	}
 
-	var retVal []ServiceListing
+	var retVal []disc.ServiceListing
 	if err := json.NewDecoder(res.Body).Decode(&retVal); err != nil {
 		return nil, errors.Wrapf(err, "Error parsing JSON results from url[%s]", url)
 	}
 	return retVal, nil
 }
 
-func (client *coordinatorClient) listingHearbeat(sl ServiceListing) error {
+func (client *coordinatorClient) listingHearbeat(sl disc.ServiceListing) error {
 	url := fmt.Sprintf("%s/v1/listings?heartbeat=true", client.coordinator.URL.String())
 
 	out, in := io.Pipe()

@@ -5,17 +5,20 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"tidepool.org/tide-whisperer/clients/disc"
+	"net/url"
+	"tidepool.org/common/errors"
 )
 
 type gatekeeperClient struct {
 	httpClient    *http.Client  // store a reference to the http client so we can reuse it
-	hostGetter    HostGetter    // The getter that provides the host to talk to for the client
+	hostGetter    disc.HostGetter    // The getter that provides the host to talk to for the client
 	tokenProvider TokenProvider // An object that provides tokens for communicating with gatekeeper
 }
 
 type gatekeeperClientBuilder struct {
 	httpClient    *http.Client  // store a reference to the http client so we can reuse it
-	hostGetter    HostGetter    // The getter that provides the host to talk to for the client
+	hostGetter    disc.HostGetter    // The getter that provides the host to talk to for the client
 	tokenProvider TokenProvider // An object that provides tokens for communicating with gatekeeper
 }
 
@@ -28,7 +31,7 @@ func (b *gatekeeperClientBuilder) WithHttpClient(httpClient *http.Client) *gatek
 	return b
 }
 
-func (b *gatekeeperClientBuilder) WithHostGetter(hostGetter HostGetter) *gatekeeperClientBuilder {
+func (b *gatekeeperClientBuilder) WithHostGetter(hostGetter disc.HostGetter) *gatekeeperClientBuilder {
 	b.hostGetter = hostGetter
 	return b
 }
@@ -58,7 +61,10 @@ func (b *gatekeeperClientBuilder) Build() *gatekeeperClient {
 type Permissions map[string]interface{}
 
 func (client *gatekeeperClient) UserInGroup(userID, groupID string) (map[string]Permissions, error) {
-	host := client.hostGetter.HostGet()[0]
+	host := client.getHost()
+	if host == nil {
+		return nil, errors.New("No known gatekeeper hosts")
+	}
 	host.Path += fmt.Sprintf("private/%s/%s", groupID, userID)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
@@ -84,4 +90,14 @@ func (client *gatekeeperClient) UserInGroup(userID, groupID string) (map[string]
 		return nil, &StatusError{NewStatusf(res.StatusCode, "Unknown response code from service[%s]", req.URL)}
 	}
 
+}
+
+func (client *gatekeeperClient) getHost() *url.URL {
+	if hostArr := client.hostGetter.HostGet(); len(hostArr) > 0 {
+		cpy := new(url.URL)
+		*cpy = hostArr[0]
+		return cpy
+	} else {
+		return nil
+	}
 }

@@ -1,29 +1,31 @@
 package hakken
 
 import (
+	"log"
 	"net/url"
 	"sync"
+	"tidepool.org/tide-whisperer/clients/disc"
 	"time"
-	"log"
+	"tidepool.org/common/jepson"
 )
 
-type hakkenClient struct {
-	config   hakkenClientConfig
+type HakkenClient struct {
+	config   HakkenClientConfig
 	cooMan   coordinatorManager
 	stopChan chan bool
 
 	mut sync.Mutex
 }
 
-type hakkenClientConfig struct {
-	Host              string `json:host`              // Primary host to bootstrap list of coordinators from
-	HeartbeatInterval int64  `json:heartbeatInterval` // Time elapsed between heartbeats and watch polls
-	PollInterval      int64  `json:pollInterval`      // Time elapsed between coordinator gossip polls
-	ResyncInterval    int64  `json:resyncInterval`    // Time elapsed between checks for new coordinators at Host
+type HakkenClientConfig struct {
+	Host              string `json:"host"`              // Primary host to bootstrap list of coordinators from
+	HeartbeatInterval jepson.Duration `json:"heartbeatInterval"` // Time elapsed between heartbeats and watch polls
+	PollInterval      jepson.Duration `json:"pollInterval"`      // Time elapsed between coordinator gossip polls
+	ResyncInterval    jepson.Duration `json:"resyncInterval"`    // Time elapsed between checks for new coordinators at Host
 }
 
 type HakkenClientBuilder struct {
-	config hakkenClientConfig
+	config HakkenClientConfig
 }
 
 func NewHakkenBuilder() *HakkenClientBuilder {
@@ -35,47 +37,54 @@ func (b *HakkenClientBuilder) WithHost(host string) *HakkenClientBuilder {
 	return b
 }
 
-func (b *HakkenClientBuilder) WithHeartbeatInterval(intvl int64) *HakkenClientBuilder {
-	b.config.HeartbeatInterval = intvl
+func (b *HakkenClientBuilder) WithHeartbeatInterval(intvl time.Duration) *HakkenClientBuilder {
+	b.config.HeartbeatInterval = jepson.Duration(intvl)
 	return b
 }
 
-func (b *HakkenClientBuilder) WithPollInterval(intvl int64) *HakkenClientBuilder {
-	b.config.PollInterval = intvl
+func (b *HakkenClientBuilder) WithPollInterval(intvl time.Duration) *HakkenClientBuilder {
+	b.config.PollInterval = jepson.Duration(intvl)
 	return b
 }
 
-func (b *HakkenClientBuilder) WithResyncInterval(intvl int64) *HakkenClientBuilder {
-	b.config.ResyncInterval = intvl
+func (b *HakkenClientBuilder) WithResyncInterval(intvl time.Duration) *HakkenClientBuilder {
+	b.config.ResyncInterval = jepson.Duration(intvl)
 	return b
 }
 
-func (b *HakkenClientBuilder) Build() *hakkenClient {
+func (b *HakkenClientBuilder) WithConfig(config *HakkenClientConfig) *HakkenClientBuilder {
+	return b.WithHost(config.Host).
+		WithHeartbeatInterval(time.Duration(config.HeartbeatInterval)).
+		WithResyncInterval(time.Duration(config.ResyncInterval)).
+		WithPollInterval(time.Duration(config.PollInterval))
+}
+
+func (b *HakkenClientBuilder) Build() *HakkenClient {
 	if b.config.Host == "" {
 		panic("HakkenClientBuilder requires a Host")
 	}
 	if b.config.HeartbeatInterval == 0 {
-		b.config.HeartbeatInterval = 20000
+		b.config.HeartbeatInterval = jepson.Duration(20 * time.Second)
 	}
 	if b.config.PollInterval == 0 {
-		b.config.PollInterval = 60000
+		b.config.PollInterval = jepson.Duration(1 * time.Minute)
 	}
 	if b.config.ResyncInterval == 0 {
 		b.config.ResyncInterval = b.config.PollInterval * 2
 	}
-	return &hakkenClient{
+	return &HakkenClient{
 		config: b.config,
 		cooMan: coordinatorManager{
 			resyncClient:   coordinatorClient{Coordinator{url.URL{Scheme: "http", Host: b.config.Host}}},
-			resyncInterval: time.Duration(b.config.ResyncInterval) * time.Millisecond,
-			pollInterval:   time.Duration(b.config.PollInterval) * time.Millisecond,
+			resyncInterval: time.Duration(b.config.ResyncInterval),
+			pollInterval:   time.Duration(b.config.PollInterval),
 			dropCooChan:    make(chan *coordinatorClient),
 		},
-		stopChan:     make(chan bool),
+		stopChan: make(chan bool),
 	}
 }
 
-func (client *hakkenClient) Start() error {
+func (client *HakkenClient) Start() error {
 	log.Println("Starting hakken")
 	err := client.cooMan.start()
 	if err != nil {
@@ -85,7 +94,7 @@ func (client *hakkenClient) Start() error {
 	return nil
 }
 
-func (client *hakkenClient) Close() error {
+func (client *HakkenClient) Close() error {
 	err := client.cooMan.Close()
 	if err != nil {
 		return err
@@ -95,17 +104,17 @@ func (client *hakkenClient) Close() error {
 	return nil
 }
 
-func (client *hakkenClient) Watch(service string) *watch {
+func (client *HakkenClient) Watch(service string) *disc.Watch {
 	log.Printf("Creating watch for service[%s] with interval[%d]", service, client.config.HeartbeatInterval)
-	slChan := make(chan *payload)
-	retVal := newWatch(slChan)
+	slChan := make(chan *disc.Payload)
+	retVal := disc.NewWatch(slChan)
 
 	cooClient := client.cooMan.getClient()
-	if (cooClient != nil) {
+	if cooClient != nil {
 		listings, err := cooClient.getListings(service)
-		if (err == nil) {
+		if err == nil {
 			done := make(chan bool)
-			slChan <- &payload{listings: listings, done: done}
+			slChan <- disc.NewPayload(listings, done)
 			<-done
 		} else {
 			log.Printf("Error when getting initial listings[%v]", err)
@@ -118,15 +127,15 @@ func (client *hakkenClient) Watch(service string) *watch {
 		timer := time.After(time.Duration(client.config.HeartbeatInterval) * time.Millisecond)
 		for {
 			select {
-			case <- client.stopChan:
+			case <-client.stopChan:
 				close(slChan)
-			case <- timer:
+			case <-timer:
 				cooClient := client.cooMan.getClient()
-				if (cooClient != nil) {
+				if cooClient != nil {
 					listings, err := cooClient.getListings(service)
 					if err == nil {
 						done := make(chan bool)
-						slChan <- &payload{listings: listings, done: done}
+						slChan <- disc.NewPayload(listings, done)
 						<-done
 					}
 				}

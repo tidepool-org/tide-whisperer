@@ -1,4 +1,4 @@
-package hakken
+package disc
 
 import (
 	"encoding/json"

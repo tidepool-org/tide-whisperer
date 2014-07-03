@@ -10,37 +10,42 @@ import (
 	"net/http"
 	"tidepool.org/tide-whisperer/clients"
 	"tidepool.org/tide-whisperer/clients/hakken"
-	"time"
+	"tidepool.org/common"
 )
 
+type Config struct {
+	clients.Config
+}
+
 func main() {
+	var config Config
+	if err := common.LoadConfig([]string{"./config/env.json", "./config/server.json"}, &config); err != nil {
+		log.Fatal("Problem loading config", err)
+	}
+
 	httpClient := http.DefaultClient
 
 	hakkenClient := hakken.NewHakkenBuilder().
-		WithHost("localhost:8000").
+		WithConfig(&config.HakkenConfig).
 		Build()
 
-	err := hakkenClient.Start()
-	if err != nil {
+	if err := hakkenClient.Start(); err != nil {
 		log.Fatal(err)
 	}
 	defer hakkenClient.Close()
 
 	userAPI := clients.NewApiClient(
-		hakkenClient.Watch("user-api-local").Random(),
-		clients.UserApiConfig(
-			"tide-whisperer",
-			"This needs to be the same secret everywhere. YaHut75NsK1f9UKUXuWqxNN0RUwHFBCy",
-			1*time.Hour),
+		config.UserApiConfig.ToHostGetter(hakkenClient),
+		&config.UserApiConfig.UserApiClientConfig,
 		httpClient)
 
 	seagullClient := clients.NewSeagullClientBuilder().
-		WithHostGetter(hakkenClient.Watch("seagull-local").Random()).
+		WithHostGetter(config.SeagullConfig.ToHostGetter(hakkenClient)).
 		WithHttpClient(httpClient).
 		Build()
 
 	gatekeeperClient := clients.NewGatekeeperClientBuilder().
-		WithHostGetter(hakkenClient.Watch("gatekeeper-local").Random()).
+		WithHostGetter(config.GatekeeperConfig.ToHostGetter(hakkenClient)).
 		WithHttpClient(httpClient).
 		WithTokenProvider(userAPI).
 		Build()
@@ -56,11 +61,11 @@ func main() {
 			return false
 		}
 
+		log.Println(perms)
 		return !(perms["root"] == nil && perms["view"] == nil)
 	}
 
-	err = userAPI.Start()
-	if err != nil {
+	if err := userAPI.Start(); err != nil {
 		log.Fatal(err)
 	}
 

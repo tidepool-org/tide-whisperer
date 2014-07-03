@@ -1,8 +1,7 @@
-package hakken
+package disc
 
 import (
 	"sync"
-	"tidepool.org/tide-whisperer/clients"
 	"time"
 	"math/rand"
 	"net/url"
@@ -14,35 +13,39 @@ func init() {
 	random = rand.New(rand.NewSource(time.Now().UnixNano()))
 }
 
-type watch struct {
-	incoming chan *payload
+type Watch struct {
+	incoming chan *Payload
 	listings []ServiceListing
 
 	mut sync.RWMutex
 }
 
-type payload struct {
+type Payload struct {
 	listings []ServiceListing
 	done chan bool
 }
 
-func newWatch(theChan chan *payload) *watch {
-	retVal := &watch{incoming: theChan}
+func NewPayload(listings []ServiceListing, done chan bool) *Payload {
+	return &Payload{listings: listings, done: done}
+}
+
+func NewWatch(theChan chan *Payload) *Watch {
+	retVal := &Watch{incoming: theChan}
 	retVal.start()
 	return retVal
 }
 
-func (g *watch) ServiceListingsGet() []ServiceListing {
+func (g *Watch) ServiceListingsGet() []ServiceListing {
 	g.mut.RLock()
 	defer g.mut.RUnlock()
 	return g.listings
 }
 
-func (g *watch) start() {
+func (g *Watch) start() {
 	go func(){
 		more := true
 		for ;more; {
-			var payload *payload
+			var payload *Payload
 			payload, more = <-g.incoming
 			theList := payload.listings
 			addedItems := make([]ServiceListing, len(theList))
@@ -77,8 +80,8 @@ func (g *watch) start() {
 	}()
 }
 
-func (g *watch) Random() clients.HostGetter {
-	return clients.HostGetterFunc(func() []url.URL {
+func (g *Watch) Random() HostGetter {
+	return HostGetterFunc(func() []url.URL {
 		listings := g.ServiceListingsGet()
 		if (len(listings) == 0) {
 			return nil
