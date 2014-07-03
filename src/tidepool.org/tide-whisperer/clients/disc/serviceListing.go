@@ -11,6 +11,13 @@ type ServiceListing struct {
 	url.URL
 	Service    string
 	properties map[string]string
+
+	sslSpec *sslSpec
+}
+
+type sslSpec struct {
+	KeyFile string
+	CertFile string
 }
 
 func (sl *ServiceListing) UnmarshalJSON(data []byte) error {
@@ -29,6 +36,16 @@ func (sl *ServiceListing) UnmarshalJSON(data []byte) error {
 			sl.Scheme, _ = jepson.JSONString(([]byte)(v))
 		case "service":
 			sl.Service, _ = jepson.JSONString(([]byte)(v))
+		case "keyFile":
+			if (sl.sslSpec == nil) {
+				sl.sslSpec = &sslSpec{}
+			}
+			sl.sslSpec.KeyFile, _ = jepson.JSONString(([]byte)(v))
+		case "certFile":
+			if (sl.sslSpec == nil) {
+				sl.sslSpec = &sslSpec{}
+			}
+			sl.sslSpec.CertFile, _ = jepson.JSONString(([]byte)(v))
 		default:
 			properties[k], _ = jepson.JSONString(([]byte)(v))
 		}
@@ -56,11 +73,15 @@ func (sl *ServiceListing) MarshalJSON() ([]byte, error) {
 	return json.Marshal(objs)
 }
 
-func (sl *ServiceListing) getPort() string {
+func (sl *ServiceListing) GetPort() string {
 	return sl.Host[strings.Index(sl.Host, ":"):]
 }
 
-func (sl *ServiceListing) getProperty(property string) string {
+func (sl *ServiceListing) GetSSLSpec() *sslSpec {
+	return sl.sslSpec
+}
+
+func (sl *ServiceListing) GetProperty(property string) string {
 	return sl.properties[property]
 }
 

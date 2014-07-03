@@ -1,7 +1,9 @@
 {
   "service": {
     "service": "pool-whisperer-local",
-    "protocol": "http",
-    "host": "localhost:17071"
+    "protocol": "https",
+    "host": "localhost:17071",
+    "keyFile": "config/key.pem",
+    "certFile": "config/cert.pem"
   }
 }

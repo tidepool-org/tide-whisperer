@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"syscall"
 	"os"
+	"crypto/tls"
 )
 
 type Config struct {
@@ -28,7 +29,10 @@ func main() {
 		log.Fatal("Problem loading config", err)
 	}
 
-	httpClient := http.DefaultClient
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	httpClient := &http.Client{Transport: tr}
 
 	hakkenClient := hakken.NewHakkenBuilder().
 		WithConfig(&config.HakkenConfig).
@@ -131,11 +135,20 @@ func main() {
 
 	done := make(chan bool)
 	server := common.NewServer(&http.Server{
-		Addr:    ":17071",
+		Addr:    config.Service.GetPort(),
 		Handler: router,
 	})
-	server.ListenAndServe()
-	log.Printf("%+v", config.Service)
+
+	var start func() error
+	if config.Service.Scheme == "https" {
+		sslSpec := config.Service.GetSSLSpec()
+		start = func() error{ return server.ListenAndServeTLS(sslSpec.CertFile, sslSpec.KeyFile) }
+	} else {
+		start = func() error{ return server.ListenAndServe() }
+	}
+	if err := start(); err != nil {
+		log.Fatal(err)
+	}
 	hakkenClient.Publish(&config.Service)
 
 	signals := make(chan os.Signal, 40)

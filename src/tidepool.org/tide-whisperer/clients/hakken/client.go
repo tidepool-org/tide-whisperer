@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"tidepool.org/common/errors"
 	"tidepool.org/tide-whisperer/clients/disc"
-	"log"
 	"bytes"
 )
 
