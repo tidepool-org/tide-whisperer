@@ -3,8 +3,8 @@ package disc
 import (
 	"encoding/json"
 	"net/url"
-	"tidepool.org/common/jepson"
 	"strings"
+	"tidepool.org/common/jepson"
 )
 
 type ServiceListing struct {
@@ -16,7 +16,7 @@ type ServiceListing struct {
 }
 
 type sslSpec struct {
-	KeyFile string
+	KeyFile  string
 	CertFile string
 }
 
@@ -37,12 +37,12 @@ func (sl *ServiceListing) UnmarshalJSON(data []byte) error {
 		case "service":
 			sl.Service, _ = jepson.JSONString(([]byte)(v))
 		case "keyFile":
-			if (sl.sslSpec == nil) {
+			if sl.sslSpec == nil {
 				sl.sslSpec = &sslSpec{}
 			}
 			sl.sslSpec.KeyFile, _ = jepson.JSONString(([]byte)(v))
 		case "certFile":
-			if (sl.sslSpec == nil) {
+			if sl.sslSpec == nil {
 				sl.sslSpec = &sslSpec{}
 			}
 			sl.sslSpec.CertFile, _ = jepson.JSONString(([]byte)(v))

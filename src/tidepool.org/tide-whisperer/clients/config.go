@@ -1,10 +1,10 @@
 package clients
 
 import (
-	"tidepool.org/tide-whisperer/clients/hakken"
-	"tidepool.org/tide-whisperer/clients/disc"
 	"log"
 	"net/url"
+	"tidepool.org/tide-whisperer/clients/disc"
+	"tidepool.org/tide-whisperer/clients/hakken"
 )
 
 type HostGetterConfig interface{}
@@ -19,7 +19,7 @@ func ToHostGetter(name string, c *HostGetterConfig, discovery disc.Discovery) di
 		case "static":
 			hostStrings := c["hosts"].([]interface{})
 			hosts := make([]url.URL, len(hostStrings))
-			for i,v := range hostStrings {
+			for i, v := range hostStrings {
 				host, err := url.Parse(v.(string))
 				if err != nil {
 					panic(err.Error())
@@ -65,8 +65,8 @@ func (uac *UserApiConfig) ToHostGetter(discovery disc.Discovery) disc.HostGetter
 }
 
 type Config struct {
-	HakkenConfig hakken.HakkenClientConfig `json:"hakken"`
-	GatekeeperConfig GatekeeperConfig `json:"gatekeeper"`
-	SeagullConfig SeagullConfig `json:"seagull"`
-	UserApiConfig UserApiConfig `json:"userApi"`
+	HakkenConfig     hakken.HakkenClientConfig `json:"hakken"`
+	GatekeeperConfig GatekeeperConfig          `json:"gatekeeper"`
+	SeagullConfig    SeagullConfig             `json:"seagull"`
+	UserApiConfig    UserApiConfig             `json:"userApi"`
 }

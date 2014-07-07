@@ -2,10 +2,10 @@ package hakken
 
 import (
 	"encoding/json"
+	"log"
 	"net/url"
 	"sync"
 	"time"
-	"log"
 )
 
 type Coordinator struct {

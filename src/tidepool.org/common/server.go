@@ -1,11 +1,11 @@
 package common
 
 import (
-	"net/http"
-	"net"
-	"time"
 	"crypto/tls"
 	"log"
+	"net"
+	"net/http"
+	"time"
 )
 
 type Server struct {
@@ -66,7 +66,7 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+*/
 
 // ListenAndServe listens on the TCP network address srv.Addr and then
 // calls Serve to handle requests on incoming connections.  If
@@ -86,7 +86,7 @@ func (srv *Server) ListenAndServe() error {
 		select {
 		case done := <-srv.stop:
 			log.Print("Closing listener at ", addr)
-		done <- ln.Close()
+			done <- ln.Close()
 		}
 	}()
 
@@ -136,7 +136,7 @@ func (srv *Server) ListenAndServeTLS(certFile, keyFile string) error {
 		select {
 		case done := <-srv.stop:
 			log.Print("Closing listener at ", addr)
-		done <- tlsListener.Close()
+			done <- tlsListener.Close()
 		}
 	}()
 
@@ -162,5 +162,3 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 	tc.SetKeepAlivePeriod(3 * time.Minute)
 	return tc, nil
 }
-
-

@@ -5,21 +5,21 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"tidepool.org/tide-whisperer/clients/disc"
 	"net/url"
 	"tidepool.org/common/errors"
+	"tidepool.org/tide-whisperer/clients/disc"
 )
 
 type gatekeeperClient struct {
-	httpClient    *http.Client  // store a reference to the http client so we can reuse it
-	hostGetter    disc.HostGetter    // The getter that provides the host to talk to for the client
-	tokenProvider TokenProvider // An object that provides tokens for communicating with gatekeeper
+	httpClient    *http.Client    // store a reference to the http client so we can reuse it
+	hostGetter    disc.HostGetter // The getter that provides the host to talk to for the client
+	tokenProvider TokenProvider   // An object that provides tokens for communicating with gatekeeper
 }
 
 type gatekeeperClientBuilder struct {
-	httpClient    *http.Client  // store a reference to the http client so we can reuse it
-	hostGetter    disc.HostGetter    // The getter that provides the host to talk to for the client
-	tokenProvider TokenProvider // An object that provides tokens for communicating with gatekeeper
+	httpClient    *http.Client    // store a reference to the http client so we can reuse it
+	hostGetter    disc.HostGetter // The getter that provides the host to talk to for the client
+	tokenProvider TokenProvider   // An object that provides tokens for communicating with gatekeeper
 }
 
 func NewGatekeeperClientBuilder() *gatekeeperClientBuilder {

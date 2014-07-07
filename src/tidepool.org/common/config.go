@@ -1,8 +1,8 @@
 package common
 
 import (
-	"io/ioutil"
 	"encoding/json"
+	"io/ioutil"
 	"os"
 )
 
@@ -25,7 +25,6 @@ func LoadConfig(filenames []string, obj interface{}) error {
 }
 
 type ServiceConfig struct {
-	Addr string `json:"address"`
+	Addr    string `json:"address"`
 	Service string `json:"service"`
-
 }

@@ -1,14 +1,15 @@
 package disc
 
 import (
-	"sync"
-	"time"
+	"log"
 	"math/rand"
 	"net/url"
-	"log"
+	"sync"
+	"time"
 )
 
 var random *rand.Rand
+
 func init() {
 	random = rand.New(rand.NewSource(time.Now().UnixNano()))
 }
@@ -22,7 +23,7 @@ type Watch struct {
 
 type Payload struct {
 	listings []ServiceListing
-	done chan bool
+	done     chan bool
 }
 
 func NewPayload(listings []ServiceListing, done chan bool) *Payload {
@@ -42,9 +43,9 @@ func (g *Watch) ServiceListingsGet() []ServiceListing {
 }
 
 func (g *Watch) start() {
-	go func(){
+	go func() {
 		more := true
-		for ;more; {
+		for more {
 			var payload *Payload
 			payload, more = <-g.incoming
 			theList := payload.listings
@@ -83,7 +84,7 @@ func (g *Watch) start() {
 func (g *Watch) Random() HostGetter {
 	return HostGetterFunc(func() []url.URL {
 		listings := g.ServiceListingsGet()
-		if (len(listings) == 0) {
+		if len(listings) == 0 {
 			return nil
 		}
 

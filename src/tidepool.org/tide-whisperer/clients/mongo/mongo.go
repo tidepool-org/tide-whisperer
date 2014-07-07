@@ -1,21 +1,21 @@
 package mongo
 
 import (
-	"labix.org/v2/mgo"
-	"net/url"
+	"crypto/tls"
 	"fmt"
+	"labix.org/v2/mgo"
+	"log"
+	"net"
+	"net/url"
 	"strings"
 	"tidepool.org/common/errors"
-	"time"
-	"crypto/tls"
-	"net"
 	"tidepool.org/common/jepson"
-	"log"
+	"time"
 )
 
 type Config struct {
-	ConnectionString string `json:"connectionString"`
-	Timeout *jepson.Duration `json:"timeout"`
+	ConnectionString string           `json:"connectionString"`
+	Timeout          *jepson.Duration `json:"timeout"`
 }
 
 func Connect(config *Config) (*mgo.Session, error) {
@@ -34,7 +34,7 @@ func Connect(config *Config) (*mgo.Session, error) {
 /*
  All following code originally C&Pd from mgo.  It has been adjusted to allow
  for automatic handling of ssl connections based on a connection string parameter
- */
+*/
 
 // mgo - MongoDB driver for Go
 //
@@ -104,15 +104,15 @@ func DialWithTimeout(url string, timeout time.Duration) (*mgo.Session, error) {
 		}
 	}
 	info := mgo.DialInfo{
-		Addrs:     uinfo.addrs,
-		Direct:    direct,
-		Timeout:   timeout,
-		Database:  uinfo.db,
-		Username:  uinfo.user,
-		Password:  uinfo.pass,
-		Mechanism: mechanism,
-		Service:   service,
-		Source:    source,
+		Addrs:      uinfo.addrs,
+		Direct:     direct,
+		Timeout:    timeout,
+		Database:   uinfo.db,
+		Username:   uinfo.user,
+		Password:   uinfo.pass,
+		Mechanism:  mechanism,
+		Service:    service,
+		Source:     source,
 		DialServer: dialServer,
 	}
 	return mgo.DialWithInfo(&info)

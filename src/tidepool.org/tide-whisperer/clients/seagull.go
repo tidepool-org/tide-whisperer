@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"tidepool.org/tide-whisperer/clients/disc"
 	"net/url"
+	"tidepool.org/tide-whisperer/clients/disc"
 )
 
 type seagullClient struct {
-	httpClient *http.Client // store a reference to the http client so we can reuse it
-	hostGetter disc.HostGetter   // The getter that provides the host to talk to for the client
+	httpClient *http.Client    // store a reference to the http client so we can reuse it
+	hostGetter disc.HostGetter // The getter that provides the host to talk to for the client
 }
 
 type seagullClientBuilder struct {

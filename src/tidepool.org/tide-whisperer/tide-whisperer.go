@@ -1,27 +1,27 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/gorilla/pat"
 	"labix.org/v2/mgo/bson"
 	"log"
 	"net/http"
-	"tidepool.org/tide-whisperer/clients"
-	"tidepool.org/tide-whisperer/clients/hakken"
-	"tidepool.org/tide-whisperer/clients/disc"
-	"tidepool.org/common"
+	"os"
 	"os/signal"
 	"syscall"
-	"os"
-	"crypto/tls"
+	"tidepool.org/common"
+	"tidepool.org/tide-whisperer/clients"
+	"tidepool.org/tide-whisperer/clients/disc"
+	"tidepool.org/tide-whisperer/clients/hakken"
 	"tidepool.org/tide-whisperer/clients/mongo"
 )
 
 type Config struct {
 	clients.Config
 	Service disc.ServiceListing `json:"service"`
-	Mongo mongo.Config `json:"mongo"`
+	Mongo   mongo.Config        `json:"mongo"`
 }
 
 func main() {
@@ -127,11 +127,11 @@ func main() {
 			}
 			res.Write(bytes)
 		}
-			if !first {
-				res.WriteHeader(404)
-			} else {
-				res.Write([]byte("]"))
-			}
+		if !first {
+			res.WriteHeader(404)
+		} else {
+			res.Write([]byte("]"))
+		}
 		if err := iter.Close(); err != nil {
 			log.Fatal("Iterator ended with an error", err)
 		}
@@ -146,9 +146,9 @@ func main() {
 	var start func() error
 	if config.Service.Scheme == "https" {
 		sslSpec := config.Service.GetSSLSpec()
-		start = func() error{ return server.ListenAndServeTLS(sslSpec.CertFile, sslSpec.KeyFile) }
+		start = func() error { return server.ListenAndServeTLS(sslSpec.CertFile, sslSpec.KeyFile) }
 	} else {
-		start = func() error{ return server.ListenAndServe() }
+		start = func() error { return server.ListenAndServe() }
 	}
 	if err := start(); err != nil {
 		log.Fatal(err)
@@ -157,9 +157,9 @@ func main() {
 
 	signals := make(chan os.Signal, 40)
 	signal.Notify(signals)
-	go func(){
+	go func() {
 		for {
-			sig := <-signals;
+			sig := <-signals
 			log.Printf("Got signal [%s]", sig)
 
 			if sig == syscall.SIGINT {

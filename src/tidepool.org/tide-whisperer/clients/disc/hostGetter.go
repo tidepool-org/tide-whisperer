@@ -17,7 +17,7 @@ type StaticHostGetter struct {
 }
 
 func NewStaticHostGetter(retVal url.URL) *StaticHostGetter {
-	return &StaticHostGetter{ Hosts: []url.URL{retVal} }
+	return &StaticHostGetter{Hosts: []url.URL{retVal}}
 }
 
 func (h *StaticHostGetter) HostGet() []url.URL {

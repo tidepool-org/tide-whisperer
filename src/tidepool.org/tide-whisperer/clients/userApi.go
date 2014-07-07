@@ -7,18 +7,18 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"tidepool.org/common/errors"
-	"time"
 	"net/url"
-	"tidepool.org/tide-whisperer/clients/disc"
+	"tidepool.org/common/errors"
 	"tidepool.org/common/jepson"
+	"tidepool.org/tide-whisperer/clients/disc"
+	"time"
 )
 
 // UserApiClient manages the local data for a client. A client is intended to be shared among multiple
 // goroutines so it's OK to treat it as a singleton (and probably a good idea).
 type UserApiClient struct {
 	httpClient *http.Client         // store a reference to the http client so we can reuse it
-	hostGetter disc.HostGetter           // The getter that provides the host to talk to for the client
+	hostGetter disc.HostGetter      // The getter that provides the host to talk to for the client
 	config     *UserApiClientConfig // Configuration for the client
 
 	serverToken string         // stores the most recently received server token
@@ -26,8 +26,8 @@ type UserApiClient struct {
 }
 
 type UserApiClientConfig struct {
-	Name                 string `json:"name"`       // The name of this server for use in obtaining a server token
-	Secret               string `json:"secret"`       // The secret used along with the name to obtain a server token
+	Name                 string          `json:"name"`                 // The name of this server for use in obtaining a server token
+	Secret               string          `json:"secret"`               // The secret used along with the name to obtain a server token
 	TokenRefreshInterval jepson.Duration `json:"tokenRefreshInterval"` // The amount of time between refreshes of the server token
 }
 

@@ -1,12 +1,12 @@
 package hakken
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"tidepool.org/common/errors"
 	"tidepool.org/tide-whisperer/clients/disc"
-	"bytes"
 )
 
 type coordinatorClient struct {

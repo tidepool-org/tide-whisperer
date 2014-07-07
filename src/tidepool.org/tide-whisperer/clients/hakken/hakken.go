@@ -4,9 +4,9 @@ import (
 	"log"
 	"net/url"
 	"sync"
+	"tidepool.org/common/jepson"
 	"tidepool.org/tide-whisperer/clients/disc"
 	"time"
-	"tidepool.org/common/jepson"
 )
 
 type HakkenClient struct {
@@ -18,7 +18,7 @@ type HakkenClient struct {
 }
 
 type HakkenClientConfig struct {
-	Host              string `json:"host"`              // Primary host to bootstrap list of coordinators from
+	Host              string          `json:"host"`              // Primary host to bootstrap list of coordinators from
 	HeartbeatInterval jepson.Duration `json:"heartbeatInterval"` // Time elapsed between heartbeats and watch polls
 	PollInterval      jepson.Duration `json:"pollInterval"`      // Time elapsed between coordinator gossip polls
 	ResyncInterval    jepson.Duration `json:"resyncInterval"`    // Time elapsed between checks for new coordinators at Host
@@ -150,18 +150,18 @@ func (client *HakkenClient) Watch(service string) *disc.Watch {
 
 func (client *HakkenClient) Publish(sl *disc.ServiceListing) {
 	log.Printf("Publishing service[%s]", sl.Service)
-	 go func() {
-		 timer := time.After(0)
-		 for {
-			 select {
-			 case <-client.stopChan:
-				 break
-			 case <-timer:
-				 for _, coo := range *client.cooMan.getClients() {
-					 coo.listingHearbeat(sl)
-				 }
-				 timer = time.After(time.Duration(client.config.HeartbeatInterval))
-			 }
-		 }
-	 }()
+	go func() {
+		timer := time.After(0)
+		for {
+			select {
+			case <-client.stopChan:
+				break
+			case <-timer:
+				for _, coo := range *client.cooMan.getClients() {
+					coo.listingHearbeat(sl)
+				}
+				timer = time.After(time.Duration(client.config.HeartbeatInterval))
+			}
+		}
+	}()
 }
