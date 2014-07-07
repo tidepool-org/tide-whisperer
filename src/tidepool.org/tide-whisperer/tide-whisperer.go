@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/gorilla/pat"
-	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
 	"log"
 	"net/http"
@@ -16,11 +15,13 @@ import (
 	"syscall"
 	"os"
 	"crypto/tls"
+	"tidepool.org/tide-whisperer/clients/mongo"
 )
 
 type Config struct {
 	clients.Config
 	Service disc.ServiceListing `json:"service"`
+	Mongo mongo.Config `json:"mongo"`
 }
 
 func main() {
@@ -78,7 +79,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	session, err := mgo.Dial("mongodb://localhost/streams")
+	session, err := mongo.Connect(&config.Mongo)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -126,10 +127,13 @@ func main() {
 			}
 			res.Write(bytes)
 		}
-		res.Write([]byte("]"))
+			if !first {
+				res.WriteHeader(404)
+			} else {
+				res.Write([]byte("]"))
+			}
 		if err := iter.Close(); err != nil {
-			log.Println("HUH?")
-			log.Fatal(err)
+			log.Fatal("Iterator ended with an error", err)
 		}
 	})))
 

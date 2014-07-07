@@ -5,5 +5,8 @@
     "host": "localhost:17071",
     "keyFile": "config/key.pem",
     "certFile": "config/cert.pem"
+  },
+  "mongo": {
+    "connectionString": "mongodb://localhost/streams?ssl=true"
   }
 }
