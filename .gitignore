@@ -3,3 +3,4 @@ pkg
 *.iml
 .idea
 .bzr
+dist
