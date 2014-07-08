@@ -3,8 +3,8 @@ package clients
 import (
 	"log"
 	"net/url"
-	"tidepool.org/tide-whisperer/clients/disc"
-	"tidepool.org/tide-whisperer/clients/hakken"
+	"github.com/tidepool-org/tide-whisperer/clients/disc"
+	"github.com/tidepool-org/tide-whisperer/clients/hakken"
 )
 
 type HostGetterConfig interface{}

@@ -4,8 +4,8 @@ import (
 	"log"
 	"net/url"
 	"sync"
-	"tidepool.org/common/jepson"
-	"tidepool.org/tide-whisperer/clients/disc"
+	"github.com/tidepool-org/common/jepson"
+	"github.com/tidepool-org/tide-whisperer/clients/disc"
 	"time"
 )
 

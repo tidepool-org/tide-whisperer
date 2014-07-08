@@ -11,11 +11,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"tidepool.org/common"
-	"tidepool.org/tide-whisperer/clients"
-	"tidepool.org/tide-whisperer/clients/disc"
-	"tidepool.org/tide-whisperer/clients/hakken"
-	"tidepool.org/tide-whisperer/clients/mongo"
+	"github.com/tidepool-org/common"
+	"github.com/tidepool-org/tide-whisperer/clients"
+	"github.com/tidepool-org/tide-whisperer/clients/disc"
+	"github.com/tidepool-org/tide-whisperer/clients/hakken"
+	"github.com/tidepool-org/tide-whisperer/clients/mongo"
 )
 
 type Config struct {

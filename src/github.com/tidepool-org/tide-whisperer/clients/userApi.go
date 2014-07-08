@@ -8,9 +8,9 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"tidepool.org/common/errors"
-	"tidepool.org/common/jepson"
-	"tidepool.org/tide-whisperer/clients/disc"
+	"github.com/tidepool-org/common/errors"
+	"github.com/tidepool-org/common/jepson"
+	"github.com/tidepool-org/tide-whisperer/clients/disc"
 	"time"
 )
 

@@ -6,6 +6,6 @@ OUTDIR=dist
 
 rm -rf ${OUTDIR}
 mkdir ${OUTDIR}
-go build -o ${OUTDIR}/tide-whisperer tidepool.org/tide-whisperer
+go build -o ${OUTDIR}/tide-whisperer github.com/tidepool-org/tide-whisperer
 
 cp start.sh ${OUTDIR}/

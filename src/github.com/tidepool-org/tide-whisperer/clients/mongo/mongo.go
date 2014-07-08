@@ -8,8 +8,8 @@ import (
 	"net"
 	"net/url"
 	"strings"
-	"tidepool.org/common/errors"
-	"tidepool.org/common/jepson"
+	"github.com/tidepool-org/common/errors"
+	"github.com/tidepool-org/common/jepson"
 	"time"
 )
 

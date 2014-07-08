@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"strings"
-	"tidepool.org/common/jepson"
+	"github.com/tidepool-org/common/jepson"
 )
 
 type ServiceListing struct {

@@ -6,8 +6,8 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"tidepool.org/common/errors"
-	"tidepool.org/tide-whisperer/clients/disc"
+	"github.com/tidepool-org/common/errors"
+	"github.com/tidepool-org/tide-whisperer/clients/disc"
 )
 
 type gatekeeperClient struct {
