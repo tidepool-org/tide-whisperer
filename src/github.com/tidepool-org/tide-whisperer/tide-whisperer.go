@@ -27,7 +27,7 @@ type Config struct {
 func main() {
 	var config Config
 	if err := common.LoadConfig([]string{"./config/env.json", "./config/server.json"}, &config); err != nil {
-		log.Fatal("Problem loading config", err)
+		log.Fatal("Problem loading config: ", err)
 	}
 
 	tr := &http.Transport{
@@ -162,7 +162,7 @@ func main() {
 			sig := <-signals
 			log.Printf("Got signal [%s]", sig)
 
-			if sig == syscall.SIGINT {
+			if sig == syscall.SIGINT || sig == syscall.SIGTERM {
 				server.Close()
 				done <- true
 			}
