@@ -65,7 +65,7 @@ func (client *gatekeeperClient) UserInGroup(userID, groupID string) (map[string]
 	if host == nil {
 		return nil, errors.New("No known gatekeeper hosts")
 	}
-	host.Path += fmt.Sprintf("private/%s/%s", groupID, userID)
+	host.Path += fmt.Sprintf("access/%s/%s", groupID, userID)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
 	req.Header.Add("x-tidepool-session-token", client.tokenProvider.TokenProvide())
