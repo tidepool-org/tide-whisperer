@@ -87,17 +87,17 @@ func main() {
 
 	router := pat.New()
 	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		userID := req.URL.Query().Get(":userID")
+		userToView := req.URL.Query().Get(":userID")
 
 		token := req.Header.Get("x-tidepool-session-token")
 		td := userAPI.CheckToken(token)
 
-		if td == nil || !(td.IsServer || td.UserID == userID || userCanViewData(userID, td.UserID)) {
+		if td == nil || !(td.IsServer || td.UserID == userToView || userCanViewData(td.UserID, userToView)) {
 			res.WriteHeader(403)
 			return
 		}
 
-		pair := seagullClient.GetPrivatePair(userID, "uploads", userAPI.TokenProvide())
+		pair := seagullClient.GetPrivatePair(userToView, "uploads", userAPI.TokenProvide())
 		if pair == nil {
 			res.WriteHeader(500)
 			return
