@@ -86,6 +86,16 @@ func main() {
 	defer session.Close()
 
 	router := pat.New()
+	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, _ *http.Request) {
+			if err := session.Ping(); err != nil {
+				res.WriteHeader(500)
+				res.Write([]byte(err.Error()))
+				return
+			}
+			res.WriteHeader(200)
+			res.Write([]byte("All is well\n"))
+			return
+		}))
 	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		userToView := req.URL.Query().Get(":userID")
 
