@@ -5,18 +5,18 @@ import (
 	"encoding/json"
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/gorilla/pat"
-	"labix.org/v2/mgo/bson"
-	"log"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
 	"github.com/tidepool-org/go-common/clients/disc"
 	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/shoreline"
+	"labix.org/v2/mgo/bson"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 type Config struct {
@@ -46,10 +46,10 @@ func main() {
 	defer hakkenClient.Close()
 
 	shorelineClient := shoreline.NewShorelineClientBuilder().
-	WithHostGetter(config.ShorelineConfig.ToHostGetter(hakkenClient)).
-	WithHttpClient(httpClient).
-	WithConfig(&config.ShorelineConfig.ShorelineClientConfig).
-	Build()
+		WithHostGetter(config.ShorelineConfig.ToHostGetter(hakkenClient)).
+		WithHttpClient(httpClient).
+		WithConfig(&config.ShorelineConfig.ShorelineClientConfig).
+		Build()
 
 	seagullClient := clients.NewSeagullClientBuilder().
 		WithHostGetter(config.SeagullConfig.ToHostGetter(hakkenClient)).
@@ -89,15 +89,15 @@ func main() {
 
 	router := pat.New()
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, _ *http.Request) {
-			if err := session.Ping(); err != nil {
-				res.WriteHeader(500)
-				res.Write([]byte(err.Error()))
-				return
-			}
-			res.WriteHeader(200)
-			res.Write([]byte("OK\n"))
+		if err := session.Ping(); err != nil {
+			res.WriteHeader(500)
+			res.Write([]byte(err.Error()))
 			return
-		}))
+		}
+		res.WriteHeader(200)
+		res.Write([]byte("OK\n"))
+		return
+	}))
 	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		userToView := req.URL.Query().Get(":userID")
 
