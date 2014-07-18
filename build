@@ -2,13 +2,14 @@
 
 export GOPATH=`pwd`
 
+come_deps.sh
+
 PROJECT=tide-whisperer
-PACKAGE=github.com/tidepool-org/${PROJECT}
 
 OUTDIR=dist
 rm -rf ${OUTDIR}
 mkdir ${OUTDIR}
 
-go build -o ${OUTDIR}/${PROJECT} ${PACKAGE}
+go build -o ${OUTDIR}/${PROJECT}
 
 cp start.sh ${OUTDIR}/

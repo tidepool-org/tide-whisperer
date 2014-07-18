@@ -1,6 +1,6 @@
 bin
+src
 pkg
-*.iml
-.idea
-.bzr
 dist
+.idea
+*.iml
