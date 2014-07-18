@@ -1,4 +1,4 @@
-labix.org/v2/mgo bzr https://launchpad.net/mgo/v2 COMMIT_HASH
+labix.org/v2/mgo bzr https://launchpad.net/mgo/v2 287
 github.com/gorilla/pat git https://github.com/gorilla/pat.git ae2e162c4b2ae96aa66b596b2c18f17834299ed0
 github.com/gorilla/mux git https://github.com/gorilla/mux.git 14cafe28513321476c73967a5a4f3454b6129c46
 github.com/gorilla/context git https://github.com/gorilla/context.git 14f550f51af52180c2eefed15e5fd18d63c0a64a
