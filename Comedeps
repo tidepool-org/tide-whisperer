@@ -1,0 +1,6 @@
+labix.org/v2/mgo bzr https://launchpad.net/mgo/v2 COMMIT_HASH
+github.com/gorilla/pat git https://github.com/gorilla/pat.git ae2e162c4b2ae96aa66b596b2c18f17834299ed0
+github.com/gorilla/mux git https://github.com/gorilla/mux.git 14cafe28513321476c73967a5a4f3454b6129c46
+github.com/gorilla/context git https://github.com/gorilla/context.git 14f550f51af52180c2eefed15e5fd18d63c0a64a
+github.com/daaku/go.httpgzip git https://github.com/daaku/go.httpgzip.git fd996995061ca6ad56e2b1b14e530edf06ce25ab
+github.com/tidepool-org/go-common git https://github.com/tidepool-org/go-common.git v0.0.1

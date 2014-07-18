@@ -11,11 +11,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"github.com/tidepool-org/common"
-	"github.com/tidepool-org/tide-whisperer/clients"
-	"github.com/tidepool-org/tide-whisperer/clients/disc"
-	"github.com/tidepool-org/tide-whisperer/clients/hakken"
-	"github.com/tidepool-org/tide-whisperer/clients/mongo"
+	common "github.com/tidepool-org/go-common"
+	"github.com/tidepool-org/go-common/clients"
+	"github.com/tidepool-org/go-common/clients/disc"
+	"github.com/tidepool-org/go-common/clients/hakken"
+	"github.com/tidepool-org/go-common/clients/mongo"
+	"github.com/tidepool-org/go-common/clients/shoreline"
 )
 
 type Config struct {
@@ -44,10 +45,11 @@ func main() {
 	}
 	defer hakkenClient.Close()
 
-	userAPI := clients.NewApiClient(
-		config.UserApiConfig.ToHostGetter(hakkenClient),
-		&config.UserApiConfig.UserApiClientConfig,
-		httpClient)
+	shorelineClient := shoreline.NewShorelineClientBuilder().
+	WithHostGetter(config.ShorelineConfig.ToHostGetter(hakkenClient)).
+	WithHttpClient(httpClient).
+	WithConfig(&config.ShorelineConfig.ShorelineClientConfig).
+	Build()
 
 	seagullClient := clients.NewSeagullClientBuilder().
 		WithHostGetter(config.SeagullConfig.ToHostGetter(hakkenClient)).
@@ -57,7 +59,7 @@ func main() {
 	gatekeeperClient := clients.NewGatekeeperClientBuilder().
 		WithHostGetter(config.GatekeeperConfig.ToHostGetter(hakkenClient)).
 		WithHttpClient(httpClient).
-		WithTokenProvider(userAPI).
+		WithTokenProvider(shorelineClient).
 		Build()
 
 	userCanViewData := func(userID, groupID string) bool {
@@ -75,7 +77,7 @@ func main() {
 		return !(perms["root"] == nil && perms["view"] == nil)
 	}
 
-	if err := userAPI.Start(); err != nil {
+	if err := shorelineClient.Start(); err != nil {
 		log.Fatal(err)
 	}
 
@@ -93,21 +95,21 @@ func main() {
 				return
 			}
 			res.WriteHeader(200)
-			res.Write([]byte("All is well\n"))
+			res.Write([]byte("OK\n"))
 			return
 		}))
 	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		userToView := req.URL.Query().Get(":userID")
 
 		token := req.Header.Get("x-tidepool-session-token")
-		td := userAPI.CheckToken(token)
+		td := shorelineClient.CheckToken(token)
 
 		if td == nil || !(td.IsServer || td.UserID == userToView || userCanViewData(td.UserID, userToView)) {
 			res.WriteHeader(403)
 			return
 		}
 
-		pair := seagullClient.GetPrivatePair(userToView, "uploads", userAPI.TokenProvide())
+		pair := seagullClient.GetPrivatePair(userToView, "uploads", shorelineClient.TokenProvide())
 		if pair == nil {
 			res.WriteHeader(500)
 			return
