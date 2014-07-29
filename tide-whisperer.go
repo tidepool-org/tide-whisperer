@@ -43,7 +43,11 @@ func main() {
 	if err := hakkenClient.Start(); err != nil {
 		log.Fatal(err)
 	}
-	defer hakkenClient.Close()
+	defer func(){
+		if err := hakkenClient.Close(); err != nil {
+			log.Panic("Error closing hakkenClient, panicing to get stacks: ", err)
+		}
+	}()
 
 	shorelineClient := shoreline.NewShorelineClientBuilder().
 		WithHostGetter(config.ShorelineConfig.ToHostGetter(hakkenClient)).
@@ -122,6 +126,7 @@ func main() {
 			Sort("deviceTime").
 			Iter()
 
+		failureReturnCode := 404
 		first := false
 		var result map[string]interface{}
 		for iter.Next(&result) {
@@ -139,13 +144,15 @@ func main() {
 			}
 			res.Write(bytes)
 		}
+		if err := iter.Close(); err != nil {
+			log.Print("Iterator ended with an error: ", err)
+			failureReturnCode = 500
+		}
+
 		if !first {
-			res.WriteHeader(404)
+			res.WriteHeader(failureReturnCode)
 		} else {
 			res.Write([]byte("]"))
-		}
-		if err := iter.Close(); err != nil {
-			log.Fatal("Iterator ended with an error", err)
 		}
 	})))
 
