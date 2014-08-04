@@ -121,7 +121,10 @@ func main() {
 
 		groupId := pair.ID
 
-		iter := session.DB("").C("deviceData").
+		mongoSession := session.Copy()
+		defer mongoSession.Close()
+
+		iter := mongoSession.DB("").C("deviceData").
 			Find(bson.M{"$or": []bson.M{bson.M{"groupId": groupId}, bson.M{"_groupId": groupId, "_active": true}}}).
 			Sort("deviceTime").
 			Iter()
