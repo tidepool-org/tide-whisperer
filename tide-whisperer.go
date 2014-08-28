@@ -133,19 +133,20 @@ func main() {
 		first := false
 		var result map[string]interface{}
 		for iter.Next(&result) {
-			if !first {
-				res.Header().Add("content-type", "application/json")
-				res.Write([]byte("["))
-				first = true
-			} else {
-				res.Write([]byte(",\n"))
-			}
 			delete(result, "groupId")
 			bytes, err := json.Marshal(result)
 			if err != nil {
-				log.Fatal(err)
+				log.Print("Failed to marshall event", result, err)
+			} else {
+				if !first {
+					res.Header().Add("content-type", "application/json")
+					res.Write([]byte("["))
+					first = true
+				} else {
+					res.Write([]byte(",\n"))
+				}
+				res.Write(bytes)
 			}
-			res.Write(bytes)
 		}
 		if err := iter.Close(); err != nil {
 			log.Print("Iterator ended with an error: ", err)
