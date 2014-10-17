@@ -134,9 +134,14 @@ func main() {
 		var result map[string]interface{}
 		for iter.Next(&result) {
 			delete(result, "groupId")
+			delete(result, "_id")
+			delete(result, "_groupId")
+			delete(result, "_version")
+			delete(result, "_active")
+
 			bytes, err := json.Marshal(result)
 			if err != nil {
-				log.Print("Failed to marshall event", result, err)
+				log.Print("Failed to marshall event: ", result, err)
 			} else {
 				if !first {
 					res.Header().Add("content-type", "application/json")
