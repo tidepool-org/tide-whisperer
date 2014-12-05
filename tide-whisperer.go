@@ -43,7 +43,7 @@ func main() {
 	if err := hakkenClient.Start(); err != nil {
 		log.Fatal(err)
 	}
-	defer func(){
+	defer func() {
 		if err := hakkenClient.Close(); err != nil {
 			log.Panic("Error closing hakkenClient, panicing to get stacks: ", err)
 		}
@@ -126,7 +126,7 @@ func main() {
 
 		iter := mongoSession.DB("").C("deviceData").
 			Find(bson.M{"$or": []bson.M{bson.M{"groupId": groupId}, bson.M{"_groupId": groupId, "_active": true}}}).
-			Sort("deviceTime").
+			Sort("time").
 			Iter()
 
 		failureReturnCode := 404
