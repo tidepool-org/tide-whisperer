@@ -43,7 +43,7 @@ func main() {
 	if err := hakkenClient.Start(); err != nil {
 		log.Fatal(err)
 	}
-	defer func(){
+	defer func() {
 		if err := hakkenClient.Close(); err != nil {
 			log.Panic("Error closing hakkenClient, panicing to get stacks: ", err)
 		}
@@ -138,8 +138,6 @@ func main() {
 			delete(result, "_groupId")
 			delete(result, "_version")
 			delete(result, "_active")
-			delete(result, "createdTime")
-			delete(result, "modifiedTime")
 
 			bytes, err := json.Marshal(result)
 			if err != nil {
