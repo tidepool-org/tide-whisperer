@@ -126,7 +126,7 @@ func main() {
 
 		iter := mongoSession.DB("").C("deviceData").
 			Find(bson.M{"$or": []bson.M{bson.M{"groupId": groupId}, bson.M{"_groupId": groupId, "_active": true}}}).
-			Sort("deviceTime").
+			Sort("time").
 			Iter()
 
 		failureReturnCode := 404
@@ -138,6 +138,8 @@ func main() {
 			delete(result, "_groupId")
 			delete(result, "_version")
 			delete(result, "_active")
+			delete(result, "createdTime")
+			delete(result, "modifiedTime")
 
 			bytes, err := json.Marshal(result)
 			if err != nil {
