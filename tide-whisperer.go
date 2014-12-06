@@ -11,6 +11,7 @@ import (
 	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/shoreline"
+	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
 	"log"
 	"net/http"
@@ -25,18 +26,20 @@ type (
 		Service disc.ServiceListing `json:"service"`
 		Mongo   mongo.Config        `json:"mongo"`
 	}
-
-	DeviceData struct {
-		data         interface{}
-		groupId      string `json:"-"`
-		createdTime  string `json:"-"`
-		modifiedTime string `json:"-"`
-		_id          string `json:"-"`
-		_groupId     string `json:"-"`
-		_version     string `json:"-"`
-		_active      bool   `json:"-"`
-	}
+	//generic return type as device data can comprimise of many things
+	DeviceData map[string]interface{}
 )
+
+//these feilds are removed from the data to be retuned by the API
+func (data DeviceData) filterUnwantedFields() {
+	delete(data, "groupId")
+	delete(data, "_id")
+	delete(data, "_groupId")
+	delete(data, "_version")
+	delete(data, "_active")
+	delete(data, "createdTime")
+	delete(data, "modifiedTime")
+}
 
 func main() {
 	const deviceDataCollection = "deviceData"
@@ -99,6 +102,11 @@ func main() {
 		log.Fatal(err)
 	}
 
+	session, err := mongo.Connect(&config.Mongo)
+	if err != nil {
+		log.Fatal(err)
+	}
+	//index based on sort and where kys
 	index := mgo.Index{
 		Key:        []string{"groupId", "_groupId", "time"},
 		Background: true,
@@ -149,11 +157,8 @@ func main() {
 		first := false
 		var result DeviceData
 		for iter.Next(&result) {
-			//delete(result, "groupId")
-			//delete(result, "_id")
-			//delete(result, "_groupId")
-			//delete(result, "_version")
-			//delete(result, "_active")
+			result.filterUnwantedFields()
+			log.Printf("results %v", result)
 
 			bytes, err := json.Marshal(result)
 			if err != nil {
