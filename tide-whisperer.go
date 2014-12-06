@@ -31,7 +31,7 @@ type (
 )
 
 //these feilds are removed from the data to be retuned by the API
-func (data DeviceData) filterUnwantedFields() {
+func (data DeviceData) filterUnwantedFeilds() {
 	delete(data, "groupId")
 	delete(data, "_id")
 	delete(data, "_groupId")
@@ -157,8 +157,7 @@ func main() {
 		first := false
 		var result DeviceData
 		for iter.Next(&result) {
-			result.filterUnwantedFields()
-			log.Printf("results %v", result)
+			result.filterUnwantedFeilds()
 
 			bytes, err := json.Marshal(result)
 			if err != nil {
