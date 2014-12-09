@@ -11,6 +11,7 @@ import (
 	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/shoreline"
+	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
 	"log"
 	"net/http"
@@ -19,13 +20,27 @@ import (
 	"syscall"
 )
 
-type Config struct {
-	clients.Config
-	Service disc.ServiceListing `json:"service"`
-	Mongo   mongo.Config        `json:"mongo"`
+type (
+	Config struct {
+		clients.Config
+		Service disc.ServiceListing `json:"service"`
+		Mongo   mongo.Config        `json:"mongo"`
+	}
+)
+
+//these fields are removed from the data to be returned by the API
+func (data DeviceData) filterUnwantedFields() {
+	delete(data, "groupId")
+	delete(data, "_id")
+	delete(data, "_groupId")
+	delete(data, "_version")
+	delete(data, "_active")
+	delete(data, "createdTime")
+	delete(data, "modifiedTime")
 }
 
 func main() {
+	const deviceDataCollection = "deviceData"
 	var config Config
 	if err := common.LoadConfig([]string{"./config/env.json", "./config/server.json"}, &config); err != nil {
 		log.Fatal("Problem loading config: ", err)
@@ -89,6 +104,13 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	//index based on sort and where kys
+	index := mgo.Index{
+		Key:        []string{"groupId", "_groupId", "time"},
+		Background: true,
+	}
+	_ = session.DB("").C(deviceDataCollection).EnsureIndex(index)
+
 	defer session.Close()
 
 	router := pat.New()
@@ -124,20 +146,16 @@ func main() {
 		mongoSession := session.Copy()
 		defer mongoSession.Close()
 
-		iter := mongoSession.DB("").C("deviceData").
+		iter := mongoSession.DB("").C(deviceDataCollection).
 			Find(bson.M{"$or": []bson.M{bson.M{"groupId": groupId}, bson.M{"_groupId": groupId, "_active": true}}}).
 			Sort("time").
 			Iter()
 
 		failureReturnCode := 404
 		first := false
-		var result map[string]interface{}
+		var result map[string]interface{} //generic type as device data can be comprised of many things
 		for iter.Next(&result) {
-			delete(result, "groupId")
-			delete(result, "_id")
-			delete(result, "_groupId")
-			delete(result, "_version")
-			delete(result, "_active")
+			result.filterUnwantedFields()
 
 			bytes, err := json.Marshal(result)
 			if err != nil {
