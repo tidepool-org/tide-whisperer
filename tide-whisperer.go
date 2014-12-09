@@ -26,8 +26,6 @@ type (
 		Service disc.ServiceListing `json:"service"`
 		Mongo   mongo.Config        `json:"mongo"`
 	}
-	//generic return type as device data can be comprised of many things
-	DeviceData map[string]interface{}
 )
 
 //these fields are removed from the data to be returned by the API
@@ -155,7 +153,7 @@ func main() {
 
 		failureReturnCode := 404
 		first := false
-		var result DeviceData
+		var result map[string]interface{} //generic type as device data can be comprised of many things
 		for iter.Next(&result) {
 			result.filterUnwantedFields()
 
