@@ -149,7 +149,9 @@ func main() {
 		defer mongoSession.Close()
 
 		iter := mongoSession.DB("").C(deviceDataCollection).
-			Find(bson.M{"$or": []bson.M{bson.M{"groupId": groupId}, bson.M{"_groupId": groupId, "_active": true}}}).
+			Find(bson.M{"$or": []bson.M{
+			bson.M{"groupId": groupId, "uploadId": bson.M{"$exists": true}},
+			bson.M{"_groupId": groupId, "_active": true, "uploadId": bson.M{"$exists": true}}}}).
 			Sort("time").
 			Iter()
 
