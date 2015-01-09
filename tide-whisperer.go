@@ -3,6 +3,12 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/gorilla/pat"
 	common "github.com/tidepool-org/go-common"
@@ -13,11 +19,6 @@ import (
 	"github.com/tidepool-org/go-common/clients/shoreline"
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
-	"log"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 type (
@@ -148,11 +149,13 @@ func main() {
 		mongoSession := session.Copy()
 		defer mongoSession.Close()
 
+		// the Sort here has to use the same fields in the same order
+		// as the index, or the index won't apply
 		iter := mongoSession.DB("").C(deviceDataCollection).
 			Find(bson.M{"$or": []bson.M{
 			bson.M{"groupId": groupId},
 			bson.M{"_groupId": groupId, "_active": true}}}).
-			Sort("time").
+			Sort("groupId", "_groupId", "time").
 			Iter()
 
 		failureReturnCode := 404
