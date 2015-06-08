@@ -3,11 +3,13 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/gorilla/pat"
@@ -31,6 +33,17 @@ type (
 	deviceData map[string]interface{}
 )
 
+const (
+	DATA_API_PREFIX = "api/data"
+
+	error_no_view_permisson = "user is not authorized to view data"
+	error_no_permissons     = "permissons not found"
+	error_running_query     = "error running query"
+	error_marshalling_event = "failed to marshall event"
+
+	query_no_data = "no data found"
+)
+
 //these fields are removed from the data to be returned by the API
 func (data deviceData) filterUnwantedFields() {
 	delete(data, "groupId")
@@ -46,7 +59,7 @@ func main() {
 	const deviceDataCollection = "deviceData"
 	var config Config
 	if err := common.LoadConfig([]string{"./config/env.json", "./config/server.json"}, &config); err != nil {
-		log.Fatal("Problem loading config: ", err)
+		log.Fatal(DATA_API_PREFIX, "Problem loading config: ", err)
 	}
 
 	tr := &http.Transport{
@@ -63,7 +76,7 @@ func main() {
 	}
 	defer func() {
 		if err := hakkenClient.Close(); err != nil {
-			log.Panic("Error closing hakkenClient, panicing to get stacks: ", err)
+			log.Panic(DATA_API_PREFIX, "Error closing hakkenClient, panicing to get stacks: ", err)
 		}
 	}()
 
@@ -91,7 +104,7 @@ func main() {
 
 		perms, err := gatekeeperClient.UserInGroup(userID, groupID)
 		if err != nil {
-			log.Println("Error looking up user in group", err)
+			log.Println(DATA_API_PREFIX, "Error looking up user in group", err)
 			return false
 		}
 
@@ -117,10 +130,10 @@ func main() {
 	defer session.Close()
 
 	router := pat.New()
-	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, _ *http.Request) {
+	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		if err := session.Ping(); err != nil {
-			res.WriteHeader(500)
-			res.Write([]byte(err.Error()))
+			log.Println(DATA_API_PREFIX, req.URL.Path, err.Error())
+			http.Error(res, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		res.WriteHeader(200)
@@ -128,19 +141,25 @@ func main() {
 		return
 	}))
 	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		start := time.Now()
+
 		userToView := req.URL.Query().Get(":userID")
 
 		token := req.Header.Get("x-tidepool-session-token")
 		td := shorelineClient.CheckToken(token)
 
 		if td == nil || !(td.IsServer || td.UserID == userToView || userCanViewData(td.UserID, userToView)) {
-			res.WriteHeader(403)
+			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("failed after [%.5f] secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, req.URL.Path, error_no_view_permisson)
+			http.Error(res, error_no_view_permisson, http.StatusForbidden)
 			return
 		}
 
 		pair := seagullClient.GetPrivatePair(userToView, "uploads", shorelineClient.TokenProvide())
 		if pair == nil {
-			res.WriteHeader(500)
+			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("failed after [%.5f] secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, req.URL.Path, error_no_permissons)
+			http.Error(res, error_no_permissons, http.StatusInternalServerError)
 			return
 		}
 
@@ -158,7 +177,6 @@ func main() {
 			Sort("groupId", "_groupId", "time").
 			Iter()
 
-		failureReturnCode := 404
 		first := false
 		var result deviceData //generic type as device data can be comprised of many things
 		for iter.Next(&result) {
@@ -166,7 +184,8 @@ func main() {
 
 			bytes, err := json.Marshal(result)
 			if err != nil {
-				log.Print("Failed to marshall event: ", result, err)
+				//log and continue
+				log.Println(DATA_API_PREFIX, req.URL.Path, error_marshalling_event, result, err.Error())
 			} else {
 				if !first {
 					res.Header().Add("content-type", "application/json")
@@ -179,14 +198,20 @@ func main() {
 			}
 		}
 		if err := iter.Close(); err != nil {
-			log.Print("Iterator ended with an error: ", err)
-			failureReturnCode = 500
+			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("failed after [%.5f] secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, req.URL.Path, error_running_query, err.Error())
+			http.Error(res, error_running_query, http.StatusInternalServerError)
+			return
 		}
 
 		if !first {
-			res.WriteHeader(failureReturnCode)
+			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("completed in [%.5f] secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, req.URL.Path, query_no_data)
+			http.Error(res, query_no_data, http.StatusNotFound)
+			return
 		} else {
 			res.Write([]byte("]"))
+			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("completed in [%.5f] secs", time.Now().Sub(start).Seconds()))
 		}
 	})))
 
