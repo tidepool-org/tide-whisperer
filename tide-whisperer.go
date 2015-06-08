@@ -44,17 +44,6 @@ const (
 	query_no_data = "no data found"
 )
 
-//these fields are removed from the data to be returned by the API
-func (data deviceData) filterUnwantedFields() {
-	delete(data, "groupId")
-	delete(data, "_id")
-	delete(data, "_groupId")
-	delete(data, "_version")
-	delete(data, "_active")
-	delete(data, "createdTime")
-	delete(data, "modifiedTime")
-}
-
 func main() {
 	const deviceDataCollection = "deviceData"
 	var config Config
@@ -72,7 +61,7 @@ func main() {
 		Build()
 
 	if err := hakkenClient.Start(); err != nil {
-		log.Fatal(err)
+		log.Fatal(DATA_API_PREFIX, err)
 	}
 	defer func() {
 		if err := hakkenClient.Close(); err != nil {
@@ -136,7 +125,7 @@ func main() {
 			http.Error(res, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		res.WriteHeader(200)
+		res.WriteHeader(http.StatusOK)
 		res.Write([]byte("OK\n"))
 		return
 	}))
@@ -149,7 +138,7 @@ func main() {
 		td := shorelineClient.CheckToken(token)
 
 		if td == nil || !(td.IsServer || td.UserID == userToView || userCanViewData(td.UserID, userToView)) {
-			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("failed after [%.5f] secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("failed after [%.5f]secs", time.Now().Sub(start).Seconds()))
 			log.Println(DATA_API_PREFIX, req.URL.Path, error_no_view_permisson)
 			http.Error(res, error_no_view_permisson, http.StatusForbidden)
 			return
@@ -157,13 +146,16 @@ func main() {
 
 		pair := seagullClient.GetPrivatePair(userToView, "uploads", shorelineClient.TokenProvide())
 		if pair == nil {
-			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("failed after [%.5f] secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("failed after [%.5f]secs", time.Now().Sub(start).Seconds()))
 			log.Println(DATA_API_PREFIX, req.URL.Path, error_no_permissons)
 			http.Error(res, error_no_permissons, http.StatusInternalServerError)
 			return
 		}
 
 		groupId := pair.ID
+
+		//we don't want to return these fields
+		filterUnwanted := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "createdTime": 0, "modifiedTime": 0, "groupId": 0}
 
 		mongoSession := session.Copy()
 		defer mongoSession.Close()
@@ -175,12 +167,12 @@ func main() {
 			bson.M{"groupId": groupId},
 			bson.M{"_groupId": groupId, "_active": true}}}).
 			Sort("groupId", "_groupId", "time").
+			Select(filterUnwanted).
 			Iter()
 
 		first := false
 		var result deviceData //generic type as device data can be comprised of many things
 		for iter.Next(&result) {
-			result.filterUnwantedFields()
 
 			bytes, err := json.Marshal(result)
 			if err != nil {
@@ -198,20 +190,20 @@ func main() {
 			}
 		}
 		if err := iter.Close(); err != nil {
-			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("failed after [%.5f] secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("failed after [%.5f]secs", time.Now().Sub(start).Seconds()))
 			log.Println(DATA_API_PREFIX, req.URL.Path, error_running_query, err.Error())
 			http.Error(res, error_running_query, http.StatusInternalServerError)
 			return
 		}
 
 		if !first {
-			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("completed in [%.5f] secs", time.Now().Sub(start).Seconds()))
-			log.Println(DATA_API_PREFIX, req.URL.Path, query_no_data)
+			log.Println(DATA_API_PREFIX, req.URL.String(), fmt.Sprintf("completed in [%.5f]secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, req.URL.String(), query_no_data)
 			http.Error(res, query_no_data, http.StatusNotFound)
 			return
 		} else {
 			res.Write([]byte("]"))
-			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("completed in [%.5f] secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, req.URL.String(), fmt.Sprintf("completed in [%.5f]secs", time.Now().Sub(start).Seconds()))
 		}
 	})))
 
@@ -229,7 +221,7 @@ func main() {
 		start = func() error { return server.ListenAndServe() }
 	}
 	if err := start(); err != nil {
-		log.Fatal(err)
+		log.Fatal(DATA_API_PREFIX, err)
 	}
 	hakkenClient.Publish(&config.Service)
 
@@ -238,7 +230,7 @@ func main() {
 	go func() {
 		for {
 			sig := <-signals
-			log.Printf("Got signal [%s]", sig)
+			log.Printf(DATA_API_PREFIX+" Got signal [%s]", sig)
 
 			if sig == syscall.SIGINT || sig == syscall.SIGTERM {
 				server.Close()
