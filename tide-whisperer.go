@@ -40,6 +40,7 @@ const (
 	error_no_permissons     = "permissons not found"
 	error_running_query     = "error running query"
 	error_marshalling_event = "failed to marshall event"
+	error_loading_events    = "failed load data"
 
 	query_no_data = "no data found"
 )
@@ -121,7 +122,7 @@ func main() {
 	router := pat.New()
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		if err := session.Ping(); err != nil {
-			log.Println(DATA_API_PREFIX, req.URL.Path, err.Error())
+			log.Println(DATA_API_PREFIX, "status", err.Error())
 			http.Error(res, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -138,73 +139,72 @@ func main() {
 		td := shorelineClient.CheckToken(token)
 
 		if td == nil || !(td.IsServer || td.UserID == userToView || userCanViewData(td.UserID, userToView)) {
-			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("failed after [%.5f]secs", time.Now().Sub(start).Seconds()))
-			log.Println(DATA_API_PREFIX, req.URL.Path, error_no_view_permisson)
+			log.Println(DATA_API_PREFIX, fmt.Sprintf("failed after [%.5f]secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, error_no_view_permisson)
 			http.Error(res, error_no_view_permisson, http.StatusForbidden)
 			return
 		}
 
 		pair := seagullClient.GetPrivatePair(userToView, "uploads", shorelineClient.TokenProvide())
 		if pair == nil {
-			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("failed after [%.5f]secs", time.Now().Sub(start).Seconds()))
-			log.Println(DATA_API_PREFIX, req.URL.Path, error_no_permissons)
+			log.Println(DATA_API_PREFIX, fmt.Sprintf("failed after [%.5f]secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, error_no_permissons)
 			http.Error(res, error_no_permissons, http.StatusInternalServerError)
 			return
 		}
 
 		groupId := pair.ID
 
-		//we don't want to return these fields
-		filterUnwanted := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "createdTime": 0, "modifiedTime": 0, "groupId": 0}
-
 		mongoSession := session.Copy()
 		defer mongoSession.Close()
 
+		//select this data
+		groupDataQuery := bson.M{"$or": []bson.M{bson.M{"groupId": groupId}, bson.M{"_groupId": groupId, "_active": true}}}
+		//don't return these fields
+		removeFieldsForReturn := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "createdTime": 0, "modifiedTime": 0, "groupId": 0}
+
+		var results []interface{}
+
+		startQueryTime := time.Now()
+
 		// the Sort here has to use the same fields in the same order
 		// as the index, or the index won't apply
-		iter := mongoSession.DB("").C(deviceDataCollection).
-			Find(bson.M{"$or": []bson.M{
-			bson.M{"groupId": groupId},
-			bson.M{"_groupId": groupId, "_active": true}}}).
+		err := mongoSession.DB("").C(deviceDataCollection).
+			Find(groupDataQuery).
 			Sort("groupId", "_groupId", "time").
-			Select(filterUnwanted).
-			Iter()
+			Select(removeFieldsForReturn).
+			All(&results)
 
-		first := false
-		var result deviceData //generic type as device data can be comprised of many things
-		for iter.Next(&result) {
-
-			bytes, err := json.Marshal(result)
-			if err != nil {
-				//log and continue
-				log.Println(DATA_API_PREFIX, req.URL.Path, error_marshalling_event, result, err.Error())
-			} else {
-				if !first {
-					res.Header().Add("content-type", "application/json")
-					res.Write([]byte("["))
-					first = true
-				} else {
-					res.Write([]byte(",\n"))
-				}
-				res.Write(bytes)
-			}
-		}
-		if err := iter.Close(); err != nil {
-			log.Println(DATA_API_PREFIX, req.URL.Path, fmt.Sprintf("failed after [%.5f]secs", time.Now().Sub(start).Seconds()))
-			log.Println(DATA_API_PREFIX, req.URL.Path, error_running_query, err.Error())
+		if err != nil {
+			log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo query took [%.5f] but failed with error [%s] ", time.Now().Sub(startQueryTime).Seconds(), err.Error()))
+			log.Println(DATA_API_PREFIX, fmt.Sprintf("failed after [%.5f]secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, error_running_query, err.Error())
 			http.Error(res, error_running_query, http.StatusInternalServerError)
 			return
 		}
 
-		if !first {
-			log.Println(DATA_API_PREFIX, req.URL.String(), fmt.Sprintf("completed in [%.5f]secs", time.Now().Sub(start).Seconds()))
-			log.Println(DATA_API_PREFIX, req.URL.String(), query_no_data)
-			http.Error(res, query_no_data, http.StatusNotFound)
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo query took [%.5f] secs and returned [%d] records", time.Now().Sub(startQueryTime).Seconds(), len(results)))
+
+		if len(results) == 0 {
+			log.Println(DATA_API_PREFIX, fmt.Sprintf("completed in [%.5f]secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, query_no_data)
+			res.Header().Add("content-type", "application/json")
+			res.WriteHeader(http.StatusNotFound)
+			res.Write([]byte("[]"))
 			return
-		} else {
-			res.Write([]byte("]"))
-			log.Println(DATA_API_PREFIX, req.URL.String(), fmt.Sprintf("completed in [%.5f]secs", time.Now().Sub(start).Seconds()))
 		}
+
+		jsonResults, err := json.Marshal(results)
+		if err != nil {
+			log.Println(DATA_API_PREFIX, fmt.Sprintf("failed after [%.5f]secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, req.URL.Path, error_loading_events, err.Error())
+			http.Error(res, error_loading_events, http.StatusInternalServerError)
+		}
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("completed in [%.5f]secs", time.Now().Sub(start).Seconds()))
+		res.Header().Add("content-type", "application/json")
+		res.Write(jsonResults)
+		return
+
 	})))
 
 	done := make(chan bool)
