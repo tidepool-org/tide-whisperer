@@ -167,23 +167,20 @@ func main() {
 
 		startQueryTime := time.Now()
 
-		// the Sort here has to use the same fields in the same order
-		// as the index, or the index won't apply
+		//return un-ordered (i.e. the order isn't guaranteed by mongo)
 		err := mongoSession.DB("").C(deviceDataCollection).
 			Find(groupDataQuery).
-			Sort("groupId", "_groupId", "time").
 			Select(removeFieldsForReturn).
 			All(&results)
 
 		if err != nil {
-			log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo query took [%.5f] but failed with error [%s] ", time.Now().Sub(startQueryTime).Seconds(), err.Error()))
-			log.Println(DATA_API_PREFIX, fmt.Sprintf("failed after [%.5f]secs", time.Now().Sub(start).Seconds()))
+			log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo query took [%.5f]secs but failed with error [%s] ", time.Now().Sub(startQueryTime).Seconds(), err.Error()))
 			log.Println(DATA_API_PREFIX, error_running_query, err.Error())
 			http.Error(res, error_running_query, http.StatusInternalServerError)
 			return
 		}
 
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo query took [%.5f] secs and returned [%d] records", time.Now().Sub(startQueryTime).Seconds(), len(results)))
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo query took [%.5f]secs and returned [%d] records", time.Now().Sub(startQueryTime).Seconds(), len(results)))
 
 		if len(results) == 0 {
 			log.Println(DATA_API_PREFIX, fmt.Sprintf("completed in [%.5f]secs", time.Now().Sub(start).Seconds()))
