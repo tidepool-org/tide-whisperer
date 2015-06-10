@@ -163,6 +163,8 @@ func main() {
 
 		var results []interface{}
 
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo query [%#v]", groupDataQuery))
+
 		startQueryTime := time.Now()
 
 		//return un-ordered (i.e. the order isn't guaranteed by mongo)
