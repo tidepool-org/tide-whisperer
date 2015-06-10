@@ -117,8 +117,6 @@ func main() {
 	}
 	_ = session.DB("").C(deviceDataCollection).EnsureIndex(index)
 
-	defer session.Close()
-
 	router := pat.New()
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		if err := session.Ping(); err != nil {
