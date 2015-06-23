@@ -29,21 +29,31 @@ type (
 		Service disc.ServiceListing `json:"service"`
 		Mongo   mongo.Config        `json:"mongo"`
 	}
+	// so we can wrap and marshal the detailed error
+	detailedError struct {
+		Status     int    `json:"status"`
+		Id         string `json:"id"`
+		Message    string `json:"message"`
+		RawMessage string `json:"-"` // not serializing out incase it leaks any details, we will log it though
+	}
 	//generic type as device data can be comprised of many things
 	deviceData map[string]interface{}
 )
 
-const (
-	DATA_API_PREFIX = "api/data"
+var (
+	error_status_check = detailedError{Status: http.StatusInternalServerError, Id: "data_status_check", Message: "checking of the status endpoint showed an error"}
 
-	error_no_view_permisson = "user is not authorized to view data"
-	error_no_permissons     = "permissons not found"
-	error_running_query     = "error running query"
-	error_marshalling_event = "failed to marshall event"
-	error_loading_events    = "failed load data"
-
-	query_no_data = "no data found"
+	error_no_view_permisson = detailedError{Status: http.StatusForbidden, Id: "data_cant_view", Message: "user is not authorized to view data"}
+	error_no_permissons     = detailedError{Status: http.StatusInternalServerError, Id: "data_perms_error", Message: "error finding permissons for user"}
+	error_running_query     = detailedError{Status: http.StatusInternalServerError, Id: "data_store_error", Message: "error running query"}
+	error_loading_events    = detailedError{Status: http.StatusInternalServerError, Id: "data_marshal_error", Message: "failed marshal data to return"}
 )
+
+const DATA_API_PREFIX = "api/data"
+
+func (d *detailedError) setRaw(err error) {
+	d.RawMessage = err.Error()
+}
 
 func main() {
 	const deviceDataCollection = "deviceData"
@@ -102,6 +112,22 @@ func main() {
 		return !(perms["root"] == nil && perms["view"] == nil)
 	}
 
+	//log error detail and write as application/json
+	jsonError := func(res http.ResponseWriter, detErr detailedError, startedAt time.Time) {
+
+		if detErr.RawMessage == "" {
+			detErr.RawMessage = detErr.Message
+		}
+
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s] failed after [%.5f]secs with error [%s] ", detErr.Id, time.Now().Sub(startedAt).Seconds(), detErr.RawMessage))
+
+		jsonErr, _ = json.Marshal(err)
+
+		res.Header().Add("content-type", "application/json")
+		res.Write(jsonErr)
+		res.WriteHeader(err.Status)
+	}
+
 	if err := shorelineClient.Start(); err != nil {
 		log.Fatal(err)
 	}
@@ -119,12 +145,15 @@ func main() {
 
 	router := pat.New()
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		if err := session.Ping(); err != nil {
-			log.Println(DATA_API_PREFIX, "status", err.Error())
-			http.Error(res, err.Error(), http.StatusInternalServerError)
+		start := time.Now()
+
+		mongoSession := session.Copy()
+		defer mongoSession.Close()
+
+		if err := mongoSession.Ping(); err != nil {
+			jsonError(res, error_status_check.setRaw(err), start)
 			return
 		}
-		res.WriteHeader(http.StatusOK)
 		res.Write([]byte("OK\n"))
 		return
 	}))
@@ -137,17 +166,13 @@ func main() {
 		td := shorelineClient.CheckToken(token)
 
 		if td == nil || !(td.IsServer || td.UserID == userToView || userCanViewData(td.UserID, userToView)) {
-			log.Println(DATA_API_PREFIX, fmt.Sprintf("failed after [%.5f]secs", time.Now().Sub(start).Seconds()))
-			log.Println(DATA_API_PREFIX, error_no_view_permisson)
-			http.Error(res, error_no_view_permisson, http.StatusForbidden)
+			jsonError(res, error_no_view_permisson, start)
 			return
 		}
 
 		pair := seagullClient.GetPrivatePair(userToView, "uploads", shorelineClient.TokenProvide())
 		if pair == nil {
-			log.Println(DATA_API_PREFIX, fmt.Sprintf("failed after [%.5f]secs", time.Now().Sub(start).Seconds()))
-			log.Println(DATA_API_PREFIX, error_no_permissons)
-			http.Error(res, error_no_permissons, http.StatusInternalServerError)
+			jsonError(res, error_no_permissons, start)
 			return
 		}
 
@@ -174,28 +199,20 @@ func main() {
 			All(&results)
 
 		if err != nil {
-			log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo query took [%.5f]secs but failed with error [%s] ", time.Now().Sub(startQueryTime).Seconds(), err.Error()))
-			log.Println(DATA_API_PREFIX, error_running_query, err.Error())
-			http.Error(res, error_running_query, http.StatusInternalServerError)
+			jsonError(res, error_running_query.setRaw(err))
 			return
 		}
 
 		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo query took [%.5f]secs and returned [%d] records", time.Now().Sub(startQueryTime).Seconds(), len(results)))
 
-		if len(results) == 0 {
-			log.Println(DATA_API_PREFIX, fmt.Sprintf("completed in [%.5f]secs", time.Now().Sub(start).Seconds()))
-			log.Println(DATA_API_PREFIX, query_no_data)
-			res.Header().Add("content-type", "application/json")
-			res.WriteHeader(http.StatusNotFound)
-			res.Write([]byte("[]"))
-			return
-		}
+		jsonResults := []byte("[]") //legit that there is no data
 
-		jsonResults, err := json.Marshal(results)
-		if err != nil {
-			log.Println(DATA_API_PREFIX, fmt.Sprintf("failed after [%.5f]secs", time.Now().Sub(start).Seconds()))
-			log.Println(DATA_API_PREFIX, req.URL.Path, error_loading_events, err.Error())
-			http.Error(res, error_loading_events, http.StatusInternalServerError)
+		if len(results) != 0 {
+			jsonResults, err := json.Marshal(results)
+			if err != nil {
+				jsonError(res, error_loading_events.setRaw(err), start)
+				return
+			}
 		}
 		log.Println(DATA_API_PREFIX, fmt.Sprintf("completed in [%.5f]secs", time.Now().Sub(start).Seconds()))
 		res.Header().Add("content-type", "application/json")
