@@ -34,10 +34,10 @@ type (
 	detailedError struct {
 		Status int `json:"status"`
 		//provided to user so that we can better track down issues
-		Id         string `json:"id"`
-		Code       string `json:"code"`
-		Message    string `json:"message"`
-		RawMessage string `json:"-"` // not serializing out so that we don't leaks any details. This will be logged by the service though
+		Id              string `json:"id"`
+		Code            string `json:"code"`
+		Message         string `json:"message"`
+		InternalMessage string `json:"-"` //used only for logging so we don't want to serialize it out
 	}
 	//generic type as device data can be comprised of many things
 	deviceData map[string]interface{}
@@ -54,9 +54,9 @@ var (
 
 const DATA_API_PREFIX = "api/data"
 
-//set the detailed error
-func (d detailedError) set(err error) detailedError {
-	d.RawMessage = err.Error()
+//set the intenal message that we will use for logging
+func (d detailedError) setInternalMessage(internal error) detailedError {
+	d.InternalMessage = internal.Error()
 	return d
 }
 
@@ -120,12 +120,9 @@ func main() {
 	//log error detail and write as application/json
 	jsonError := func(res http.ResponseWriter, err detailedError, startedAt time.Time) {
 
-		if err.RawMessage == "" {
-			err.RawMessage = err.Message
-		}
 		err.Id = uuid.NewV4().String()
 
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s] [%s] failed after [%.5f]secs with error [%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.RawMessage))
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s][%s] failed after [%.5f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
 
 		jsonErr, _ := json.Marshal(err)
 
@@ -157,7 +154,7 @@ func main() {
 		defer mongoSession.Close()
 
 		if err := mongoSession.Ping(); err != nil {
-			jsonError(res, error_status_check.set(err), start)
+			jsonError(res, error_status_check.setInternalMessage(err), start)
 			return
 		}
 		res.Write([]byte("OK\n"))
@@ -205,7 +202,7 @@ func main() {
 			All(&results)
 
 		if err != nil {
-			jsonError(res, error_running_query.set(err), start)
+			jsonError(res, error_running_query.setInternalMessage(err), start)
 			return
 		}
 
@@ -216,7 +213,7 @@ func main() {
 		if len(results) != 0 {
 			jsonResults, err = json.Marshal(results)
 			if err != nil {
-				jsonError(res, error_loading_events.set(err), start)
+				jsonError(res, error_loading_events.setInternalMessage(err), start)
 				return
 			}
 		}
