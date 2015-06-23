@@ -121,7 +121,7 @@ func main() {
 
 		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s] failed after [%.5f]secs with error [%s] ", detErr.Id, time.Now().Sub(startedAt).Seconds(), detErr.RawMessage))
 
-		jsonErr, _ = json.Marshal(err)
+		jsonErr, _ = json.Marshal(detErr)
 
 		res.Header().Add("content-type", "application/json")
 		res.Write(jsonErr)
