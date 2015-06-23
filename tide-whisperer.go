@@ -13,6 +13,7 @@ import (
 
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/gorilla/pat"
+	"github.com/satori/go.uuid"
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
 	"github.com/tidepool-org/go-common/clients/disc"
@@ -31,28 +32,32 @@ type (
 	}
 	// so we can wrap and marshal the detailed error
 	detailedError struct {
-		Status     int    `json:"status"`
+		Status int `json:"status"`
+		//provided to user so that we can better track down issues
 		Id         string `json:"id"`
+		Code       string `json:"code"`
 		Message    string `json:"message"`
-		RawMessage string `json:"-"` // not serializing out incase it leaks any details, we will log it though
+		RawMessage string `json:"-"` // not serializing out so that we don't leaks any details. This will be logged by the service though
 	}
 	//generic type as device data can be comprised of many things
 	deviceData map[string]interface{}
 )
 
 var (
-	error_status_check = detailedError{Status: http.StatusInternalServerError, Id: "data_status_check", Message: "checking of the status endpoint showed an error"}
+	error_status_check = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
 
-	error_no_view_permisson = detailedError{Status: http.StatusForbidden, Id: "data_cant_view", Message: "user is not authorized to view data"}
-	error_no_permissons     = detailedError{Status: http.StatusInternalServerError, Id: "data_perms_error", Message: "error finding permissons for user"}
-	error_running_query     = detailedError{Status: http.StatusInternalServerError, Id: "data_store_error", Message: "error running query"}
-	error_loading_events    = detailedError{Status: http.StatusInternalServerError, Id: "data_marshal_error", Message: "failed marshal data to return"}
+	error_no_view_permisson = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
+	error_no_permissons     = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissons for user"}
+	error_running_query     = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
+	error_loading_events    = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
 )
 
 const DATA_API_PREFIX = "api/data"
 
-func (d *detailedError) setRaw(err error) {
+//set the detailed error
+func (d detailedError) set(err error) detailedError {
 	d.RawMessage = err.Error()
+	return d
 }
 
 func main() {
@@ -113,15 +118,16 @@ func main() {
 	}
 
 	//log error detail and write as application/json
-	jsonError := func(res http.ResponseWriter, detErr detailedError, startedAt time.Time) {
+	jsonError := func(res http.ResponseWriter, err detailedError, startedAt time.Time) {
 
-		if detErr.RawMessage == "" {
-			detErr.RawMessage = detErr.Message
+		if err.RawMessage == "" {
+			err.RawMessage = err.Message
 		}
+		err.Id = uuid.NewV4().String()
 
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s] failed after [%.5f]secs with error [%s] ", detErr.Id, time.Now().Sub(startedAt).Seconds(), detErr.RawMessage))
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s] [%s] failed after [%.5f]secs with error [%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.RawMessage))
 
-		jsonErr, _ = json.Marshal(detErr)
+		jsonErr, _ := json.Marshal(err)
 
 		res.Header().Add("content-type", "application/json")
 		res.Write(jsonErr)
@@ -151,7 +157,7 @@ func main() {
 		defer mongoSession.Close()
 
 		if err := mongoSession.Ping(); err != nil {
-			jsonError(res, error_status_check.setRaw(err), start)
+			jsonError(res, error_status_check.set(err), start)
 			return
 		}
 		res.Write([]byte("OK\n"))
@@ -199,7 +205,7 @@ func main() {
 			All(&results)
 
 		if err != nil {
-			jsonError(res, error_running_query.setRaw(err))
+			jsonError(res, error_running_query.set(err), start)
 			return
 		}
 
@@ -208,9 +214,9 @@ func main() {
 		jsonResults := []byte("[]") //legit that there is no data
 
 		if len(results) != 0 {
-			jsonResults, err := json.Marshal(results)
+			jsonResults, err = json.Marshal(results)
 			if err != nil {
-				jsonError(res, error_loading_events.setRaw(err), start)
+				jsonError(res, error_loading_events.set(err), start)
 				return
 			}
 		}
