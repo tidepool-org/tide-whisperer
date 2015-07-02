@@ -187,7 +187,7 @@ func main() {
 		//select this data
 		groupDataQuery := bson.M{"$or": []bson.M{bson.M{"groupId": groupId}, bson.M{"_groupId": groupId, "_active": true}}}
 		//don't return these fields
-		removeFieldsForReturn := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "createdTime": 0, "modifiedTime": 0, "groupId": 0}
+		removeFieldsForReturn := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0, "groupId": 0}
 
 		var results []interface{}
 
