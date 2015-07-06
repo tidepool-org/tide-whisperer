@@ -131,6 +131,45 @@ func main() {
 		res.WriteHeader(err.Status)
 	}
 
+	//process the found data and send the appropriate response
+	processResults := func(res http.ResponseWriter, iter *mgo.Iter, startedAt time.Time) {
+		var results map[string]interface{}
+		found := 0
+		first := false
+
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo processing started after [%.5f]secs", time.Now().Sub(startedAt).Seconds()))
+
+		for iter.Next(&results) {
+
+			found = found + 1
+
+			bytes, err := json.Marshal(results)
+			if err != nil {
+				jsonError(res, error_loading_events.setInternalMessage(err), startedAt)
+				return
+			} else {
+				if !first {
+					res.Header().Add("content-type", "application/json")
+					res.Write([]byte("["))
+					first = true
+				} else {
+					res.Write([]byte(",\n"))
+				}
+				res.Write(bytes)
+			}
+		}
+
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo processing finished after [%.5f]secs and returned [%d] records", time.Now().Sub(startedAt).Seconds(), found))
+
+		if err := iter.Close(); err != nil {
+			jsonError(res, error_running_query.setInternalMessage(err), startedAt)
+			return
+		}
+
+		res.Write([]byte("]"))
+		return
+	}
+
 	if err := shorelineClient.Start(); err != nil {
 		log.Fatal(err)
 	}
@@ -185,42 +224,18 @@ func main() {
 		defer mongoSession.Close()
 
 		//select this data
-		groupDataQuery := bson.M{"$or": []bson.M{bson.M{"groupId": groupId}, bson.M{"_groupId": groupId, "_active": true}}}
+		groupDataQuery := bson.M{"_groupId": groupId, "_active": true}
 		//don't return these fields
-		removeFieldsForReturn := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0, "groupId": 0}
-
-		var results []interface{}
-
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo query [%#v]", groupDataQuery))
+		removeFieldsForReturn := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
 
 		startQueryTime := time.Now()
-
-		//return un-ordered (i.e. the order isn't guaranteed by mongo)
-		err := mongoSession.DB("").C(deviceDataCollection).
+		//use an iterator to protect against very large queries
+		iter := mongoSession.DB("").C(deviceDataCollection).
 			Find(groupDataQuery).
 			Select(removeFieldsForReturn).
-			All(&results)
+			Iter()
 
-		if err != nil {
-			jsonError(res, error_running_query.setInternalMessage(err), start)
-			return
-		}
-
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo query took [%.5f]secs and returned [%d] records", time.Now().Sub(startQueryTime).Seconds(), len(results)))
-
-		jsonResults := []byte("[]") //legit that there is no data
-
-		if len(results) != 0 {
-			jsonResults, err = json.Marshal(results)
-			if err != nil {
-				jsonError(res, error_loading_events.setInternalMessage(err), start)
-				return
-			}
-		}
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("completed in [%.5f]secs", time.Now().Sub(start).Seconds()))
-		res.Header().Add("content-type", "application/json")
-		res.Write(jsonResults)
-		return
+		processResults(res, iter, startQueryTime)
 
 	})))
 
