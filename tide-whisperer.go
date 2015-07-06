@@ -3,14 +3,17 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/gorilla/pat"
+	"github.com/satori/go.uuid"
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
 	"github.com/tidepool-org/go-common/clients/disc"
@@ -27,26 +30,41 @@ type (
 		Service disc.ServiceListing `json:"service"`
 		Mongo   mongo.Config        `json:"mongo"`
 	}
+	// so we can wrap and marshal the detailed error
+	detailedError struct {
+		Status int `json:"status"`
+		//provided to user so that we can better track down issues
+		Id              string `json:"id"`
+		Code            string `json:"code"`
+		Message         string `json:"message"`
+		InternalMessage string `json:"-"` //used only for logging so we don't want to serialize it out
+	}
 	//generic type as device data can be comprised of many things
 	deviceData map[string]interface{}
 )
 
-//these fields are removed from the data to be returned by the API
-func (data deviceData) filterUnwantedFields() {
-	delete(data, "groupId")
-	delete(data, "_id")
-	delete(data, "_groupId")
-	delete(data, "_version")
-	delete(data, "_active")
-	delete(data, "createdTime")
-	delete(data, "modifiedTime")
+var (
+	error_status_check = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
+
+	error_no_view_permisson = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
+	error_no_permissons     = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissons for user"}
+	error_running_query     = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
+	error_loading_events    = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
+)
+
+const DATA_API_PREFIX = "api/data"
+
+//set the intenal message that we will use for logging
+func (d detailedError) setInternalMessage(internal error) detailedError {
+	d.InternalMessage = internal.Error()
+	return d
 }
 
 func main() {
 	const deviceDataCollection = "deviceData"
 	var config Config
 	if err := common.LoadConfig([]string{"./config/env.json", "./config/server.json"}, &config); err != nil {
-		log.Fatal("Problem loading config: ", err)
+		log.Fatal(DATA_API_PREFIX, "Problem loading config: ", err)
 	}
 
 	tr := &http.Transport{
@@ -59,11 +77,11 @@ func main() {
 		Build()
 
 	if err := hakkenClient.Start(); err != nil {
-		log.Fatal(err)
+		log.Fatal(DATA_API_PREFIX, err)
 	}
 	defer func() {
 		if err := hakkenClient.Close(); err != nil {
-			log.Panic("Error closing hakkenClient, panicing to get stacks: ", err)
+			log.Panic(DATA_API_PREFIX, "Error closing hakkenClient, panicing to get stacks: ", err)
 		}
 	}()
 
@@ -91,12 +109,65 @@ func main() {
 
 		perms, err := gatekeeperClient.UserInGroup(userID, groupID)
 		if err != nil {
-			log.Println("Error looking up user in group", err)
+			log.Println(DATA_API_PREFIX, "Error looking up user in group", err)
 			return false
 		}
 
 		log.Println(perms)
 		return !(perms["root"] == nil && perms["view"] == nil)
+	}
+
+	//log error detail and write as application/json
+	jsonError := func(res http.ResponseWriter, err detailedError, startedAt time.Time) {
+
+		err.Id = uuid.NewV4().String()
+
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s][%s] failed after [%.5f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
+
+		jsonErr, _ := json.Marshal(err)
+
+		res.Header().Add("content-type", "application/json")
+		res.Write(jsonErr)
+		res.WriteHeader(err.Status)
+	}
+
+	//process the found data and send the appropriate response
+	processResults := func(res http.ResponseWriter, iter *mgo.Iter, startedAt time.Time) {
+		var results map[string]interface{}
+		found := 0
+		first := false
+
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo processing started after [%.5f]secs", time.Now().Sub(startedAt).Seconds()))
+
+		for iter.Next(&results) {
+
+			found = found + 1
+
+			bytes, err := json.Marshal(results)
+			if err != nil {
+				jsonError(res, error_loading_events.setInternalMessage(err), startedAt)
+				return
+			} else {
+				if !first {
+					res.Header().Add("content-type", "application/json")
+					res.Write([]byte("["))
+					first = true
+				} else {
+					res.Write([]byte(",\n"))
+				}
+				res.Write(bytes)
+			}
+		}
+
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo processing finished after [%.5f]secs and returned [%d] records", time.Now().Sub(startedAt).Seconds(), found))
+
+		if err := iter.Close(); err != nil {
+			jsonError(res, error_running_query.setInternalMessage(err), startedAt)
+			return
+		}
+
+		res.Write([]byte("]"))
+		return
 	}
 
 	if err := shorelineClient.Start(); err != nil {
@@ -114,33 +185,36 @@ func main() {
 	}
 	_ = session.DB("").C(deviceDataCollection).EnsureIndex(index)
 
-	defer session.Close()
-
 	router := pat.New()
-	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, _ *http.Request) {
-		if err := session.Ping(); err != nil {
-			res.WriteHeader(500)
-			res.Write([]byte(err.Error()))
+	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		start := time.Now()
+
+		mongoSession := session.Copy()
+		defer mongoSession.Close()
+
+		if err := mongoSession.Ping(); err != nil {
+			jsonError(res, error_status_check.setInternalMessage(err), start)
 			return
 		}
-		res.WriteHeader(200)
 		res.Write([]byte("OK\n"))
 		return
 	}))
 	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		start := time.Now()
+
 		userToView := req.URL.Query().Get(":userID")
 
 		token := req.Header.Get("x-tidepool-session-token")
 		td := shorelineClient.CheckToken(token)
 
 		if td == nil || !(td.IsServer || td.UserID == userToView || userCanViewData(td.UserID, userToView)) {
-			res.WriteHeader(403)
+			jsonError(res, error_no_view_permisson, start)
 			return
 		}
 
 		pair := seagullClient.GetPrivatePair(userToView, "uploads", shorelineClient.TokenProvide())
 		if pair == nil {
-			res.WriteHeader(500)
+			jsonError(res, error_no_permissons, start)
 			return
 		}
 
@@ -149,45 +223,20 @@ func main() {
 		mongoSession := session.Copy()
 		defer mongoSession.Close()
 
-		// the Sort here has to use the same fields in the same order
-		// as the index, or the index won't apply
+		//select this data
+		groupDataQuery := bson.M{"_groupId": groupId, "_active": true}
+		//don't return these fields
+		removeFieldsForReturn := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
+
+		startQueryTime := time.Now()
+		//use an iterator to protect against very large queries
 		iter := mongoSession.DB("").C(deviceDataCollection).
-			Find(bson.M{"$or": []bson.M{
-			bson.M{"groupId": groupId},
-			bson.M{"_groupId": groupId, "_active": true}}}).
-			Sort("groupId", "_groupId", "time").
+			Find(groupDataQuery).
+			Select(removeFieldsForReturn).
 			Iter()
 
-		failureReturnCode := 404
-		first := false
-		var result deviceData //generic type as device data can be comprised of many things
-		for iter.Next(&result) {
-			result.filterUnwantedFields()
+		processResults(res, iter, startQueryTime)
 
-			bytes, err := json.Marshal(result)
-			if err != nil {
-				log.Print("Failed to marshall event: ", result, err)
-			} else {
-				if !first {
-					res.Header().Add("content-type", "application/json")
-					res.Write([]byte("["))
-					first = true
-				} else {
-					res.Write([]byte(",\n"))
-				}
-				res.Write(bytes)
-			}
-		}
-		if err := iter.Close(); err != nil {
-			log.Print("Iterator ended with an error: ", err)
-			failureReturnCode = 500
-		}
-
-		if !first {
-			res.WriteHeader(failureReturnCode)
-		} else {
-			res.Write([]byte("]"))
-		}
 	})))
 
 	done := make(chan bool)
@@ -204,7 +253,7 @@ func main() {
 		start = func() error { return server.ListenAndServe() }
 	}
 	if err := start(); err != nil {
-		log.Fatal(err)
+		log.Fatal(DATA_API_PREFIX, err)
 	}
 	hakkenClient.Publish(&config.Service)
 
@@ -213,7 +262,7 @@ func main() {
 	go func() {
 		for {
 			sig := <-signals
-			log.Printf("Got signal [%s]", sig)
+			log.Printf(DATA_API_PREFIX+" Got signal [%s]", sig)
 
 			if sig == syscall.SIGINT || sig == syscall.SIGTERM {
 				server.Close()
