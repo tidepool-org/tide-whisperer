@@ -8,5 +8,6 @@
   },
   "mongo": {
     "connectionString": "mongodb://localhost/streams"
-  }
+  },
+  "schemaVersionGte": 1
 }
