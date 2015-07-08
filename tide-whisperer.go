@@ -27,9 +27,12 @@ import (
 type (
 	Config struct {
 		clients.Config
-		Service          disc.ServiceListing `json:"service"`
-		Mongo            mongo.Config        `json:"mongo"`
-		AllowedSchemaGte int                 `json:"schemaVersionGte"`
+		Service       disc.ServiceListing `json:"service"`
+		Mongo         mongo.Config        `json:"mongo"`
+		SchemaVersion struct {
+			Gte int
+			Lte int
+		} `json:"schemaVersion"`
 	}
 	// so we can wrap and marshal the detailed error
 	detailedError struct {
@@ -225,7 +228,7 @@ func main() {
 		defer mongoSession.Close()
 
 		//select this data
-		groupDataQuery := bson.M{"_groupId": groupId, "_active": true, "_schemaVersion": bson.M{"$gte": config.AllowedSchemaGte}}
+		groupDataQuery := bson.M{"_groupId": groupId, "_active": true, "_schemaVersion": bson.M{"$gte": config.SchemaVersion.Gte, "$lte": config.SchemaVersion.Lte}}
 		//don't return these fields
 		removeFieldsForReturn := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
 
