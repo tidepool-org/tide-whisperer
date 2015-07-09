@@ -8,5 +8,9 @@
   },
   "mongo": {
     "connectionString": "mongodb://localhost/streams"
+  },
+  "schemaVersion": {
+    "minimum": 0,
+    "maximum": 0
   }
 }

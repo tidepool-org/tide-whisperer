@@ -27,8 +27,12 @@ import (
 type (
 	Config struct {
 		clients.Config
-		Service disc.ServiceListing `json:"service"`
-		Mongo   mongo.Config        `json:"mongo"`
+		Service       disc.ServiceListing `json:"service"`
+		Mongo         mongo.Config        `json:"mongo"`
+		SchemaVersion struct {
+			Minimum int
+			Maximum int
+		} `json:"schemaVersion"`
 	}
 	// so we can wrap and marshal the detailed error
 	detailedError struct {
@@ -178,9 +182,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	//index based on sort and where kys
+	//index based on sort and where keys
 	index := mgo.Index{
-		Key:        []string{"groupId", "_groupId", "time"},
+		Key:        []string{"_groupId", "_active", "_schemaVersion"},
 		Background: true,
 	}
 	_ = session.DB("").C(deviceDataCollection).EnsureIndex(index)
@@ -224,7 +228,7 @@ func main() {
 		defer mongoSession.Close()
 
 		//select this data
-		groupDataQuery := bson.M{"_groupId": groupId, "_active": true}
+		groupDataQuery := bson.M{"_groupId": groupId, "_active": true, "_schemaVersion": bson.M{"$gte": config.SchemaVersion.Minimum, "$lte": config.SchemaVersion.Maximum}}
 		//don't return these fields
 		removeFieldsForReturn := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
 
