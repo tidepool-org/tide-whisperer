@@ -30,8 +30,8 @@ type (
 		Service       disc.ServiceListing `json:"service"`
 		Mongo         mongo.Config        `json:"mongo"`
 		SchemaVersion struct {
-			Gte int
-			Lte int
+			Minimum int
+			Maximum int
 		} `json:"schemaVersion"`
 	}
 	// so we can wrap and marshal the detailed error
@@ -228,7 +228,7 @@ func main() {
 		defer mongoSession.Close()
 
 		//select this data
-		groupDataQuery := bson.M{"_groupId": groupId, "_active": true, "_schemaVersion": bson.M{"$gte": config.SchemaVersion.Gte, "$lte": config.SchemaVersion.Lte}}
+		groupDataQuery := bson.M{"_groupId": groupId, "_active": true, "_schemaVersion": bson.M{"$gte": config.SchemaVersion.Minimum, "$lte": config.SchemaVersion.Maximum}}
 		//don't return these fields
 		removeFieldsForReturn := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
 
