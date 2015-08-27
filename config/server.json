@@ -10,7 +10,7 @@
     "connectionString": "mongodb://localhost/streams"
   },
   "schemaVersion": {
-    "minimum": 0,
-    "maximum": 0
+    "minimum": 1,
+    "maximum": 99
   }
 }
