@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"strings"
 
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/gorilla/pat"
@@ -54,6 +55,7 @@ var (
 	error_no_permissons     = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissons for user"}
 	error_running_query     = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
 	error_loading_events    = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
+	error_incorrect_params  = detailedError{Status: http.StatusInternalServerError, Code: "params", Message: "incorrect parameters"}
 )
 
 const DATA_API_PREFIX = "api/data"
@@ -203,11 +205,57 @@ func main() {
 		res.Write([]byte("OK\n"))
 		return
 	}))
+	
+	/*
+	* /userid: the ID of the user you want to retrieve data for
+	* type (optional) : The Tidepool data type to search for. Only objects with a type field matching the specified type param will be returned.
+	*					can be /userid?type=smbg or a comma seperated list e.g /userid?type=smgb,cbg . If is a comma seperated 
+	*					list, then objects matching any of the sub types will be returned
+	* subtype (optional) : The Tidepool data subtype to search for. Only objects with a subtype field matching the specified subtype param will be returned.
+	*					can be /userid?subtype=physicalactivity or a comma seperated list e.g /userid?subtypetype=physicalactivity,steps . If is a comma seperated 
+	*					list, then objects matching any of the types will be returned
+	* startdate (optional) : Only objects with 'time' field equal to or greater than start date will be returned . 
+	*						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
+	* enddate (optional) : Only objects with 'time' field less than to or equal to start date will be returned . 
+	*						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z 
+ 	*/
 	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 
 		userToView := req.URL.Query().Get(":userID")
 
+		startDateString := req.URL.Query().Get("startdate")
+		endDateString := req.URL.Query().Get("enddate")
+		objType := req.URL.Query().Get("type")
+		objSubType := req.URL.Query().Get("subtype")
+
+		//the query params for type and subtype can contain multiple values seperated by a comma e.g. "type=smbg,cbg"
+		//so split them out into an array of values
+		objTypes := strings.Split(objType, ",")
+		objSubTypes := strings.Split(objSubType, ",")
+
+
+		if startDateString != "" {
+			startDate, err := time.Parse(time.RFC3339Nano, startDateString)
+			if err != nil {
+				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing start date: %s", err))
+				jsonError(res, error_incorrect_params, start)
+				return
+			}
+			startDateString = startDate.Format(time.RFC3339Nano)
+		}
+		if endDateString != "" {
+			endDate, err := time.Parse(time.RFC3339Nano, endDateString)
+			if err != nil {
+				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing end date: %s", err))
+				jsonError(res, error_incorrect_params, start)
+				return
+			}
+			endDateString = endDate.Format(time.RFC3339Nano)
+		}
+		
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("Params: startdate:%s enddate:%s type:%s subtype:%s", startDateString, endDateString, objType, objSubType))
+		
 		token := req.Header.Get("x-tidepool-session-token")
 		td := shorelineClient.CheckToken(token)
 
@@ -228,7 +276,29 @@ func main() {
 		defer mongoSession.Close()
 
 		//select this data
-		groupDataQuery := bson.M{"_groupId": groupId, "_active": true, "_schemaVersion": bson.M{"$gte": config.SchemaVersion.Minimum, "$lte": config.SchemaVersion.Maximum}}
+		groupDataQuery := bson.M{"_groupId": groupId, 
+			"_active": true, 
+			"_schemaVersion": bson.M{"$gte": config.SchemaVersion.Minimum, "$lte": config.SchemaVersion.Maximum, }}
+
+		//if optional parameters are present, then add them to the query
+		if len(objTypes) >0 && objTypes[0] != "" {
+			log.Println(DATA_API_PREFIX, fmt.Sprintf("num obj types to map:%d",len(objTypes)))
+			groupDataQuery["type"] = bson.M{"$in":objTypes}
+		}
+
+		if len(objSubTypes) >0 && objSubTypes[0] != "" {
+			groupDataQuery["subType"] = bson.M{"$in":objSubTypes}
+		}
+
+		if startDateString != "" && endDateString != "" {
+			groupDataQuery["time"] = bson.M{"$gte": startDateString, "$lte": endDateString}
+		} else if startDateString != "" {
+			groupDataQuery["time"] = bson.M{"$gte": startDateString}
+		} else if endDateString != "" {
+			groupDataQuery["time"] = bson.M{"$lte": endDateString}
+		}
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("query:",groupDataQuery))
+
 		//don't return these fields
 		removeFieldsForReturn := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
 
