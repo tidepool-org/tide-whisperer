@@ -66,12 +66,11 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 	return d
 }
 
-/*
-* This function takes in a number of parameters and constructs a mongo query
-* to retrieve objects from the Tidepool database. It is used by the router.Add("GET", "/{userID}"
-* endpoint, which implements the Tide-whisperer API. See that function for further documentation
-* on parameters
-**/
+
+// generateMongoQuery takes in a number of parameters and constructs a mongo query
+// to retrieve objects from the Tidepool database. It is used by the router.Add("GET", "/{userID}"
+// endpoint, which implements the Tide-whisperer API. See that function for further documentation
+// on parameters
 func generateMongoQuery(groupId string, minSchemaVersion int, maxSchemaVersion int, 
 		startDateString string, endDateString string, objType string, objSubType string) (bson.M, error) {
 
@@ -261,20 +260,19 @@ func main() {
 		return
 	}))
 	
-	/*
-	* /userid: the ID of the user you want to retrieve data for
-	* type (optional) : The Tidepool data type to search for. Only objects with a type field matching the specified type param will be returned.
-	*					can be /userid?type=smbg or a comma seperated list e.g /userid?type=smgb,cbg . If is a comma seperated 
-	*					list, then objects matching any of the sub types will be returned
-	* subtype (optional) : The Tidepool data subtype to search for. Only objects with a subtype field matching the specified subtype param will be returned.
-	*					can be /userid?subtype=physicalactivity or a comma seperated list e.g /userid?subtypetype=physicalactivity,steps . If is a comma seperated 
-	*					list, then objects matching any of the types will be returned
-	* startdate (optional) : Only objects with 'time' field equal to or greater than start date will be returned . 
-	*						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
-	* enddate (optional) : Only objects with 'time' field less than to or equal to start date will be returned . 
-	*						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z 
- 	*/
-	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+	// The /data/userId endpoint retrieves device/health data for a user based on a set of parameters
+	// userid: the ID of the user you want to retrieve data for
+	// type (optional) : The Tidepool data type to search for. Only objects with a type field matching the specified type param will be returned.
+	//					can be /userid?type=smbg or a comma seperated list e.g /userid?type=smgb,cbg . If is a comma seperated 
+	//					list, then objects matching any of the sub types will be returned
+	// subtype (optional) : The Tidepool data subtype to search for. Only objects with a subtype field matching the specified subtype param will be returned.
+	//					can be /userid?subtype=physicalactivity or a comma seperated list e.g /userid?subtypetype=physicalactivity,steps . If is a comma seperated 
+	//					list, then objects matching any of the types will be returned
+	// startdate (optional) : Only objects with 'time' field equal to or greater than start date will be returned . 
+	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
+	// enddate (optional) : Only objects with 'time' field less than to or equal to start date will be returned . 
+	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z 
+ 	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 
 		userToView := req.URL.Query().Get(":userID")
