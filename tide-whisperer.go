@@ -66,6 +66,61 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 	return d
 }
 
+/*
+* This function takes in a number of parameters and constructs a mongo query
+* to retrieve objects from the Tidepool database. It is used by the router.Add("GET", "/{userID}"
+* endpoint, which implements the Tide-whisperer API. See that function for further documentation
+* on parameters
+**/
+func generateMongoQuery(groupId string, minSchemaVersion int, maxSchemaVersion int, 
+		startDateString string, endDateString string, objType string, objSubType string) (bson.M, error) {
+
+	//the query params for type and subtype can contain multiple values seperated by a comma e.g. "type=smbg,cbg"
+	//so split them out into an array of values
+	objTypes := strings.Split(objType, ",")
+	objSubTypes := strings.Split(objSubType, ",")
+
+	if startDateString != "" {
+		startDate, err := time.Parse(time.RFC3339Nano, startDateString)
+		if err != nil {
+			return nil, err
+		}
+		startDateString = startDate.Format(time.RFC3339Nano)
+	}
+	if endDateString != "" {
+		endDate, err := time.Parse(time.RFC3339Nano, endDateString)
+		if err != nil {
+			//log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing end date: %s", err))
+			//jsonError(res, error_incorrect_params, start)
+			return nil, err
+		}
+		endDateString = endDate.Format(time.RFC3339Nano)
+	}
+	
+	groupDataQuery := bson.M{"_groupId": groupId, 
+		"_active": true, 
+		"_schemaVersion": bson.M{"$gte": minSchemaVersion, "$lte": maxSchemaVersion, }}
+
+	//if optional parameters are present, then add them to the query
+	if len(objTypes) >0 && objTypes[0] != "" {
+		groupDataQuery["type"] = bson.M{"$in":objTypes}
+	}
+
+	if len(objSubTypes) >0 && objSubTypes[0] != "" {
+		groupDataQuery["subType"] = bson.M{"$in":objSubTypes}
+	}
+
+	if startDateString != "" && endDateString != "" {
+		groupDataQuery["time"] = bson.M{"$gte": startDateString, "$lte": endDateString}
+	} else if startDateString != "" {
+		groupDataQuery["time"] = bson.M{"$gte": startDateString}
+	} else if endDateString != "" {
+		groupDataQuery["time"] = bson.M{"$lte": endDateString}
+	}
+
+	return groupDataQuery, nil
+}
+
 func main() {
 	const deviceDataCollection = "deviceData"
 	var config Config
@@ -223,38 +278,12 @@ func main() {
 		start := time.Now()
 
 		userToView := req.URL.Query().Get(":userID")
-
 		startDateString := req.URL.Query().Get("startdate")
 		endDateString := req.URL.Query().Get("enddate")
 		objType := req.URL.Query().Get("type")
 		objSubType := req.URL.Query().Get("subtype")
 
-		//the query params for type and subtype can contain multiple values seperated by a comma e.g. "type=smbg,cbg"
-		//so split them out into an array of values
-		objTypes := strings.Split(objType, ",")
-		objSubTypes := strings.Split(objSubType, ",")
-
-
-		if startDateString != "" {
-			startDate, err := time.Parse(time.RFC3339Nano, startDateString)
-			if err != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing start date: %s", err))
-				jsonError(res, error_incorrect_params, start)
-				return
-			}
-			startDateString = startDate.Format(time.RFC3339Nano)
-		}
-		if endDateString != "" {
-			endDate, err := time.Parse(time.RFC3339Nano, endDateString)
-			if err != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing end date: %s", err))
-				jsonError(res, error_incorrect_params, start)
-				return
-			}
-			endDateString = endDate.Format(time.RFC3339Nano)
-		}
-		
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("Params: startdate:%s enddate:%s type:%s subtype:%s", startDateString, endDateString, objType, objSubType))
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("****Params: startdate:%s enddate:%s type:%s subtype:%s", startDateString, endDateString, objType, objSubType))
 		
 		token := req.Header.Get("x-tidepool-session-token")
 		td := shorelineClient.CheckToken(token)
@@ -275,30 +304,16 @@ func main() {
 		mongoSession := session.Copy()
 		defer mongoSession.Close()
 
-		//select this data
-		groupDataQuery := bson.M{"_groupId": groupId, 
-			"_active": true, 
-			"_schemaVersion": bson.M{"$gte": config.SchemaVersion.Minimum, "$lte": config.SchemaVersion.Maximum, }}
-
-		//if optional parameters are present, then add them to the query
-		if len(objTypes) >0 && objTypes[0] != "" {
-			log.Println(DATA_API_PREFIX, fmt.Sprintf("num obj types to map:%d",len(objTypes)))
-			groupDataQuery["type"] = bson.M{"$in":objTypes}
-		}
-
-		if len(objSubTypes) >0 && objSubTypes[0] != "" {
-			groupDataQuery["subType"] = bson.M{"$in":objSubTypes}
-		}
-
-		if startDateString != "" && endDateString != "" {
-			groupDataQuery["time"] = bson.M{"$gte": startDateString, "$lte": endDateString}
-		} else if startDateString != "" {
-			groupDataQuery["time"] = bson.M{"$gte": startDateString}
-		} else if endDateString != "" {
-			groupDataQuery["time"] = bson.M{"$lte": endDateString}
+		groupDataQuery, queryBuildError := generateMongoQuery(groupId, config.SchemaVersion.Minimum, config.SchemaVersion.Maximum , 
+						  startDateString , endDateString, objType, objSubType)
+		
+		if queryBuildError != nil {
+			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing date: %s", queryBuildError))
+			jsonError(res, error_incorrect_params, start)
+			return
 		}
 		log.Println(DATA_API_PREFIX, fmt.Sprintf("query:",groupDataQuery))
-
+	
 		//don't return these fields
 		removeFieldsForReturn := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
 
