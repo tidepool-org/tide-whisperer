@@ -1,10 +1,13 @@
 package main
+
 import (
-	"testing"
-	"reflect"
-	"labix.org/v2/mgo/bson"
 	"encoding/json"
+	"reflect"
 	"strings"
+	"testing"
+
+	"labix.org/v2/mgo"
+	"labix.org/v2/mgo/bson"
 )
 
 func TestGenerateMongoQuery_basic(t *testing.T) {
@@ -21,13 +24,13 @@ func TestGenerateMongoQuery_basic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectedQuery := bson.M{"_groupId": userId, 
-		"_active": true, 
-		"_schemaVersion": bson.M{"$gte": minSV, "$lte": maxSV }}
+	expectedQuery := bson.M{"_groupId": userId,
+		"_active":        true,
+		"_schemaVersion": bson.M{"$gte": minSV, "$lte": maxSV}}
 
 	eq := reflect.DeepEqual(mongoQuery, expectedQuery)
 	if !eq {
-	    t.Fatal(getErrString(mongoQuery, expectedQuery))
+		t.Fatal(getErrString(mongoQuery, expectedQuery))
 	}
 }
 
@@ -46,16 +49,16 @@ func TestGenerateMongoQuery_allparams(t *testing.T) {
 	}
 
 	expectedQuery := bson.M{
-		"_groupId": userId, 
-		"_active": true, 
-		"type":bson.M{"$in":strings.Split("smbg",",")},
-		"subType":bson.M{"$in":strings.Split("stype",",")},
-		"time": bson.M{"$gte": "2015-10-08T15:00:00Z", "$lte": "2015-10-11T15:00:00Z"},
-		"_schemaVersion": bson.M{"$gte": minSV, "$lte": maxSV }}
+		"_groupId":       userId,
+		"_active":        true,
+		"type":           bson.M{"$in": strings.Split("smbg", ",")},
+		"subType":        bson.M{"$in": strings.Split("stype", ",")},
+		"time":           bson.M{"$gte": "2015-10-08T15:00:00Z", "$lte": "2015-10-11T15:00:00Z"},
+		"_schemaVersion": bson.M{"$gte": minSV, "$lte": maxSV}}
 
 	eq := reflect.DeepEqual(mongoQuery, expectedQuery)
 	if !eq {
-	    t.Fatal(getErrString(mongoQuery, expectedQuery))
+		t.Fatal(getErrString(mongoQuery, expectedQuery))
 	}
 }
 
@@ -80,7 +83,8 @@ func TestGenerateMongoQuery_badDates(t *testing.T) {
 		t.Fatal("Should have failed to parse end date")
 	}
 
-	if mongoQuery == nil{}
+	if mongoQuery == nil {
+	}
 }
 
 func TestGenerateMongoQuery_multipleTypesAndSubTypes(t *testing.T) {
@@ -98,28 +102,30 @@ func TestGenerateMongoQuery_multipleTypesAndSubTypes(t *testing.T) {
 	}
 
 	expectedQuery := bson.M{
-		"_groupId": userId, 
-		"_active": true, 
-		"type":bson.M{"$in":strings.Split(types,",")},
-		"subType":bson.M{"$in":strings.Split(subTypes,",")},
-		"time": bson.M{"$gte": "2015-10-08T15:00:00Z", "$lte": "2015-10-11T15:00:00Z"},
-		"_schemaVersion": bson.M{"$gte": minSV, "$lte": maxSV }}
+		"_groupId":       userId,
+		"_active":        true,
+		"type":           bson.M{"$in": strings.Split(types, ",")},
+		"subType":        bson.M{"$in": strings.Split(subTypes, ",")},
+		"time":           bson.M{"$gte": "2015-10-08T15:00:00Z", "$lte": "2015-10-11T15:00:00Z"},
+		"_schemaVersion": bson.M{"$gte": minSV, "$lte": maxSV}}
 
 	eq := reflect.DeepEqual(mongoQuery, expectedQuery)
 	if !eq {
-	    t.Fatal(getErrString(mongoQuery, expectedQuery))
+		t.Fatal(getErrString(mongoQuery, expectedQuery))
 	}
+}
+
+func Test_useOfIndexes(t *testing.T) {
+	mgo.Index{}
+
 }
 
 func getErrString(mongoQuery, expectedQuery bson.M) string {
 	exp, err1 := json.MarshalIndent(expectedQuery, "", "  ")
 	mq, err2 := json.MarshalIndent(mongoQuery, "", "  ")
-	errStr := "expected:\n"+string(exp)+"\ndid not match returned query\n"+string(mq)
-	if err1 == nil && err2 == nil {}
+	errStr := "expected:\n" + string(exp) + "\ndid not match returned query\n" + string(mq)
+	if err1 == nil && err2 == nil {
+	}
 	return errStr
 
 }
-
-
-
-
