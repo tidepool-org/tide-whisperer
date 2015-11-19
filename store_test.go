@@ -139,60 +139,42 @@ func TestStore_generateMongoQuery_allparams(t *testing.T) {
 	}
 }
 
-/*
-func TestGenerateMongoQuery_badDates(t *testing.T) {
+func TestStore_generateMongoQuery_noDates(t *testing.T) {
 
 	qParams := &params{
 		active:        true,
 		groupId:       "123ggf",
 		userId:        "abc123",
-		schemaVersion: SchemaVersion{Maximum: 2, Minimum: 0},
-		date:          date{"123", ""},
-		types:         string{"smbg", "cbg"},
-		subTypes:      string{"stuff"},
+		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		types:         []string{"smbg", "cbg"},
+		subTypes:      []string{"stuff"},
 	}
 
-	mongoQuery, err := generateMongoQuery(userId, minSV, maxSV, startDate, endDate, types, subTypes)
-	if err == nil {
-		t.Fatal("should have failed to parse start date")
-	}
-
-	startDate = "2015-10-11T15:00:00.000Z"
-	endDate = "2015-10-11"
-	mongoQuery, err = generateMongoQuery(userId, minSV, maxSV, startDate, endDate, types, subTypes)
-	if err == nil {
-		t.Fatal("Should have failed to parse end date")
-	}
-
-	if mongoQuery == nil {
-	}
-}
-
-func TestGenerateMongoQuery_multipleTypesAndSubTypes(t *testing.T) {
-	userId := "abc123"
-	minSV := 0
-	maxSV := 1
-	startDate := "2015-10-08T15:00:00.000Z"
-	endDate := "2015-10-11T15:00:00.000Z"
-	types := "smbg,physicalActivity"
-	subTypes := "stype1,stype2"
-
-	mongoQuery, err := generateMongoQuery(userId, minSV, maxSV, startDate, endDate, types, subTypes)
-	if err != nil {
-		t.Fatal(err)
-	}
+	query := generateMongoQuery(qParams)
 
 	expectedQuery := bson.M{
-		"_groupId":       userId,
+		"_groupId":       "123ggf",
 		"_active":        true,
-		"type":           bson.M{"$in": strings.Split(types, ",")},
-		"subType":        bson.M{"$in": strings.Split(subTypes, ",")},
-		"time":           bson.M{"$gte": "2015-10-08T15:00:00Z", "$lte": "2015-10-11T15:00:00Z"},
-		"_schemaVersion": bson.M{"$gte": minSV, "$lte": maxSV}}
+		"type":           bson.M{"$in": strings.Split("smbg,cbg", ",")},
+		"subType":        bson.M{"$in": strings.Split("stuff", ",")},
+		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2}}
 
-	eq := reflect.DeepEqual(mongoQuery, expectedQuery)
+	eq := reflect.DeepEqual(query, expectedQuery)
 	if !eq {
-		t.Fatal(getErrString(mongoQuery, expectedQuery))
+		t.Error(getErrString(query, expectedQuery))
 	}
 }
-*/
+
+func TestStore_Ping(t *testing.T) {
+
+	store := before(t)
+	err := store.Ping()
+
+	if err != nil {
+		t.Error("there should be no error but got", err.Error())
+	}
+}
+
+func TestStore_IndexUse(t *testing.T) {
+
+}
