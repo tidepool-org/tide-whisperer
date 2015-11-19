@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -20,7 +22,7 @@ type StorageIterator interface {
 type Storage interface {
 	Close()
 	Ping() error
-	GetDeviceData(p *params) StorageIterator
+	GetDeviceData(p *params, res http.ResponseWriter)
 }
 
 const (
@@ -91,30 +93,14 @@ func NewMongoStoreClient(config *mongo.Config) *MongoStoreClient {
 		log.Fatal(DATA_API_PREFIX, err)
 	}
 
-	c := &MongoStoreClient{
-		session: mongoSession,
-	}
-
-	err = c.initIndexes()
-	if err != nil {
-		log.Panic("Setting up mongo indexes", err.Error())
-	}
-	return c
-}
-
-func (d MongoStoreClient) initIndexes() error {
-
-	cpy := d.session.Copy()
-	defer cpy.Close()
-
 	//index based on sort and where keys
 	index := mgo.Index{
 		Key:        []string{"_groupId", "_active", "_schemaVersion"},
 		Background: true,
 	}
-	err := mgoDataCollection(cpy).EnsureIndex(index)
+	err = mgoDataCollection(mongoSession).EnsureIndex(index)
 	if err != nil {
-		return err
+		log.Panic("Setting up base index", err.Error())
 	}
 
 	//index on type
@@ -122,9 +108,9 @@ func (d MongoStoreClient) initIndexes() error {
 		Key:        []string{"type"},
 		Background: true,
 	}
-	err = mgoDataCollection(cpy).EnsureIndex(typeIndex)
+	err = mgoDataCollection(mongoSession).EnsureIndex(typeIndex)
 	if err != nil {
-		return err
+		log.Panic("Setting up type index", err.Error())
 	}
 
 	//index on subType
@@ -132,11 +118,14 @@ func (d MongoStoreClient) initIndexes() error {
 		Key:        []string{"subType"},
 		Background: true,
 	}
-	err = mgoDataCollection(cpy).EnsureIndex(subTypeIndex)
+	err = mgoDataCollection(mongoSession).EnsureIndex(subTypeIndex)
 	if err != nil {
-		return err
+		log.Panic("Setting up subType index", err.Error())
 	}
-	return nil
+
+	return &MongoStoreClient{
+		session: mongoSession,
+	}
 }
 
 func mgoDataCollection(cpy *mgo.Session) *mgo.Collection {
@@ -188,18 +177,65 @@ func (d MongoStoreClient) Ping() error {
 	return nil
 }
 
-func (d MongoStoreClient) GetDeviceData(p *params) StorageIterator {
+func (d MongoStoreClient) GetDeviceData(p *params, res http.ResponseWriter) {
+
+	//process the found data and send the appropriate response
+	processResults := func(res http.ResponseWriter, iter StorageIterator, startedAt time.Time) {
+		var results map[string]interface{}
+		found := 0
+		first := false
+
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo processing started after [%.5f]secs", time.Now().Sub(startedAt).Seconds()))
+
+		for iter.Next(&results) {
+
+			found = found + 1
+
+			bytes, err := json.Marshal(results)
+			if err != nil {
+
+				res.WriteHeader(http.StatusInternalServerError)
+				//jsonError(res, error_loading_events.setInternalMessage(err), startedAt)
+				return
+			} else {
+				if !first {
+					res.Header().Add("content-type", "application/json")
+					res.Write([]byte("["))
+					first = true
+				} else {
+					res.Write([]byte(",\n"))
+				}
+				res.Write(bytes)
+			}
+		}
+
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo processing finished after [%.5f]secs and returned [%d] records", time.Now().Sub(startedAt).Seconds(), found))
+
+		if err := iter.Close(); err != nil {
+			res.WriteHeader(http.StatusInternalServerError)
+			//jsonError(res, error_running_query.setInternalMessage(err), startedAt)
+			return
+		}
+
+		res.Write([]byte("]"))
+		return
+	}
 
 	cpy := d.session.Copy()
 	defer cpy.Close()
+
+	started := time.Now()
 
 	query := generateMongoQuery(p)
 
 	removeFieldsForReturn := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
 
 	//use an iterator to protect against very large queries
-	return mgoDataCollection(cpy).
+	iter := mgoDataCollection(cpy).
 		Find(query).
 		Select(removeFieldsForReturn).
 		Iter()
+
+	processResults(res, iter, started)
+	return
 }
