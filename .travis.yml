@@ -8,13 +8,6 @@ go:
  - 1.4
  - tip
 
-addons:
-  apt:
-    sources:
-    - mongodb-3.0-precise
-    packages:
-    - mongodb-org-server
-
 install:
  - wget https://raw.githubusercontent.com/tidepool-org/tools/master/come_deps.sh
  - chmod -R 777 ./come_deps.sh

@@ -49,12 +49,16 @@ func formatForReading(toFormat interface{}) string {
 
 func getCursors(exPlans interface{}) []string {
 	var cursors []string
-	plans := exPlans.([]interface{})
 
-	if plans != nil {
-		for i := range plans {
-			p := plans[i].(map[string]interface{})
-			cursors = append(cursors, p["cursor"].(string))
+	if exPlans != nil {
+
+		plans := exPlans.([]interface{})
+
+		if plans != nil {
+			for i := range plans {
+				p := plans[i].(map[string]interface{})
+				cursors = append(cursors, p["cursor"].(string))
+			}
 		}
 	}
 	return cursors
