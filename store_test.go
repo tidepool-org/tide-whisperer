@@ -265,6 +265,10 @@ func TestStore_IndexUse_basicQuery(t *testing.T) {
 		t.Errorf("excpected [%s] to be in  [%v]", baseCursor, usedCursors)
 	}
 
+	if contains(usedCursors, typeCursor) {
+		t.Errorf("didn't expect [%s] to be in  [%v]", typeCursor, usedCursors)
+	}
+
 }
 
 func TestStore_IndexUse_fullQuery(t *testing.T) {
@@ -325,6 +329,10 @@ func TestStore_IndexUse_typeQuery(t *testing.T) {
 
 	if contains(usedCursors, baseCursor) == false {
 		t.Errorf("excpected [%s] to be in  [%v]", baseCursor, usedCursors)
+	}
+
+	if contains(usedCursors, subTypeCursor) {
+		t.Errorf("didn't expect [%s] to be in  [%v]", subTypeCursor, usedCursors)
 	}
 
 }
