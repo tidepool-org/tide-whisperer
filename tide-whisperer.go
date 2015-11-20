@@ -138,6 +138,45 @@ func main() {
 		res.WriteHeader(err.Status)
 	}
 
+	//process the found data and send the appropriate response
+	processResults := func(res http.ResponseWriter, iter StorageIterator, startedAt time.Time) {
+		var results map[string]interface{}
+		found := 0
+		first := false
+
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo processing started after [%.5f]secs", time.Now().Sub(startedAt).Seconds()))
+
+		for iter.Next(&results) {
+
+			found = found + 1
+
+			bytes, err := json.Marshal(results)
+			if err != nil {
+				jsonError(res, error_loading_events.setInternalMessage(err), startedAt)
+				return
+			} else {
+				if !first {
+					res.Header().Add("content-type", "application/json")
+					res.Write([]byte("["))
+					first = true
+				} else {
+					res.Write([]byte(",\n"))
+				}
+				res.Write(bytes)
+			}
+		}
+
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo processing finished after [%.5f]secs and returned [%d] records", time.Now().Sub(startedAt).Seconds(), found))
+
+		if err := iter.Close(); err != nil {
+			jsonError(res, error_running_query.setInternalMessage(err), startedAt)
+			return
+		}
+
+		res.Write([]byte("]"))
+		return
+	}
+
 	if err := shorelineClient.Start(); err != nil {
 		log.Fatal(err)
 	}
@@ -194,8 +233,10 @@ func main() {
 		}
 
 		queryParams.groupId = pair.ID
+		started := time.Now()
 
-		store.GetDeviceData(queryParams, res)
+		iter := store.GetDeviceData(queryParams)
+		processResults(res, iter, started)
 
 	})))
 
