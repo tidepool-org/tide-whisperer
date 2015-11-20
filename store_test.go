@@ -19,9 +19,7 @@ func before(t *testing.T) *MongoStoreClient {
 
 	store := NewMongoStoreClient(testingConfig)
 
-	/*
-	 * INIT THE TEST - we use a clean copy of the collection before we start
-	 */
+	//INIT THE TEST - we use a clean copy of the collection before we start
 	cpy := store.session.Copy()
 	defer cpy.Close()
 
@@ -35,13 +33,9 @@ func before(t *testing.T) *MongoStoreClient {
 }
 
 func getErrString(mongoQuery, expectedQuery bson.M) string {
-	exp, err1 := json.MarshalIndent(expectedQuery, "", "  ")
-	mq, err2 := json.MarshalIndent(mongoQuery, "", "  ")
-	errStr := "expected:\n" + string(exp) + "\ndid not match returned query\n" + string(mq)
-	if err1 == nil && err2 == nil {
-	}
-	return errStr
-
+	exp, _ := json.MarshalIndent(expectedQuery, "", "  ")
+	mq, _ := json.MarshalIndent(mongoQuery, "", "  ")
+	return "expected:\n" + string(exp) + "\ndid not match returned query\n" + string(mq)
 }
 
 func TestStore_IndexesExist(t *testing.T) {
@@ -87,10 +81,7 @@ func TestStore_IndexesExist(t *testing.T) {
 
 }
 
-func TestStore_generateMongoQuery_basic(t *testing.T) {
-
-	time.Now()
-
+func basicQuery() bson.M {
 	qParams := &params{
 		active:        true,
 		groupId:       "123",
@@ -98,7 +89,51 @@ func TestStore_generateMongoQuery_basic(t *testing.T) {
 		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 	}
 
-	query := generateMongoQuery(qParams)
+	return generateMongoQuery(qParams)
+}
+
+func allParamsQuery() bson.M {
+	qParams := &params{
+		active:        true,
+		groupId:       "123ggf",
+		userId:        "abc123",
+		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		date:          date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
+		types:         []string{"smbg", "cbg"},
+		subTypes:      []string{"stuff"},
+	}
+
+	return generateMongoQuery(qParams)
+}
+
+func noDatesQuery() bson.M {
+	qParams := &params{
+		active:        true,
+		groupId:       "123ggf",
+		userId:        "abc123",
+		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		types:         []string{"smbg", "cbg"},
+		subTypes:      []string{"stuff"},
+	}
+	return generateMongoQuery(qParams)
+}
+
+func dateRangedQuery() bson.M {
+	qParams := &params{
+		active:        true,
+		groupId:       "123",
+		userId:        "321",
+		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		date:          date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
+	}
+
+	return generateMongoQuery(qParams)
+}
+
+func TestStore_generateMongoQuery_basic(t *testing.T) {
+
+	time.Now()
+	query := basicQuery()
 
 	expectedQuery := bson.M{"_groupId": "123",
 		"_active":        true,
@@ -113,25 +148,18 @@ func TestStore_generateMongoQuery_basic(t *testing.T) {
 
 func TestStore_generateMongoQuery_allparams(t *testing.T) {
 
-	qParams := &params{
-		active:        true,
-		groupId:       "123ggf",
-		userId:        "abc123",
-		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		date:          date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
-		types:         []string{"smbg", "cbg"},
-		subTypes:      []string{"stuff"},
-	}
-
-	query := generateMongoQuery(qParams)
+	query := allParamsQuery()
 
 	expectedQuery := bson.M{
 		"_groupId":       "123ggf",
 		"_active":        true,
+		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
 		"type":           bson.M{"$in": strings.Split("smbg,cbg", ",")},
 		"subType":        bson.M{"$in": strings.Split("stuff", ",")},
-		"time":           bson.M{"$gte": "2015-10-07T15:00:00.000Z", "$lte": "2015-10-11T15:00:00.000Z"},
-		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2}}
+		"time": bson.M{
+			"$gte": "2015-10-07T15:00:00.000Z",
+			"$lte": "2015-10-11T15:00:00.000Z"},
+	}
 
 	eq := reflect.DeepEqual(query, expectedQuery)
 	if !eq {
@@ -141,16 +169,7 @@ func TestStore_generateMongoQuery_allparams(t *testing.T) {
 
 func TestStore_generateMongoQuery_noDates(t *testing.T) {
 
-	qParams := &params{
-		active:        true,
-		groupId:       "123ggf",
-		userId:        "abc123",
-		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		types:         []string{"smbg", "cbg"},
-		subTypes:      []string{"stuff"},
-	}
-
-	query := generateMongoQuery(qParams)
+	query := noDatesQuery()
 
 	expectedQuery := bson.M{
 		"_groupId":       "123ggf",
@@ -176,5 +195,12 @@ func TestStore_Ping(t *testing.T) {
 }
 
 func TestStore_IndexUse(t *testing.T) {
+
+	/*store := before(t)
+
+	sCopy := store.session
+	defer sCopy.Close()
+
+	query := basicQuery()*/
 
 }
