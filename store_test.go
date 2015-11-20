@@ -48,16 +48,25 @@ func formatForReading(toFormat interface{}) string {
 }
 
 func getCursors(exPlans interface{}) []string {
-
+	var cursors []string
 	plans := exPlans.([]interface{})
 
-	var cursors []string
-
-	for i := range plans {
-		p := plans[i].(map[string]interface{})
-		cursors = append(cursors, p["cursor"].(string))
+	if plans != nil {
+		for i := range plans {
+			p := plans[i].(map[string]interface{})
+			cursors = append(cursors, p["cursor"].(string))
+		}
 	}
 	return cursors
+}
+
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }
 
 func TestStore_IndexesExist(t *testing.T) {
@@ -248,14 +257,8 @@ func TestStore_IndexUse_basicQuery(t *testing.T) {
 
 	usedCursors := getCursors(executedPlan["allPlans"])
 
-	t.Log("TestStore_IndexUse_basicQuery cursors ", len(usedCursors))
-
-	if len(usedCursors) < 1 {
-		t.Fatal("basic query should have 1 cursors associated with it")
-	}
-
-	if usedCursors[0] != baseCursor {
-		t.Errorf("excpected [%s] actual [%s]", baseCursor, usedCursors[0])
+	if contains(usedCursors, baseCursor) == false {
+		t.Errorf("excpected [%s] to be in  [%v]", baseCursor, usedCursors)
 	}
 
 }
@@ -280,23 +283,18 @@ func TestStore_IndexUse_fullQuery(t *testing.T) {
 
 	usedCursors := getCursors(executedPlan["allPlans"])
 
-	t.Log("TestStore_IndexUse_fullQuery cursors ", len(usedCursors))
-
-	if len(usedCursors) < 3 {
-		t.Fatal("full query should have 3 cursors associated with it")
+	if contains(usedCursors, typeCursor) == false {
+		t.Errorf("excpected [%s] to be in  [%v]", typeCursor, usedCursors)
 	}
 
-	if usedCursors[0] != typeCursor {
-		t.Errorf("excpected [%s] actual [%s]", typeCursor, usedCursors[0])
+	if contains(usedCursors, subTypeCursor) == false {
+		t.Errorf("excpected [%s] to be in  [%v]", subTypeCursor, usedCursors)
 	}
 
-	if usedCursors[1] != subTypeCursor {
-		t.Errorf("excpected [%s] actual [%s]", subTypeCursor, usedCursors[1])
+	if contains(usedCursors, baseCursor) == false {
+		t.Errorf("excpected [%s] to be in  [%v]", baseCursor, usedCursors)
 	}
 
-	if usedCursors[2] != baseCursor {
-		t.Errorf("excpected [%s] actual [%s]", baseCursor, usedCursors[2])
-	}
 }
 
 func TestStore_IndexUse_typeQuery(t *testing.T) {
@@ -317,18 +315,12 @@ func TestStore_IndexUse_typeQuery(t *testing.T) {
 
 	usedCursors := getCursors(executedPlan["allPlans"])
 
-	t.Log("TestStore_IndexUse_typeQuery cursors ", len(usedCursors))
-
-	if len(usedCursors) < 2 {
-		t.Fatal("type query should have 2 cursors associated with it")
+	if contains(usedCursors, typeCursor) == false {
+		t.Errorf("excpected [%s] to be in  [%v]", typeCursor, usedCursors)
 	}
 
-	if usedCursors[0] != typeCursor {
-		t.Errorf("excpected [%s] actual [%s]", typeCursor, usedCursors[0])
-	}
-
-	if usedCursors[1] != baseCursor {
-		t.Errorf("excpected [%s] actual [%s]", baseCursor, usedCursors[1])
+	if contains(usedCursors, baseCursor) == false {
+		t.Errorf("excpected [%s] to be in  [%v]", baseCursor, usedCursors)
 	}
 
 }
