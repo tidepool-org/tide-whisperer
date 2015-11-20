@@ -66,7 +66,7 @@ func getCursors(exPlans interface{}) []string {
 
 func contains(s []string, e string) bool {
 	for _, a := range s {
-		if a == e {
+		if strings.Contains(s, e) {
 			return true
 		}
 	}
