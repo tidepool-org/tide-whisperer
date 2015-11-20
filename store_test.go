@@ -15,6 +15,12 @@ import (
 
 var testingConfig = &mongo.Config{ConnectionString: "mongodb://localhost/data_test"}
 
+const (
+	typeCursor    = "BtreeCursor type_1"
+	subTypeCursor = "BtreeCursor subType_1"
+	baseCursor    = "BtreeCursor _groupId_1__active_1__schemaVersion_1"
+)
+
 func before(t *testing.T) *MongoStoreClient {
 
 	store := NewMongoStoreClient(testingConfig)
@@ -33,9 +39,25 @@ func before(t *testing.T) *MongoStoreClient {
 }
 
 func getErrString(mongoQuery, expectedQuery bson.M) string {
-	exp, _ := json.MarshalIndent(expectedQuery, "", "  ")
-	mq, _ := json.MarshalIndent(mongoQuery, "", "  ")
-	return "expected:\n" + string(exp) + "\ndid not match returned query\n" + string(mq)
+	return "expected:\n" + formatForReading(expectedQuery) + "\ndid not match returned query\n" + formatForReading(mongoQuery)
+}
+
+func formatForReading(toFormat interface{}) string {
+	formatted, _ := json.MarshalIndent(toFormat, "", "  ")
+	return string(formatted)
+}
+
+func getCursors(exPlans interface{}) []string {
+
+	plans := exPlans.([]interface{})
+
+	var cursors []string
+
+	for i := range plans {
+		p := plans[i].(map[string]interface{})
+		cursors = append(cursors, p["cursor"].(string))
+	}
+	return cursors
 }
 
 func TestStore_IndexesExist(t *testing.T) {
@@ -106,7 +128,19 @@ func allParamsQuery() bson.M {
 	return generateMongoQuery(qParams)
 }
 
-func noDatesQuery() bson.M {
+func dateAndTypeQuery() bson.M {
+	qParams := &params{
+		active:        true,
+		groupId:       "123ggf",
+		userId:        "abc123",
+		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		date:          date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
+		types:         []string{"smbg", "cbg", "bolus", "basal"},
+	}
+	return generateMongoQuery(qParams)
+}
+
+func typeAndSubtypeQuery() bson.M {
 	qParams := &params{
 		active:        true,
 		groupId:       "123ggf",
@@ -118,7 +152,7 @@ func noDatesQuery() bson.M {
 	return generateMongoQuery(qParams)
 }
 
-func dateRangedQuery() bson.M {
+func dateQuery() bson.M {
 	qParams := &params{
 		active:        true,
 		groupId:       "123",
@@ -169,7 +203,7 @@ func TestStore_generateMongoQuery_allparams(t *testing.T) {
 
 func TestStore_generateMongoQuery_noDates(t *testing.T) {
 
-	query := noDatesQuery()
+	query := typeAndSubtypeQuery()
 
 	expectedQuery := bson.M{
 		"_groupId":       "123ggf",
@@ -194,13 +228,101 @@ func TestStore_Ping(t *testing.T) {
 	}
 }
 
-func TestStore_IndexUse(t *testing.T) {
+func TestStore_IndexUse_basicQuery(t *testing.T) {
 
-	/*store := before(t)
+	const expectedCursor = "BtreeCursor _groupId_1__active_1__schemaVersion_1"
 
+	store := before(t)
 	sCopy := store.session
 	defer sCopy.Close()
 
-	query := basicQuery()*/
+	query := basicQuery()
+
+	var executedPlan map[string]interface{}
+
+	err := mgoDataCollection(sCopy).Find(query).Explain(&executedPlan)
+
+	if err != nil {
+		t.Error("there should be no error execting the query", err.Error())
+	}
+
+	usedCursors := getCursors(executedPlan["allPlans"])
+
+	if len(usedCursors) != 1 {
+		t.Fatal("basic query should have 1 cursors associated with it")
+	}
+
+	if usedCursors[0] != baseCursor {
+		t.Errorf("excpected [%s] actual [%s]", baseCursor, usedCursors[0])
+	}
+
+}
+
+func TestStore_IndexUse_fullQuery(t *testing.T) {
+
+	const expectedCursor = "BtreeCursor type_1"
+
+	store := before(t)
+	sCopy := store.session
+	defer sCopy.Close()
+
+	query := allParamsQuery()
+
+	var executedPlan map[string]interface{}
+
+	err := mgoDataCollection(sCopy).Find(query).Explain(&executedPlan)
+
+	if err != nil {
+		t.Error("there should be no error execting the query", err.Error())
+	}
+
+	usedCursors := getCursors(executedPlan["allPlans"])
+
+	if len(usedCursors) != 3 {
+		t.Fatal("full query should have 3 cursors associated with it")
+	}
+
+	if usedCursors[0] != typeCursor {
+		t.Errorf("excpected [%s] actual [%s]", typeCursor, usedCursors[0])
+	}
+
+	if usedCursors[1] != subTypeCursor {
+		t.Errorf("excpected [%s] actual [%s]", subTypeCursor, usedCursors[1])
+	}
+
+	if usedCursors[2] != baseCursor {
+		t.Errorf("excpected [%s] actual [%s]", baseCursor, usedCursors[2])
+	}
+}
+
+func TestStore_IndexUse_typeQuery(t *testing.T) {
+
+	store := before(t)
+	sCopy := store.session
+	defer sCopy.Close()
+
+	query := dateAndTypeQuery()
+
+	var executedPlan map[string]interface{}
+
+	err := mgoDataCollection(sCopy).Find(query).Explain(&executedPlan)
+
+	if err != nil {
+		t.Error("there should be no error execting the query", err.Error())
+	}
+
+	usedCursors := getCursors(executedPlan["allPlans"])
+
+	if len(usedCursors) != 2 {
+		t.Fatal("type query should have 2 cursors associated with it")
+	}
+
+	if usedCursors[0] != typeCursor {
+		t.Errorf("excpected [%s] actual [%s]", typeCursor, usedCursors[0])
+	}
+
+	if usedCursors[1] != baseCursor {
+		t.Errorf("excpected [%s] actual [%s]", baseCursor, usedCursors[1])
+	}
 
 }
