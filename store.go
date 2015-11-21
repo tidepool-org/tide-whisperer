@@ -17,25 +17,27 @@ const (
 )
 
 type (
+	//Interface for the query iterator
 	StorageIterator interface {
 		Next(result interface{}) bool
 		Close() error
 	}
-
+	//Interface for our storage layer
 	Storage interface {
 		Close()
 		Ping() error
 		GetDeviceData(p *params) StorageIterator
 	}
-
+	//Mongo Storage Client
 	MongoStoreClient struct {
 		session *mgo.Session
 	}
 
 	params struct {
 		active bool
+		//userId comes from the request
 		userId string
-		//userId is resolved to the groupId for use in queries
+		//groupId is resolved from the incoming userid and if used storage in queries
 		groupId  string
 		types    []string
 		subTypes []string
