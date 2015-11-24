@@ -74,8 +74,8 @@ func getParams(q url.Values, schema *SchemaVersion) (*params, error) {
 
 	p := &params{
 		userId: q.Get(":userID"),
-		//the query params for type and subtype can contain multiple values seperated by a comma e.g. "type=smbg,cbg"
-		//so split them out into an array of values
+		//the query params for type and subtype can contain multiple values seperated
+		//by a comma e.g. "type=smbg,cbg" so split them out into an array of values
 		types:         strings.Split(q.Get("type"), ","),
 		subTypes:      strings.Split(q.Get("subType"), ","),
 		date:          date{startStr, endStr},

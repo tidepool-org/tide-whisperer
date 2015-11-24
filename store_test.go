@@ -256,7 +256,7 @@ func TestStore_IndexUse_basicQuery(t *testing.T) {
 
 	usedCursors := getCursors(executedPlan["allPlans"])
 
-	if contains(usedCursors, baseCursor) == false {
+	if !contains(usedCursors, baseCursor) {
 		t.Errorf("excpected [%s] to be in  [%v]", baseCursor, usedCursors)
 	}
 
@@ -286,15 +286,15 @@ func TestStore_IndexUse_fullQuery(t *testing.T) {
 
 	usedCursors := getCursors(executedPlan["allPlans"])
 
-	if contains(usedCursors, typeCursor) == false {
+	if !contains(usedCursors, typeCursor) {
 		t.Errorf("excpected [%s] to be in  [%v]", typeCursor, usedCursors)
 	}
 
-	if contains(usedCursors, subTypeCursor) == false {
+	if !contains(usedCursors, subTypeCursor) {
 		t.Errorf("excpected [%s] to be in  [%v]", subTypeCursor, usedCursors)
 	}
 
-	if contains(usedCursors, baseCursor) == false {
+	if !contains(usedCursors, baseCursor) {
 		t.Errorf("excpected [%s] to be in  [%v]", baseCursor, usedCursors)
 	}
 
@@ -318,11 +318,11 @@ func TestStore_IndexUse_typeQuery(t *testing.T) {
 
 	usedCursors := getCursors(executedPlan["allPlans"])
 
-	if contains(usedCursors, typeCursor) == false {
+	if !contains(usedCursors, typeCursor) {
 		t.Errorf("excpected [%s] to be in  [%v]", typeCursor, usedCursors)
 	}
 
-	if contains(usedCursors, baseCursor) == false {
+	if !contains(usedCursors, baseCursor) {
 		t.Errorf("excpected [%s] to be in  [%v]", baseCursor, usedCursors)
 	}
 
