@@ -336,3 +336,55 @@ func TestStore_IndexUse_typeQuery(t *testing.T) {
 	}
 
 }
+
+func TestStore_cleanDateString_empty(t *testing.T) {
+
+	dateStr, err := cleanDateString("")
+
+	if dateStr != "" {
+		t.Error("the returned dateStr should have been empty but got ", dateStr)
+	}
+	if err != nil {
+		t.Error("didn't expect an error but got ", err.Error())
+	}
+
+}
+
+func TestStore_cleanDateString_nonsensical(t *testing.T) {
+
+	dateStr, err := cleanDateString("blah")
+
+	if dateStr != "" {
+		t.Error("the returned dateStr should have been empty but got ", dateStr)
+	}
+	if err == nil {
+		t.Error("we should have been given an error")
+	}
+
+}
+
+func TestStore_cleanDateString_wrongFormat(t *testing.T) {
+
+	dateStr, err := cleanDateString("2006-20-02T3:04pm")
+
+	if dateStr != "" {
+		t.Error("the returned dateStr should have been empty but got ", dateStr)
+	}
+	if err == nil {
+		t.Error("we should have been given an error")
+	}
+
+}
+
+func TestStore_cleanDateString(t *testing.T) {
+
+	dateStr, err := cleanDateString("2015-10-10T15:00:00.000Z")
+
+	if dateStr == "" {
+		t.Error("the returned dateStr should not be empty")
+	}
+	if err != nil {
+		t.Error("we should have no error but go ", err.Error())
+	}
+
+}

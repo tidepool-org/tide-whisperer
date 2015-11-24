@@ -51,24 +51,27 @@ type (
 	}
 )
 
+func cleanDateString(dateString string) (string, error) {
+	if dateString == "" {
+		return "", nil
+	}
+	date, err := time.Parse(time.RFC3339Nano, dateString)
+	if err != nil {
+		return "", err
+	}
+	return date.Format(time.RFC3339Nano), nil
+}
+
 func getParams(q url.Values, schema *SchemaVersion) (*params, error) {
 
-	startStr := q.Get("startdate")
-	endStr := q.Get("enddate")
-
-	if startStr != "" {
-		startDate, err := time.Parse(time.RFC3339Nano, startStr)
-		if err != nil {
-			return nil, err
-		}
-		startStr = startDate.Format(time.RFC3339Nano)
+	startStr, err := cleanDateString(q.Get("startdate"))
+	if err != nil {
+		return nil, err
 	}
-	if endStr != "" {
-		endDate, err := time.Parse(time.RFC3339Nano, endStr)
-		if err != nil {
-			return nil, err
-		}
-		endStr = endDate.Format(time.RFC3339Nano)
+
+	endStr, err := cleanDateString(q.Get("enddate"))
+	if err != nil {
+		return nil, err
 	}
 
 	p := &params{
