@@ -176,10 +176,7 @@ func (d MongoStoreClient) Close() {
 
 func (d MongoStoreClient) Ping() error {
 	// do we have a store session
-	if err := d.session.Ping(); err != nil {
-		return err
-	}
-	return nil
+	return d.session.Ping()
 }
 
 func (d MongoStoreClient) GetDeviceData(p *params) StorageIterator {
