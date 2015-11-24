@@ -93,12 +93,14 @@ func NewMongoStoreClient(config *mongo.Config) *MongoStoreClient {
 		log.Fatal(DATA_API_PREFIX, err)
 	}
 
+	deviceDataCollection := mgoDataCollection(mongoSession)
+
 	//index based on sort and where keys
 	index := mgo.Index{
 		Key:        []string{"_groupId", "_active", "_schemaVersion"},
 		Background: true,
 	}
-	err = mgoDataCollection(mongoSession).EnsureIndex(index)
+	err = deviceDataCollection.EnsureIndex(index)
 	if err != nil {
 		log.Panic("Setting up base index", err.Error())
 	}
@@ -108,7 +110,7 @@ func NewMongoStoreClient(config *mongo.Config) *MongoStoreClient {
 		Key:        []string{"type"},
 		Background: true,
 	}
-	err = mgoDataCollection(mongoSession).EnsureIndex(typeIndex)
+	err = deviceDataCollection.EnsureIndex(typeIndex)
 	if err != nil {
 		log.Panic("Setting up type index", err.Error())
 	}
@@ -118,7 +120,7 @@ func NewMongoStoreClient(config *mongo.Config) *MongoStoreClient {
 		Key:        []string{"subType"},
 		Background: true,
 	}
-	err = mgoDataCollection(mongoSession).EnsureIndex(subTypeIndex)
+	err = deviceDataCollection.EnsureIndex(subTypeIndex)
 	if err != nil {
 		log.Panic("Setting up subType index", err.Error())
 	}
