@@ -33,7 +33,6 @@ type (
 	}
 
 	params struct {
-		active bool
 		//userId comes from the request
 		userId string
 		//groupId is resolved from the incoming userid and if used storage in queries
@@ -63,23 +62,22 @@ func cleanDateString(dateString string) (string, error) {
 
 func getParams(q url.Values, schema *SchemaVersion) (*params, error) {
 
-	startStr, err := cleanDateString(q.Get("startdate"))
+	startStr, err := cleanDateString(q.Get("startDate"))
 	if err != nil {
 		return nil, err
 	}
 
-	endStr, err := cleanDateString(q.Get("enddate"))
+	endStr, err := cleanDateString(q.Get("endDate"))
 	if err != nil {
 		return nil, err
 	}
 
 	p := &params{
 		userId: q.Get(":userID"),
-		active: true,
 		//the query params for type and subtype can contain multiple values seperated by a comma e.g. "type=smbg,cbg"
 		//so split them out into an array of values
 		types:         strings.Split(q.Get("type"), ","),
-		subTypes:      strings.Split(q.Get("subtype"), ","),
+		subTypes:      strings.Split(q.Get("subType"), ","),
 		date:          date{startStr, endStr},
 		schemaVersion: schema,
 	}
@@ -142,7 +140,7 @@ func generateMongoQuery(p *params) bson.M {
 
 	groupDataQuery := bson.M{
 		"_groupId":       p.groupId,
-		"_active":        p.active,
+		"_active":        true,
 		"_schemaVersion": bson.M{"$gte": p.schemaVersion.Minimum, "$lte": p.schemaVersion.Maximum}}
 
 	//if optional parameters are present, then add them to the query

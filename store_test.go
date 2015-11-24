@@ -118,7 +118,6 @@ func TestStore_IndexesExist(t *testing.T) {
 
 func basicQuery() bson.M {
 	qParams := &params{
-		active:        true,
 		groupId:       "123",
 		userId:        "321",
 		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
@@ -129,7 +128,6 @@ func basicQuery() bson.M {
 
 func allParamsQuery() bson.M {
 	qParams := &params{
-		active:        true,
 		groupId:       "123ggf",
 		userId:        "abc123",
 		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
@@ -143,7 +141,6 @@ func allParamsQuery() bson.M {
 
 func dateAndTypeQuery() bson.M {
 	qParams := &params{
-		active:        true,
 		groupId:       "123ggf",
 		userId:        "abc123",
 		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
@@ -155,7 +152,6 @@ func dateAndTypeQuery() bson.M {
 
 func typeAndSubtypeQuery() bson.M {
 	qParams := &params{
-		active:        true,
 		groupId:       "123ggf",
 		userId:        "abc123",
 		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
@@ -167,7 +163,6 @@ func typeAndSubtypeQuery() bson.M {
 
 func dateQuery() bson.M {
 	qParams := &params{
-		active:        true,
 		groupId:       "123",
 		userId:        "321",
 		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
