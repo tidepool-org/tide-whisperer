@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/url"
 	"strings"
@@ -84,8 +83,6 @@ func getParams(q url.Values, schema *SchemaVersion) (*params, error) {
 		date:          date{startStr, endStr},
 		schemaVersion: schema,
 	}
-
-	log.Println(DATA_API_PREFIX, fmt.Sprintf("****Params: %v", p))
 
 	return p, nil
 
