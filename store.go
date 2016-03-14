@@ -47,6 +47,11 @@ type (
 		start string
 		end   string
 	}
+
+	ClosingSessionIterator struct {
+		*mgo.Session
+		*mgo.Iter
+	}
 )
 
 func cleanDateString(dateString string) (string, error) {
@@ -178,15 +183,36 @@ func (d MongoStoreClient) Ping() error {
 
 func (d MongoStoreClient) GetDeviceData(p *params) StorageIterator {
 
-	cpy := d.session.Copy()
-	//NOTE: We are not defering the close here as we
-	//use the iterator to process the data to return
-
 	removeFieldsForReturn := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
 
-	//NOTE: We use an iterator to protect against very large queries
-	return mgoDataCollection(cpy).
+	// Note: We do not defer closing the session copy here as the iterator is returned back to be
+	// caller for processing. Instead, we wrap the session and iterator in an object that
+	// closes session when the iterator is closed. See ClosingSessionIterator below.
+	session := d.session.Copy()
+
+	iter := mgoDataCollection(session).
 		Find(generateMongoQuery(p)).
 		Select(removeFieldsForReturn).
 		Iter()
+
+	return &ClosingSessionIterator{session, iter}
+}
+
+func (i *ClosingSessionIterator) Next(result interface{}) bool {
+	if i.Iter != nil {
+		return i.Iter.Next(result)
+	}
+	return false
+}
+
+func (i *ClosingSessionIterator) Close() (err error) {
+	if i.Iter != nil {
+		err = i.Iter.Close()
+		i.Iter = nil
+	}
+	if i.Session != nil {
+		i.Session.Close()
+		i.Session = nil
+	}
+	return err
 }

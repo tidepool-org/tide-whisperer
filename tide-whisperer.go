@@ -13,7 +13,7 @@ import (
 
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/gorilla/pat"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
 	"github.com/tidepool-org/go-common/clients/disc"
@@ -168,11 +168,6 @@ func main() {
 
 		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo processing finished after [%.5f]secs and returned [%d] records", time.Now().Sub(startedAt).Seconds(), found))
 
-		if err := iter.Close(); err != nil {
-			jsonError(res, error_running_query.setInternalMessage(err), startedAt)
-			return
-		}
-
 		res.Write([]byte("]"))
 		return
 	}
@@ -236,8 +231,9 @@ func main() {
 		started := time.Now()
 
 		iter := store.GetDeviceData(queryParams)
-		processResults(res, iter, started)
+		defer iter.Close()
 
+		processResults(res, iter, started)
 	})))
 
 	done := make(chan bool)
