@@ -4,4 +4,4 @@ github.com/gorilla/mux git https://github.com/gorilla/mux.git 14cafe28513321476c
 github.com/gorilla/context git https://github.com/gorilla/context.git 14f550f51af52180c2eefed15e5fd18d63c0a64a
 github.com/daaku/go.httpgzip git https://github.com/daaku/go.httpgzip.git fd996995061ca6ad56e2b1b14e530edf06ce25ab
 github.com/satori/go.uuid git https://github.com/satori/go.uuid.git afe1e2ddf0f05b7c29d388a3f8e76cb15c2231ca
-github.com/tidepool-org/go-common git https://github.com/tidepool-org/go-common.git afa160c04ee3a517d14b9a511475df53b6ead772
+github.com/tidepool-org/go-common git https://github.com/tidepool-org/go-common.git 88b8b5f02bb67e5e3a2a623e1a83b061a800a7de
