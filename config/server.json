@@ -7,7 +7,7 @@
     "certFile": "config/cert.pem"
   },
   "mongo": {
-    "connectionString": "mongodb://localhost/streams"
+    "connectionString": "mongodb://localhost/data"
   },
   "schemaVersion": {
     "minimum": 1,
