@@ -183,7 +183,7 @@ func (d MongoStoreClient) Ping() error {
 
 func (d MongoStoreClient) GetDeviceData(p *params) StorageIterator {
 
-	removeFieldsForReturn := bson.M{"_id": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
+	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
 
 	// Note: We do not defer closing the session copy here as the iterator is returned back to be
 	// caller for processing. Instead, we wrap the session and iterator in an object that
