@@ -138,38 +138,36 @@ func main() {
 		res.WriteHeader(err.Status)
 	}
 
-	//process the found data and send the appropriate response
-	processResults := func(res http.ResponseWriter, iter StorageIterator, startedAt time.Time) {
+	processResults := func(response http.ResponseWriter, iterator StorageIterator, startTime time.Time) {
+		var writeCount int
+
+		log.Printf("%s mongo processing started after %.5f seconds", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds())
+
+		response.Header().Add("Content-Type", "application/json")
+		response.Write([]byte("["))
+
 		var results map[string]interface{}
-		found := 0
-		first := false
-
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo processing started after [%.5f]secs", time.Now().Sub(startedAt).Seconds()))
-
-		for iter.Next(&results) {
-
-			found = found + 1
-
-			bytes, err := json.Marshal(results)
-			if err != nil {
-				jsonError(res, error_loading_events.setInternalMessage(err), startedAt)
-				return
-			} else {
-				if !first {
-					res.Header().Add("content-type", "application/json")
-					res.Write([]byte("["))
-					first = true
+		for iterator.Next(&results) {
+			if len(results) > 0 {
+				if bytes, err := json.Marshal(results); err != nil {
+					log.Printf("%s failed to marshal mongo result with error: %s", DATA_API_PREFIX, err)
 				} else {
-					res.Write([]byte(",\n"))
+					if writeCount > 0 {
+						response.Write([]byte(","))
+					}
+					response.Write([]byte("\n"))
+					response.Write(bytes)
+					writeCount += 1
 				}
-				res.Write(bytes)
 			}
 		}
 
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("mongo processing finished after [%.5f]secs and returned [%d] records", time.Now().Sub(startedAt).Seconds(), found))
+		if writeCount > 0 {
+			response.Write([]byte("\n"))
+		}
+		response.Write([]byte("]"))
 
-		res.Write([]byte("]"))
-		return
+		log.Printf("%s mongo processing finished after %.5f seconds and returned %d records", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds(), writeCount)
 	}
 
 	if err := shorelineClient.Start(); err != nil {
