@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -41,6 +43,7 @@ type (
 		subTypes []string
 		date
 		schemaVersion *SchemaVersion
+		carelink      bool
 	}
 
 	date struct {
@@ -77,6 +80,17 @@ func getParams(q url.Values, schema *SchemaVersion) (*params, error) {
 		return nil, err
 	}
 
+	carelink := false
+	if values, ok := q["carelink"]; ok {
+		if len(values) < 1 {
+			return nil, errors.New("carelink parameter not valid")
+		}
+		carelink, err = strconv.ParseBool(values[len(values)-1])
+		if err != nil {
+			return nil, errors.New("carelink parameter not valid")
+		}
+	}
+
 	p := &params{
 		userId: q.Get(":userID"),
 		//the query params for type and subtype can contain multiple values seperated
@@ -85,6 +99,7 @@ func getParams(q url.Values, schema *SchemaVersion) (*params, error) {
 		subTypes:      strings.Split(q.Get("subType"), ","),
 		date:          date{startStr, endStr},
 		schemaVersion: schema,
+		carelink:      carelink,
 	}
 
 	return p, nil
@@ -167,6 +182,10 @@ func generateMongoQuery(p *params) bson.M {
 		groupDataQuery["time"] = bson.M{"$lte": p.date.end}
 	}
 
+	if !p.carelink {
+		groupDataQuery["source"] = bson.M{"$ne": "carelink"}
+	}
+
 	return groupDataQuery
 }
 
@@ -179,6 +198,33 @@ func (d MongoStoreClient) Close() {
 func (d MongoStoreClient) Ping() error {
 	// do we have a store session
 	return d.session.Ping()
+}
+
+func (d MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
+	if userID == "" {
+		return false, errors.New("user id is missing")
+	}
+
+	session := d.session.Copy()
+	defer session.Close()
+
+	query := bson.M{
+		"_userId": userID,
+		"type":    "upload",
+		"_state":  "closed",
+		"_active": true,
+		"deletedTime": bson.M{
+			"$exists": false,
+		},
+		"deviceManufacturers": "Medtronic",
+	}
+
+	count, err := mgoDataCollection(session).Find(query).Limit(1).Count()
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
 }
 
 func (d MongoStoreClient) GetDeviceData(p *params) StorageIterator {

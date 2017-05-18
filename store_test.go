@@ -21,7 +21,7 @@ const (
 	baseCursor    = "BtreeCursor _groupId_1__active_1__schemaVersion_1"
 )
 
-func before(t *testing.T) *MongoStoreClient {
+func before(t *testing.T, docs ...interface{}) *MongoStoreClient {
 
 	store := NewMongoStoreClient(testingConfig)
 
@@ -35,6 +35,13 @@ func before(t *testing.T) *MongoStoreClient {
 	if err := mgoDataCollection(cpy).Create(&mgo.CollectionInfo{}); err != nil {
 		t.Error("We couldn't created the deviceData collection for these tests ", err)
 	}
+
+	if len(docs) > 0 {
+		if err := mgoDataCollection(cpy).Insert(docs...); err != nil {
+			t.Error("Unable to insert documents", err)
+		}
+	}
+
 	return NewMongoStoreClient(testingConfig)
 }
 
@@ -137,6 +144,7 @@ func allParamsQuery() bson.M {
 		date:          date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
 		types:         []string{"smbg", "cbg"},
 		subTypes:      []string{"stuff"},
+		carelink:      true,
 	}
 
 	return generateMongoQuery(qParams)
@@ -182,7 +190,11 @@ func TestStore_generateMongoQuery_basic(t *testing.T) {
 
 	expectedQuery := bson.M{"_groupId": "123",
 		"_active":        true,
-		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2}}
+		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
+		"source": bson.M{
+			"$ne": "carelink",
+		},
+	}
 
 	eq := reflect.DeepEqual(query, expectedQuery)
 	if !eq {
@@ -221,7 +233,11 @@ func TestStore_generateMongoQuery_noDates(t *testing.T) {
 		"_active":        true,
 		"type":           bson.M{"$in": strings.Split("smbg,cbg", ",")},
 		"subType":        bson.M{"$in": strings.Split("stuff", ",")},
-		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2}}
+		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
+		"source": bson.M{
+			"$ne": "carelink",
+		},
+	}
 
 	eq := reflect.DeepEqual(query, expectedQuery)
 	if !eq {
@@ -394,4 +410,249 @@ func TestStore_cleanDateString(t *testing.T) {
 		t.Error("we should have no error but go ", err.Error())
 	}
 
+}
+
+func TestStore_HasMedtronicDirectData_UserID_Missing(t *testing.T) {
+	store := before(t)
+
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData("")
+
+	if err == nil {
+		t.Error("should have received error, but got nil")
+	}
+	if hasMedtronicDirectData {
+		t.Error("should not have Medtronic Direct data, but got some")
+	}
+}
+
+func TestStore_HasMedtronicDirectData_Found(t *testing.T) {
+	store := before(t, bson.M{
+		"_userId":             "1234567890",
+		"type":                "upload",
+		"_state":              "closed",
+		"_active":             true,
+		"deviceManufacturers": "Medtronic",
+	})
+
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+
+	if err != nil {
+		t.Error("failure querying HasMedtronicDirectData", err)
+	}
+	if !hasMedtronicDirectData {
+		t.Error("should have Medtronic Direct data, but got none")
+	}
+}
+
+func TestStore_HasMedtronicDirectData_Found_Multiple(t *testing.T) {
+	store := before(t, bson.M{
+		"_userId":             "0000000000",
+		"type":                "upload",
+		"_state":              "closed",
+		"_active":             true,
+		"deviceManufacturers": "Medtronic",
+		"index":               "0",
+	}, bson.M{
+		"_userId":             "1234567890",
+		"type":                "upload",
+		"_state":              "closed",
+		"_active":             true,
+		"deviceManufacturers": "Medtronic",
+		"index":               "1",
+	}, bson.M{
+		"_userId":             "1234567890",
+		"type":                "upload",
+		"_state":              "open",
+		"_active":             true,
+		"deviceManufacturers": "Medtronic",
+		"index":               "2",
+	}, bson.M{
+		"_userId":             "1234567890",
+		"type":                "upload",
+		"_state":              "closed",
+		"_active":             true,
+		"deviceManufacturers": "Medtronic",
+		"index":               "3",
+	}, bson.M{
+		"_userId":             "1234567890",
+		"type":                "upload",
+		"_state":              "closed",
+		"_active":             true,
+		"deletedTime":         "2017-05-17T20:13:32.064-0700",
+		"deviceManufacturers": "Medtronic",
+		"index":               "4",
+	})
+
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+
+	if err != nil {
+		t.Error("failure querying HasMedtronicDirectData", err)
+	}
+	if !hasMedtronicDirectData {
+		t.Error("should have Medtronic Direct data, but got none")
+	}
+}
+
+func TestStore_HasMedtronicDirectData_NotFound_UserID(t *testing.T) {
+	store := before(t, bson.M{
+		"_userId":             "0000000000",
+		"type":                "upload",
+		"_state":              "closed",
+		"_active":             true,
+		"deviceManufacturers": "Medtronic",
+	})
+
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+
+	if err != nil {
+		t.Error("failure querying HasMedtronicDirectData", err)
+	}
+	if hasMedtronicDirectData {
+		t.Error("should not have Medtronic Direct data, but got some")
+	}
+}
+
+func TestStore_HasMedtronicDirectData_NotFound_Type(t *testing.T) {
+	store := before(t, bson.M{
+		"_userId":             "1234567890",
+		"type":                "cgm",
+		"_state":              "closed",
+		"_active":             true,
+		"deviceManufacturers": "Medtronic",
+	})
+
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+
+	if err != nil {
+		t.Error("failure querying HasMedtronicDirectData", err)
+	}
+	if hasMedtronicDirectData {
+		t.Error("should not have Medtronic Direct data, but got some")
+	}
+}
+
+func TestStore_HasMedtronicDirectData_NotFound_State(t *testing.T) {
+	store := before(t, bson.M{
+		"_userId":             "1234567890",
+		"type":                "upload",
+		"_state":              "open",
+		"_active":             true,
+		"deviceManufacturers": "Medtronic",
+	})
+
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+
+	if err != nil {
+		t.Error("failure querying HasMedtronicDirectData", err)
+	}
+	if hasMedtronicDirectData {
+		t.Error("should not have Medtronic Direct data, but got some")
+	}
+}
+
+func TestStore_HasMedtronicDirectData_NotFound_Active(t *testing.T) {
+	store := before(t, bson.M{
+		"_userId":             "1234567890",
+		"type":                "upload",
+		"_state":              "closed",
+		"_active":             false,
+		"deviceManufacturers": "Medtronic",
+	})
+
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+
+	if err != nil {
+		t.Error("failure querying HasMedtronicDirectData", err)
+	}
+	if hasMedtronicDirectData {
+		t.Error("should not have Medtronic Direct data, but got some")
+	}
+}
+
+func TestStore_HasMedtronicDirectData_NotFound_DeletedTime(t *testing.T) {
+	store := before(t, bson.M{
+		"_userId":             "1234567890",
+		"type":                "upload",
+		"_state":              "closed",
+		"_active":             true,
+		"deletedTime":         "2017-05-17T20:10:26.607-0700",
+		"deviceManufacturers": "Medtronic",
+	})
+
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+
+	if err != nil {
+		t.Error("failure querying HasMedtronicDirectData", err)
+	}
+	if hasMedtronicDirectData {
+		t.Error("should not have Medtronic Direct data, but got some")
+	}
+}
+
+func TestStore_HasMedtronicDirectData_NotFound_DeviceManufacturer(t *testing.T) {
+	store := before(t, bson.M{
+		"_userId":             "1234567890",
+		"type":                "upload",
+		"_state":              "closed",
+		"_active":             true,
+		"deviceManufacturers": "Acme",
+	})
+
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+
+	if err != nil {
+		t.Error("failure querying HasMedtronicDirectData", err)
+	}
+	if hasMedtronicDirectData {
+		t.Error("should not have Medtronic Direct data, but got some")
+	}
+}
+
+func TestStore_HasMedtronicDirectData_NotFound_Multiple(t *testing.T) {
+	store := before(t, bson.M{
+		"_userId":             "0000000000",
+		"type":                "upload",
+		"_state":              "closed",
+		"_active":             true,
+		"deviceManufacturers": "Medtronic",
+		"index":               "0",
+	}, bson.M{
+		"_userId":             "1234567890",
+		"type":                "cgm",
+		"_state":              "closed",
+		"_active":             true,
+		"deviceManufacturers": "Medtronic",
+		"index":               "1",
+	}, bson.M{
+		"_userId":             "1234567890",
+		"type":                "upload",
+		"_state":              "open",
+		"_active":             true,
+		"deviceManufacturers": "Medtronic",
+		"index":               "2",
+	}, bson.M{
+		"_userId":             "1234567890",
+		"type":                "upload",
+		"_state":              "closed",
+		"_active":             false,
+		"deviceManufacturers": "Medtronic",
+		"index":               "3",
+	}, bson.M{
+		"_userId":             "1234567890",
+		"type":                "upload",
+		"_state":              "closed",
+		"_active":             true,
+		"deletedTime":         "2017-05-17T20:13:32.064-0700",
+		"deviceManufacturers": "Medtronic",
+		"index":               "4",
+	})
+
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+
+	if err != nil {
+		t.Error("failure querying HasMedtronicDirectData", err)
+	}
+	if hasMedtronicDirectData {
+		t.Error("should not have Medtronic Direct data, but got some")
+	}
 }

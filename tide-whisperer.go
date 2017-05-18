@@ -219,6 +219,16 @@ func main() {
 			return
 		}
 
+		if _, ok := req.URL.Query()["carelink"]; !ok {
+			if hasMedtronicDirectData, err := store.HasMedtronicDirectData(queryParams.userId); err != nil {
+				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Medtronic Direct data: %s", err))
+				jsonError(res, error_running_query, start)
+				return
+			} else if !hasMedtronicDirectData {
+				queryParams.carelink = true
+			}
+		}
+
 		pair := seagullClient.GetPrivatePair(queryParams.userId, "uploads", shorelineClient.TokenProvide())
 		if pair == nil {
 			jsonError(res, error_no_permissons, start)
