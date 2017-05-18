@@ -51,11 +51,11 @@ type (
 var (
 	error_status_check = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
 
-	error_no_view_permisson    = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
-	error_no_permissons        = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissons for user"}
-	error_running_query        = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
-	error_loading_events       = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
-	error_incorrect_dateparams = detailedError{Status: http.StatusInternalServerError, Code: "date_params", Message: "dates be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z"}
+	error_no_view_permisson  = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
+	error_no_permissons      = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissons for user"}
+	error_running_query      = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
+	error_loading_events     = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
+	error_invalid_parameters = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
 
 	store Storage
 )
@@ -207,7 +207,7 @@ func main() {
 
 		if err != nil {
 			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing date: %s", err))
-			jsonError(res, error_incorrect_dateparams, start)
+			jsonError(res, error_invalid_parameters, start)
 			return
 		}
 
