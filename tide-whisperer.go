@@ -134,8 +134,8 @@ func main() {
 		jsonErr, _ := json.Marshal(err)
 
 		res.Header().Add("content-type", "application/json")
-		res.Write(jsonErr)
 		res.WriteHeader(err.Status)
+		res.Write(jsonErr)
 	}
 
 	processResults := func(response http.ResponseWriter, iterator StorageIterator, startTime time.Time) {
