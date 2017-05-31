@@ -103,27 +103,6 @@ func main() {
 		WithHttpClient(httpClient).
 		Build()
 
-	gatekeeperClient := clients.NewGatekeeperClientBuilder().
-		WithHostGetter(config.GatekeeperConfig.ToHostGetter(hakkenClient)).
-		WithHttpClient(httpClient).
-		WithTokenProvider(shorelineClient).
-		Build()
-
-	userCanViewData := func(userID, groupID string) bool {
-		if userID == groupID {
-			return true
-		}
-
-		perms, err := gatekeeperClient.UserInGroup(userID, groupID)
-		if err != nil {
-			log.Println(DATA_API_PREFIX, "Error looking up user in group", err)
-			return false
-		}
-
-		log.Println(perms)
-		return !(perms["root"] == nil && perms["view"] == nil)
-	}
-
 	//log error detail and write as application/json
 	jsonError := func(res http.ResponseWriter, err detailedError, startedAt time.Time) {
 
@@ -157,7 +136,7 @@ func main() {
 					}
 					response.Write([]byte("\n"))
 					response.Write(bytes)
-					writeCount += 1
+					writeCount++
 				}
 			}
 		}
@@ -200,7 +179,7 @@ func main() {
 	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
 	// endDate (optional) : Only objects with 'time' field less than to or equal to start date will be returned .
 	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
-	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+	router.Add("GET", "/{userID}", checkJwt(httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 
 		queryParams, err := getParams(req.URL.Query(), &config.SchemaVersion)
@@ -208,14 +187,6 @@ func main() {
 		if err != nil {
 			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing date: %s", err))
 			jsonError(res, error_invalid_parameters, start)
-			return
-		}
-
-		token := req.Header.Get("x-tidepool-session-token")
-		td := shorelineClient.CheckToken(token)
-
-		if td == nil || !(td.IsServer || td.UserID == queryParams.userId || userCanViewData(td.UserID, queryParams.userId)) {
-			jsonError(res, error_no_view_permisson, start)
 			return
 		}
 
@@ -242,7 +213,7 @@ func main() {
 		defer iter.Close()
 
 		processResults(res, iter, started)
-	})))
+	}))))
 
 	done := make(chan bool)
 	server := common.NewServer(&http.Server{

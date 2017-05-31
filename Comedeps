@@ -5,3 +5,5 @@ github.com/gorilla/context git https://github.com/gorilla/context.git 14f550f51a
 github.com/daaku/go.httpgzip git https://github.com/daaku/go.httpgzip.git fd996995061ca6ad56e2b1b14e530edf06ce25ab
 github.com/satori/go.uuid git https://github.com/satori/go.uuid.git afe1e2ddf0f05b7c29d388a3f8e76cb15c2231ca
 github.com/tidepool-org/go-common git https://github.com/tidepool-org/go-common.git 023d0826496c7a3a155fbda2058224602b731b26
+github.com/auth0-community/go-auth0 git https://github.com/auth0-community/go-auth0.git b5e8610828c057e3df94ee1c2be99475befae99d
+github.com/square/go-jose git https://github.com/square/go-jose.git af13e1fbc7ac2df7f7eab54e5177104d546d0e9c
