@@ -163,7 +163,7 @@ func main() {
 			jsonError(res, error_status_check.setInternalMessage(err), start)
 			return
 		}
-		res.Write([]byte("OK\n"))
+		res.Write([]byte("Sweet as Bro!!\n"))
 		return
 	}))
 

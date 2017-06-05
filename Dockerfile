@@ -26,7 +26,7 @@ RUN apk --no-cache add bash curl bzr git \
            -e 's/localhost:9120/seagull:9120/g' \
            -e's/localhost:9107/shoreline:9107/g' config/env.json \
 # Switch to `master` in case we're working in a branch
- && git checkout master \
+# && git checkout master \
 # Build
  && PATH=${PATH}:. ./build \
 # Remove packages needed to build
