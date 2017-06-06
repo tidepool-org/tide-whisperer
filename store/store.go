@@ -1,4 +1,4 @@
-package main
+package store
 
 import (
 	"errors"
@@ -8,13 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tidepool-org/go-common/clients/mongo"
 	"labix.org/v2/mgo"
 	"labix.org/v2/mgo/bson"
+
+	"github.com/tidepool-org/go-common/clients/mongo"
 )
 
 const (
-	data_collection = "deviceData"
+	data_collection       = "deviceData"
+	DATA_STORE_API_PREFIX = "api/data/store"
 )
 
 type (
@@ -27,28 +29,33 @@ type (
 	Storage interface {
 		Close()
 		Ping() error
-		GetDeviceData(p *params) StorageIterator
+		GetDeviceData(p *Params) StorageIterator
 	}
 	//Mongo Storage Client
 	MongoStoreClient struct {
 		session *mgo.Session
 	}
 
-	params struct {
-		//userId comes from the request
-		userId string
-		//groupId is resolved from the incoming userid and if used storage in queries
-		groupId  string
-		types    []string
-		subTypes []string
-		date
-		schemaVersion *SchemaVersion
-		carelink      bool
+	SchemaVersion struct {
+		Minimum int
+		Maximum int
 	}
 
-	date struct {
-		start string
-		end   string
+	Params struct {
+		//userId comes from the request
+		UserId string
+		//groupId is resolved from the incoming userid and if used storage in queries
+		GroupId  string
+		Types    []string
+		SubTypes []string
+		Date
+		*SchemaVersion
+		Carelink bool
+	}
+
+	Date struct {
+		Start string
+		End   string
 	}
 
 	ClosingSessionIterator struct {
@@ -68,7 +75,7 @@ func cleanDateString(dateString string) (string, error) {
 	return date.Format(time.RFC3339Nano), nil
 }
 
-func getParams(q url.Values, schema *SchemaVersion) (*params, error) {
+func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 
 	startStr, err := cleanDateString(q.Get("startDate"))
 	if err != nil {
@@ -91,15 +98,15 @@ func getParams(q url.Values, schema *SchemaVersion) (*params, error) {
 		}
 	}
 
-	p := &params{
-		userId: q.Get(":userID"),
+	p := &Params{
+		UserId: q.Get(":userID"),
 		//the query params for type and subtype can contain multiple values seperated
 		//by a comma e.g. "type=smbg,cbg" so split them out into an array of values
-		types:         strings.Split(q.Get("type"), ","),
-		subTypes:      strings.Split(q.Get("subType"), ","),
-		date:          date{startStr, endStr},
-		schemaVersion: schema,
-		carelink:      carelink,
+		Types:         strings.Split(q.Get("type"), ","),
+		SubTypes:      strings.Split(q.Get("subType"), ","),
+		Date:          Date{startStr, endStr},
+		SchemaVersion: schema,
+		Carelink:      carelink,
 	}
 
 	return p, nil
@@ -110,7 +117,7 @@ func NewMongoStoreClient(config *mongo.Config) *MongoStoreClient {
 
 	mongoSession, err := mongo.Connect(config)
 	if err != nil {
-		log.Fatal(DATA_API_PREFIX, err)
+		log.Fatal(DATA_STORE_API_PREFIX, err)
 	}
 
 	deviceDataCollection := mgoDataCollection(mongoSession)
@@ -158,31 +165,31 @@ func mgoDataCollection(cpy *mgo.Session) *mgo.Collection {
 // to retrieve objects from the Tidepool database. It is used by the router.Add("GET", "/{userID}"
 // endpoint, which implements the Tide-whisperer API. See that function for further documentation
 // on parameters
-func generateMongoQuery(p *params) bson.M {
+func generateMongoQuery(p *Params) bson.M {
 
 	groupDataQuery := bson.M{
-		"_groupId":       p.groupId,
+		"_groupId":       p.GroupId,
 		"_active":        true,
-		"_schemaVersion": bson.M{"$gte": p.schemaVersion.Minimum, "$lte": p.schemaVersion.Maximum}}
+		"_schemaVersion": bson.M{"$gte": p.SchemaVersion.Minimum, "$lte": p.SchemaVersion.Maximum}}
 
 	//if optional parameters are present, then add them to the query
-	if len(p.types) > 0 && p.types[0] != "" {
-		groupDataQuery["type"] = bson.M{"$in": p.types}
+	if len(p.Types) > 0 && p.Types[0] != "" {
+		groupDataQuery["type"] = bson.M{"$in": p.Types}
 	}
 
-	if len(p.subTypes) > 0 && p.subTypes[0] != "" {
-		groupDataQuery["subType"] = bson.M{"$in": p.subTypes}
+	if len(p.SubTypes) > 0 && p.SubTypes[0] != "" {
+		groupDataQuery["subType"] = bson.M{"$in": p.SubTypes}
 	}
 
-	if p.date.start != "" && p.date.end != "" {
-		groupDataQuery["time"] = bson.M{"$gte": p.date.start, "$lte": p.date.end}
-	} else if p.date.start != "" {
-		groupDataQuery["time"] = bson.M{"$gte": p.date.start}
-	} else if p.date.end != "" {
-		groupDataQuery["time"] = bson.M{"$lte": p.date.end}
+	if p.Date.Start != "" && p.Date.End != "" {
+		groupDataQuery["time"] = bson.M{"$gte": p.Date.Start, "$lte": p.Date.End}
+	} else if p.Date.Start != "" {
+		groupDataQuery["time"] = bson.M{"$gte": p.Date.Start}
+	} else if p.Date.End != "" {
+		groupDataQuery["time"] = bson.M{"$lte": p.Date.End}
 	}
 
-	if !p.carelink {
+	if !p.Carelink {
 		groupDataQuery["source"] = bson.M{"$ne": "carelink"}
 	}
 
@@ -190,7 +197,7 @@ func generateMongoQuery(p *params) bson.M {
 }
 
 func (d MongoStoreClient) Close() {
-	log.Print(DATA_API_PREFIX, "Close the session")
+	log.Print(DATA_STORE_API_PREFIX, "Close the session")
 	d.session.Close()
 	return
 }
@@ -227,7 +234,7 @@ func (d MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 	return count > 0, nil
 }
 
-func (d MongoStoreClient) GetDeviceData(p *params) StorageIterator {
+func (d MongoStoreClient) GetDeviceData(p *Params) StorageIterator {
 
 	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
 

@@ -1,4 +1,4 @@
-package main
+package store
 
 import (
 	"encoding/json"
@@ -127,57 +127,57 @@ func contains(s []string, e string) bool {
 // }
 
 func basicQuery() bson.M {
-	qParams := &params{
-		groupId:       "123",
-		userId:        "321",
-		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+	qParams := &Params{
+		GroupId:       "123",
+		UserId:        "321",
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 	}
 
 	return generateMongoQuery(qParams)
 }
 
 func allParamsQuery() bson.M {
-	qParams := &params{
-		groupId:       "123ggf",
-		userId:        "abc123",
-		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		date:          date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
-		types:         []string{"smbg", "cbg"},
-		subTypes:      []string{"stuff"},
-		carelink:      true,
+	qParams := &Params{
+		GroupId:       "123ggf",
+		UserId:        "abc123",
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		Date:          Date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
+		Types:         []string{"smbg", "cbg"},
+		SubTypes:      []string{"stuff"},
+		Carelink:      true,
 	}
 
 	return generateMongoQuery(qParams)
 }
 
 func dateAndTypeQuery() bson.M {
-	qParams := &params{
-		groupId:       "123ggf",
-		userId:        "abc123",
-		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		date:          date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
-		types:         []string{"smbg", "cbg", "bolus", "basal"},
+	qParams := &Params{
+		GroupId:       "123ggf",
+		UserId:        "abc123",
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		Date:          Date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
+		Types:         []string{"smbg", "cbg", "bolus", "basal"},
 	}
 	return generateMongoQuery(qParams)
 }
 
 func typeAndSubtypeQuery() bson.M {
-	qParams := &params{
-		groupId:       "123ggf",
-		userId:        "abc123",
-		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		types:         []string{"smbg", "cbg"},
-		subTypes:      []string{"stuff"},
+	qParams := &Params{
+		GroupId:       "123ggf",
+		UserId:        "abc123",
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		Types:         []string{"smbg", "cbg"},
+		SubTypes:      []string{"stuff"},
 	}
 	return generateMongoQuery(qParams)
 }
 
 func dateQuery() bson.M {
-	qParams := &params{
-		groupId:       "123",
-		userId:        "321",
-		schemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		date:          date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
+	qParams := &Params{
+		GroupId:       "123",
+		UserId:        "321",
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		Date:          Date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
 	}
 
 	return generateMongoQuery(qParams)
