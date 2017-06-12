@@ -21,8 +21,6 @@ RUN sed -i -e 's/mongodb:\/\/localhost\/data/mongodb:\/\/mongo\/data/g' config/s
            -e 's/localhost:9123/gatekeeper:9123/g' \
            -e 's/localhost:9120/seagull:9120/g' \
            -e's/localhost:9107/shoreline:9107/g' config/env.json \
-# Switch to `master` in case we're working in a branch
- && git checkout master \
 # Build
  && ./build \
 # Remove files no longer needed after the build to reduce fs layer size
