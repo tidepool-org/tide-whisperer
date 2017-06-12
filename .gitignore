@@ -1,6 +1,4 @@
-bin
-src
-pkg
-dist
-.idea
-*.iml
+deploy/
+dist/
+
+artifact_go.sh

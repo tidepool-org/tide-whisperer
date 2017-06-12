@@ -1,19 +1,37 @@
+sudo: false
+
 language: go
 
-sudo: false
+go:
+  - 1.8.3
+  - tip
+
+addons:
+  apt:
+    sources:
+      - mongodb-3.2-precise
+    packages:
+      - mongodb-org-server
+  artifacts:
+    s3_region: us-west-2
+    paths:
+      - $(git ls-files -o deploy/*/*-*.tar.gz | tr "\n" ":")
+    target_paths:
+      - /
+
 services:
   - mongodb
 
-go:
- - 1.4
- - tip
-
-install:
- - wget https://raw.githubusercontent.com/tidepool-org/tools/master/come_deps.sh
- - chmod -R 777 ./come_deps.sh
- - export PATH=$PATH:$PWD
-
 script:
- - source ./build
- - go test -v
+  - ./build.sh
+  - ./test.sh
+  - ./artifact.sh
 
+matrix:
+  allow_failures:
+    - go: tip
+
+notifications:
+  email:
+    on_success: change
+    on_failure: always
