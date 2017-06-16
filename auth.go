@@ -80,7 +80,7 @@ tWud
 
 		if err != nil {
 			fmt.Println("Token is not valid or missing token")
-
+			fmt.Println("error was: ", err.Error())
 			response := Response{
 				Message: "Missing or invalid token.",
 			}
@@ -114,7 +114,6 @@ func checkScope(r *http.Request, validator *auth0.JWTValidator, token *jwt.JSONW
 		fmt.Println(err)
 		return false
 	}
-	fmt.Println("## claims", claims)
 	if strings.Contains(claims["scope"].(string), "read:data") {
 		return true
 	}
