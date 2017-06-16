@@ -190,7 +190,7 @@ func main() {
 		token := req.Header.Get("x-tidepool-session-token")
 		td := shorelineClient.CheckToken(token)
 
-		if td == nil || !(td.IsServer || td.UserID == queryParams.UserId || userCanViewData(td.UserID, queryParams.UserId)) {
+		if td == nil || !(td.IsServer || td.UserID == queryParams.UserId) {
 			jsonError(res, error_no_view_permisson, start)
 			return
 		}

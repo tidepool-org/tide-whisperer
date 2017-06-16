@@ -1,6 +1,132 @@
 {
-	"ImportPath": ".",
+	"ImportPath": "github.com/tidepool-org/tide-whisperer",
 	"GoVersion": "go1.7",
 	"GodepVersion": "v74",
-	"Deps": []
+	"Deps": [
+		{
+			"ImportPath": "github.com/auth0-community/go-auth0",
+			"Rev": "64f427eaa850dfad1df4050b1b7ed5270d81338b"
+		},
+		{
+			"ImportPath": "github.com/daaku/go.httpgzip",
+			"Rev": "a336c4bfd42faf5b18b9d90dcdfe3b4fc13a8fa5"
+		},
+		{
+			"ImportPath": "github.com/go-errors/errors",
+			"Rev": "8fa88b06e5974e97fbf9899a7f86a344bfd1f105"
+		},
+		{
+			"ImportPath": "github.com/gorilla/context",
+			"Rev": "14f550f51af52180c2eefed15e5fd18d63c0a64a"
+		},
+		{
+			"ImportPath": "github.com/gorilla/mux",
+			"Rev": "14cafe28513321476c73967a5a4f3454b6129c46"
+		},
+		{
+			"ImportPath": "github.com/gorilla/pat",
+			"Rev": "e3ceaad21981965be815a74ec833802d74e52947"
+		},
+		{
+			"ImportPath": "github.com/satori/go.uuid",
+			"Rev": "afe1e2ddf0f05b7c29d388a3f8e76cb15c2231ca"
+		},
+		{
+			"ImportPath": "github.com/square/go-jose",
+			"Rev": "50df5ca198e569d06795909c091ac0cea62e925a"
+		},
+		{
+			"ImportPath": "github.com/square/go-jose/cipher",
+			"Rev": "50df5ca198e569d06795909c091ac0cea62e925a"
+		},
+		{
+			"ImportPath": "github.com/square/go-jose/json",
+			"Rev": "50df5ca198e569d06795909c091ac0cea62e925a"
+		},
+		{
+			"ImportPath": "github.com/tidepool-org/go-common",
+			"Comment": "v0.0.13",
+			"Rev": "92156ada7f748ab4b6c19ff28c09ce469a9591d5"
+		},
+		{
+			"ImportPath": "github.com/tidepool-org/go-common/clients",
+			"Comment": "v0.0.13",
+			"Rev": "92156ada7f748ab4b6c19ff28c09ce469a9591d5"
+		},
+		{
+			"ImportPath": "github.com/tidepool-org/go-common/clients/disc",
+			"Comment": "v0.0.13",
+			"Rev": "92156ada7f748ab4b6c19ff28c09ce469a9591d5"
+		},
+		{
+			"ImportPath": "github.com/tidepool-org/go-common/clients/hakken",
+			"Comment": "v0.0.13",
+			"Rev": "92156ada7f748ab4b6c19ff28c09ce469a9591d5"
+		},
+		{
+			"ImportPath": "github.com/tidepool-org/go-common/clients/highwater",
+			"Comment": "v0.0.13",
+			"Rev": "92156ada7f748ab4b6c19ff28c09ce469a9591d5"
+		},
+		{
+			"ImportPath": "github.com/tidepool-org/go-common/clients/mongo",
+			"Comment": "v0.0.13",
+			"Rev": "92156ada7f748ab4b6c19ff28c09ce469a9591d5"
+		},
+		{
+			"ImportPath": "github.com/tidepool-org/go-common/clients/shoreline",
+			"Comment": "v0.0.13",
+			"Rev": "92156ada7f748ab4b6c19ff28c09ce469a9591d5"
+		},
+		{
+			"ImportPath": "github.com/tidepool-org/go-common/clients/status",
+			"Comment": "v0.0.13",
+			"Rev": "92156ada7f748ab4b6c19ff28c09ce469a9591d5"
+		},
+		{
+			"ImportPath": "github.com/tidepool-org/go-common/errors",
+			"Comment": "v0.0.13",
+			"Rev": "92156ada7f748ab4b6c19ff28c09ce469a9591d5"
+		},
+		{
+			"ImportPath": "github.com/tidepool-org/go-common/jepson",
+			"Comment": "v0.0.13",
+			"Rev": "92156ada7f748ab4b6c19ff28c09ce469a9591d5"
+		},
+		{
+			"ImportPath": "gopkg.in/square/go-jose.v2",
+			"Comment": "v2.1.1",
+			"Rev": "af13e1fbc7ac2df7f7eab54e5177104d546d0e9c"
+		},
+		{
+			"ImportPath": "gopkg.in/square/go-jose.v2/cipher",
+			"Comment": "v2.1.1",
+			"Rev": "af13e1fbc7ac2df7f7eab54e5177104d546d0e9c"
+		},
+		{
+			"ImportPath": "gopkg.in/square/go-jose.v2/json",
+			"Comment": "v2.1.1",
+			"Rev": "af13e1fbc7ac2df7f7eab54e5177104d546d0e9c"
+		},
+		{
+			"ImportPath": "gopkg.in/square/go-jose.v2/jwt",
+			"Comment": "v2.1.1",
+			"Rev": "af13e1fbc7ac2df7f7eab54e5177104d546d0e9c"
+		},
+		{
+			"ImportPath": "labix.org/v2/mgo",
+			"Comment": "275",
+			"Rev": "gustavo@niemeyer.net-20140501184651-975yyw9ipld92pji"
+		},
+		{
+			"ImportPath": "labix.org/v2/mgo/bson",
+			"Comment": "275",
+			"Rev": "gustavo@niemeyer.net-20140501184651-975yyw9ipld92pji"
+		},
+		{
+			"ImportPath": "labix.org/v2/mgo/sasl",
+			"Comment": "275",
+			"Rev": "gustavo@niemeyer.net-20140501184651-975yyw9ipld92pji"
+		}
+	]
 }

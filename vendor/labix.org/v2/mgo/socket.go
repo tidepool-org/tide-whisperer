@@ -122,7 +122,6 @@ type replyOp struct {
 type insertOp struct {
 	collection string        // "database.collection"
 	documents  []interface{} // One or more documents to insert
-	flags      uint32
 }
 
 type updateOp struct {
@@ -301,7 +300,6 @@ func (socket *mongoSocket) kill(err error, abend bool) {
 	socket.replyFuncs = make(map[uint32]replyFunc)
 	server := socket.server
 	socket.server = nil
-	socket.gotNonce.Broadcast()
 	socket.Unlock()
 	for _, replyFunc := range replyFuncs {
 		logf("Socket %p to %s: notifying replyFunc of closed socket: %s", socket, socket.addr, err.Error())
@@ -313,33 +311,24 @@ func (socket *mongoSocket) kill(err error, abend bool) {
 }
 
 func (socket *mongoSocket) SimpleQuery(op *queryOp) (data []byte, err error) {
-	var wait, change sync.Mutex
-	var replyDone bool
+	var mutex sync.Mutex
 	var replyData []byte
 	var replyErr error
-	wait.Lock()
+	mutex.Lock()
 	op.replyFunc = func(err error, reply *replyOp, docNum int, docData []byte) {
-		change.Lock()
-		if !replyDone {
-			replyDone = true
-			replyErr = err
-			if err == nil {
-				replyData = docData
-			}
-		}
-		change.Unlock()
-		wait.Unlock()
+		replyData = docData
+		replyErr = err
+		mutex.Unlock()
 	}
 	err = socket.Query(op)
 	if err != nil {
 		return nil, err
 	}
-	wait.Lock()
-	change.Lock()
-	data = replyData
-	err = replyErr
-	change.Unlock()
-	return data, err
+	mutex.Lock() // Wait.
+	if replyErr != nil {
+		return nil, replyErr
+	}
+	return replyData, nil
 }
 
 func (socket *mongoSocket) Query(ops ...interface{}) (err error) {
@@ -381,7 +370,7 @@ func (socket *mongoSocket) Query(ops ...interface{}) (err error) {
 
 		case *insertOp:
 			buf = addHeader(buf, 2002)
-			buf = addInt32(buf, int32(op.flags))
+			buf = addInt32(buf, 0) // Reserved
 			buf = addCString(buf, op.collection)
 			for _, doc := range op.documents {
 				debugf("Socket %p to %s: serializing document for insertion: %#v", socket, socket.addr, doc)
