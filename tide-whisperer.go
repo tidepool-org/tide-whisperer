@@ -14,25 +14,22 @@ import (
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/gorilla/pat"
 	uuid "github.com/satori/go.uuid"
+
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
 	"github.com/tidepool-org/go-common/clients/disc"
 	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/shoreline"
+	"github.com/tidepool-org/tide-whisperer/store"
 )
 
 type (
 	Config struct {
 		clients.Config
-		Service       disc.ServiceListing `json:"service"`
-		Mongo         mongo.Config        `json:"mongo"`
-		SchemaVersion `json:"schemaVersion"`
-	}
-
-	SchemaVersion struct {
-		Minimum int
-		Maximum int
+		Service             disc.ServiceListing `json:"service"`
+		Mongo               mongo.Config        `json:"mongo"`
+		store.SchemaVersion `json:"schemaVersion"`
 	}
 
 	// so we can wrap and marshal the detailed error
@@ -57,7 +54,7 @@ var (
 	error_loading_events     = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
 	error_invalid_parameters = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
 
-	store Storage
+	storage store.Storage
 )
 
 const DATA_API_PREFIX = "api/data"
@@ -117,7 +114,7 @@ func main() {
 		res.Write(jsonErr)
 	}
 
-	processResults := func(response http.ResponseWriter, iterator StorageIterator, startTime time.Time) {
+	processResults := func(response http.ResponseWriter, iterator store.StorageIterator, startTime time.Time) {
 		var writeCount int
 
 		log.Printf("%s mongo processing started after %.5f seconds", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds())
@@ -153,13 +150,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	store := NewMongoStoreClient(&config.Mongo)
+	storage := store.NewMongoStoreClient(&config.Mongo)
 
 	router := pat.New()
 
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
-		if err := store.Ping(); err != nil {
+		if err := storage.Ping(); err != nil {
 			jsonError(res, error_status_check.setInternalMessage(err), start)
 			return
 		}
@@ -182,7 +179,7 @@ func main() {
 	router.Add("GET", "/{userID}", checkJwt(httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 
-		queryParams, err := getParams(req.URL.Query(), &config.SchemaVersion)
+		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion)
 
 		if err != nil {
 			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing date: %s", err))
@@ -190,26 +187,34 @@ func main() {
 			return
 		}
 
+		token := req.Header.Get("x-tidepool-session-token")
+		td := shorelineClient.CheckToken(token)
+
+		if td == nil || !(td.IsServer || td.UserID == queryParams.UserId || userCanViewData(td.UserID, queryParams.UserId)) {
+			jsonError(res, error_no_view_permisson, start)
+			return
+		}
+
 		if _, ok := req.URL.Query()["carelink"]; !ok {
-			if hasMedtronicDirectData, err := store.HasMedtronicDirectData(queryParams.userId); err != nil {
+			if hasMedtronicDirectData, err := storage.HasMedtronicDirectData(queryParams.UserId); err != nil {
 				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Medtronic Direct data: %s", err))
 				jsonError(res, error_running_query, start)
 				return
 			} else if !hasMedtronicDirectData {
-				queryParams.carelink = true
+				queryParams.Carelink = true
 			}
 		}
 
-		pair := seagullClient.GetPrivatePair(queryParams.userId, "uploads", shorelineClient.TokenProvide())
+		pair := seagullClient.GetPrivatePair(queryParams.UserId, "uploads", shorelineClient.TokenProvide())
 		if pair == nil {
 			jsonError(res, error_no_permissons, start)
 			return
 		}
 
-		queryParams.groupId = pair.ID
+		queryParams.GroupId = pair.ID
 		started := time.Now()
 
-		iter := store.GetDeviceData(queryParams)
+		iter := storage.GetDeviceData(queryParams)
 		defer iter.Close()
 
 		processResults(res, iter, started)

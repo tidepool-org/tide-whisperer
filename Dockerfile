@@ -11,27 +11,20 @@ ENV API_SECRET="This is a local API secret for everyone. BsscSHqSHiwrBMJsEGqbvXi
     SEAGULL_SERVICE="{ \"type\": \"static\", \"hosts\": [{ \"protocol\": \"http\", \"host\": \"seagull:9120\" }] }" \
     GATEKEEPER_SERVICE="{ \"type\": \"static\", \"hosts\": [{ \"protocol\": \"http\", \"host\": \"gatekeeper:9123\" }] }"
 
-WORKDIR /go/src/app
+WORKDIR /go/src/github.com/tidepool-org/tide-whisperer
 
-COPY . /go/src/app
+COPY . /go/src/github.com/tidepool-org/tide-whisperer
 
-# Get come_deps.sh
-RUN apk --no-cache add bash curl bzr git \
- && curl --remote-name https://raw.githubusercontent.com/tidepool-org/tools/master/come_deps.sh \
- && chmod a+x come_deps.sh \
 # Update config to work with Docker hostnames
- && sed -i -e 's/mongodb:\/\/localhost\/data/mongodb:\/\/mongo\/data/g' config/server.json \
+RUN sed -i -e 's/mongodb:\/\/localhost\/data/mongodb:\/\/mongo\/data/g' config/server.json \
  && sed -i -e 's/localhost:8000/hakken:8000/g' \
            -e 's/localhost:9123/gatekeeper:9123/g' \
            -e 's/localhost:9120/seagull:9120/g' \
            -e's/localhost:9107/shoreline:9107/g' config/env.json \
-# Switch to `master` in case we're working in a branch
-# && git checkout master \
+           
 # Build
- && PATH=${PATH}:. ./build \
-# Remove packages needed to build
- && apk del bash curl bzr git \
+ && ./build \
 # Remove files no longer needed after the build to reduce fs layer size
- && rm -rf .git .gitignore come_deps.sh
+ && rm -rf .git .gitignore
 
 CMD ["./dist/tide-whisperer"]
