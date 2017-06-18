@@ -29,7 +29,7 @@ type (
 	Config struct {
 		clients.Config
 		Service             disc.ServiceListing `json:"service"`
-		Mongo               *mongo.Config       `json:"mongo"`
+		Mongo               mongo.Config        `json:"mongo"`
 		store.SchemaVersion `json:"schemaVersion"`
 	}
 
