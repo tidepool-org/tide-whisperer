@@ -21,6 +21,7 @@ import (
 	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/shoreline"
+	"github.com/tidepool-org/tide-whisperer/auth"
 	"github.com/tidepool-org/tide-whisperer/store"
 )
 
@@ -28,7 +29,7 @@ type (
 	Config struct {
 		clients.Config
 		Service             disc.ServiceListing `json:"service"`
-		Mongo               mongo.Config        `json:"mongo"`
+		Mongo               *mongo.Config       `json:"mongo"`
 		store.SchemaVersion `json:"schemaVersion"`
 	}
 
@@ -176,7 +177,7 @@ func main() {
 	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
 	// endDate (optional) : Only objects with 'time' field less than to or equal to start date will be returned .
 	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
-	router.Add("GET", "/{userID}", checkJwt(httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+	router.Add("GET", "/{userID}", auth.CheckJwt(httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 
 		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion)

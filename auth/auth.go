@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"crypto/x509"
@@ -40,7 +40,8 @@ func loadPublicKey(data []byte) (interface{}, error) {
 	return nil, fmt.Errorf("square/go-jose: parse error, got '%s' and '%s'", err0, err1)
 }
 
-func checkJwt(h http.Handler) http.Handler {
+// CheckJwt for auth
+func CheckJwt(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		cert := `-----BEGIN CERTIFICATE-----
@@ -69,7 +70,8 @@ tWud
 
 		configuration := auth0.NewConfiguration(
 			secretProvider,
-			[]string{"http://localhost:8009/data", "https://tidepool.auth0.com/userinfo"},
+			//[]string{"http://localhost:8009/data", "https://tidepool.auth0.com/userinfo"},
+			[]string{"https://dev-api.tidepool.org/data", "https://tidepool.auth0.com/userinfo"},
 			"https://tidepool.auth0.com/",
 			jose.RS256,
 		)
