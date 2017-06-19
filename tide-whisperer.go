@@ -8,12 +8,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	auth0 "github.com/auth0-community/go-auth0"
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/gorilla/pat"
 	uuid "github.com/satori/go.uuid"
+	jose "gopkg.in/square/go-jose.v2"
+	jwt "gopkg.in/square/go-jose.v2/jwt"
 
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
@@ -21,7 +25,6 @@ import (
 	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/shoreline"
-	"github.com/tidepool-org/tide-whisperer/auth"
 	"github.com/tidepool-org/tide-whisperer/store"
 )
 
@@ -48,6 +51,9 @@ type (
 
 var (
 	error_status_check = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
+
+	error_no_auth_token    = detailedError{Status: http.StatusUnauthorized, Code: "data_missing_authorization", Message: "access token is not valid or missing"}
+	error_wrong_auth_scope = detailedError{Status: http.StatusUnauthorized, Code: "data_wrong_scope", Message: "you do not have the read:data scope."}
 
 	error_no_view_permisson  = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
 	error_no_permissons      = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissons for user"}
@@ -147,6 +153,65 @@ func main() {
 		log.Printf("%s mongo processing finished after %.5f seconds and returned %d records", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds(), writeCount)
 	}
 
+	checkScope := func(r *http.Request, validator *auth0.JWTValidator, token *jwt.JSONWebToken) bool {
+		claims := map[string]interface{}{}
+		err := validator.Claims(r, token, &claims)
+
+		if err != nil {
+			fmt.Println("error validating claim", err)
+			return false
+		}
+		fmt.Println("claims", claims)
+		if strings.Contains(claims["scope"].(string), "read:data") {
+			return true
+		}
+		return false
+	}
+
+	authorize := func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+			start := time.Now()
+
+			if sessionToken := r.Header.Get("x-tidepool-session-token"); sessionToken != "" {
+				queryParams, err := store.GetParams(r.URL.Query(), &config.SchemaVersion)
+
+				td := shorelineClient.CheckToken(sessionToken)
+
+				if td == nil || !(td.IsServer || td.UserID == queryParams.UserId) {
+					jsonError(w, error_no_view_permisson, start)
+					return
+				}
+				// If the token is valid we'll pass through the middleware
+				h.ServeHTTP(w, r)
+			}
+
+			configuration := auth0.NewConfiguration(
+				auth0.NewJWKClient(auth0.JWKClientOptions{URI: "https://tidepool.auth0.com/.well-known/jwks.json"}),
+				[]string{"https://dev-api.tidepool.org/data", "https://tidepool.auth0.com/userinfo"},
+				"https://tidepool.auth0.com/",
+				jose.RS256,
+			)
+			validator := auth0.NewValidator(configuration)
+			token, err := validator.ValidateRequest(r)
+
+			if err != nil {
+				jsonError(w, error_no_auth_token, start)
+				return
+			}
+
+			result := checkScope(r, validator, token)
+			if result == true {
+				// If the token is valid and we have the right scope, we'll pass through the middleware
+				h.ServeHTTP(w, r)
+			} else {
+				jsonError(w, error_wrong_auth_scope, start)
+				return
+
+			}
+		})
+	}
+
 	if err := shorelineClient.Start(); err != nil {
 		log.Fatal(err)
 	}
@@ -177,9 +242,8 @@ func main() {
 	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
 	// endDate (optional) : Only objects with 'time' field less than to or equal to start date will be returned .
 	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
-	router.Add("GET", "/{userID}", auth.CheckJwt(httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+	router.Add("GET", "/{userID}", authorize(httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
-
 		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion)
 
 		if err != nil {
@@ -187,14 +251,6 @@ func main() {
 			jsonError(res, error_invalid_parameters, start)
 			return
 		}
-
-		// token := req.Header.Get("x-tidepool-session-token")
-		// td := shorelineClient.CheckToken(token)
-
-		// if td == nil || !(td.IsServer || td.UserID == queryParams.UserId) {
-		// 	jsonError(res, error_no_view_permisson, start)
-		// 	return
-		// }
 
 		if _, ok := req.URL.Query()["carelink"]; !ok {
 			if hasMedtronicDirectData, err := storage.HasMedtronicDirectData(queryParams.UserId); err != nil {
