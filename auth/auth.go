@@ -65,17 +65,25 @@ tWud
 -----END CERTIFICATE-----
 `
 
-		secret, _ := loadPublicKey([]byte(cert))
-		secretProvider := auth0.NewKeyProvider(secret)
+		// secret, _ := loadPublicKey([]byte(cert))
+		// secretProvider := auth0.NewKeyProvider(secret)
 
+		// configuration := auth0.NewConfiguration(
+		// 	secretProvider,
+		// 	//[]string{"http://localhost:8009/data", "https://tidepool.auth0.com/userinfo"},
+		// 	[]string{"https://dev-api.tidepool.org/data", "https://tidepool.auth0.com/userinfo"},
+		// 	"https://tidepool.auth0.com/",
+		// 	jose.RS256,
+		// )
+
+		//
 		configuration := auth0.NewConfiguration(
-			secretProvider,
-			//[]string{"http://localhost:8009/data", "https://tidepool.auth0.com/userinfo"},
+			auth0.NewJWKClient(auth0.JWKClientOptions{URI: "https://tidepool.auth0.com/.well-known/jwks.json"}),
 			[]string{"https://dev-api.tidepool.org/data", "https://tidepool.auth0.com/userinfo"},
 			"https://tidepool.auth0.com/",
 			jose.RS256,
 		)
-
+		//
 		validator := auth0.NewValidator(configuration)
 
 		token, err := validator.ValidateRequest(r)
