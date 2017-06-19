@@ -188,6 +188,7 @@ func main() {
 				}
 				// If the token is valid we'll pass through the middleware
 				h.ServeHTTP(w, r)
+				return
 			}
 
 			configuration := auth0.NewConfiguration(
@@ -208,11 +209,11 @@ func main() {
 			if result == true {
 				// If the token is valid and we have the right scope, we'll pass through the middleware
 				h.ServeHTTP(w, r)
-			} else {
-				jsonError(w, error_wrong_auth_scope, start)
 				return
-
 			}
+			jsonError(w, error_wrong_auth_scope, start)
+			return
+
 		})
 	}
 
