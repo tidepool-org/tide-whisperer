@@ -188,13 +188,13 @@ func main() {
 			return
 		}
 
-		token := req.Header.Get("x-tidepool-session-token")
-		td := shorelineClient.CheckToken(token)
+		// token := req.Header.Get("x-tidepool-session-token")
+		// td := shorelineClient.CheckToken(token)
 
-		if td == nil || !(td.IsServer || td.UserID == queryParams.UserId) {
-			jsonError(res, error_no_view_permisson, start)
-			return
-		}
+		// if td == nil || !(td.IsServer || td.UserID == queryParams.UserId) {
+		// 	jsonError(res, error_no_view_permisson, start)
+		// 	return
+		// }
 
 		if _, ok := req.URL.Query()["carelink"]; !ok {
 			if hasMedtronicDirectData, err := storage.HasMedtronicDirectData(queryParams.UserId); err != nil {
