@@ -175,6 +175,10 @@ func main() {
 
 			if sessionToken := r.Header.Get("x-tidepool-session-token"); sessionToken != "" {
 				queryParams, err := store.GetParams(r.URL.Query(), &config.SchemaVersion)
+				if err != nil {
+					jsonError(w, error_invalid_parameters, start)
+					return
+				}
 
 				td := shorelineClient.CheckToken(sessionToken)
 
