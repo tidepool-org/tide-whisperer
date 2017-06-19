@@ -119,9 +119,10 @@ func checkScope(r *http.Request, validator *auth0.JWTValidator, token *jwt.JSONW
 	err := validator.Claims(r, token, &claims)
 
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("error validating claim", err)
 		return false
 	}
+	fmt.Println("claims", claims)
 	if strings.Contains(claims["scope"].(string), "read:data") {
 		return true
 	}
