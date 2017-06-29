@@ -158,10 +158,10 @@ func main() {
 		err := validator.Claims(r, token, &claims)
 
 		if err != nil {
-			fmt.Println("error validating claim", err)
+			log.Println("error validating claim", err)
 			return false
 		}
-		fmt.Println("claims", claims)
+		log.Println("claims", claims)
 		if strings.Contains(claims["scope"].(string), "read:data") {
 			return true
 		}
@@ -191,6 +191,7 @@ func main() {
 				return
 			}
 
+			// No session token so we will look at access_token
 			configuration := auth0.NewConfiguration(
 				auth0.NewJWKClient(auth0.JWKClientOptions{URI: "https://tidepool.auth0.com/.well-known/jwks.json"}),
 				[]string{"https://dev-api.tidepool.org/data", "https://tidepool.auth0.com/userinfo"},
@@ -201,6 +202,7 @@ func main() {
 			token, err := validator.ValidateRequest(r)
 
 			if err != nil {
+				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error validating token: %s", err))
 				jsonError(w, error_no_auth_token, start)
 				return
 			}
