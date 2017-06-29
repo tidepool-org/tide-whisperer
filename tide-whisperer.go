@@ -158,10 +158,10 @@ func main() {
 		err := validator.Claims(r, token, &claims)
 
 		if err != nil {
-			log.Println("error validating claim", err)
+			fmt.Println("error validating claim", err)
 			return false
 		}
-		log.Println("claims", claims)
+		fmt.Println("claims", claims)
 		if strings.Contains(claims["scope"].(string), "read:data") {
 			return true
 		}
@@ -202,7 +202,7 @@ func main() {
 			token, err := validator.ValidateRequest(r)
 
 			if err != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error validating token: %s", err))
+				fmt.Println("error validating token", err)
 				jsonError(w, error_no_auth_token, start)
 				return
 			}
