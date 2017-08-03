@@ -95,23 +95,18 @@ func main() {
 		WithConfig(&config.ShorelineConfig.ShorelineClientConfig).
 		Build()
 
-	seagullClient := clients.NewSeagullClientBuilder().
-		WithHostGetter(config.SeagullConfig.ToHostGetter(hakkenClient)).
-		WithHttpClient(httpClient).
-		Build()
-
 	gatekeeperClient := clients.NewGatekeeperClientBuilder().
 		WithHostGetter(config.GatekeeperConfig.ToHostGetter(hakkenClient)).
 		WithHttpClient(httpClient).
 		WithTokenProvider(shorelineClient).
 		Build()
 
-	userCanViewData := func(userID, groupID string) bool {
-		if userID == groupID {
+	userCanViewData := func(authenticatedUserID string, targetUserID string) bool {
+		if authenticatedUserID == targetUserID {
 			return true
 		}
 
-		perms, err := gatekeeperClient.UserInGroup(userID, groupID)
+		perms, err := gatekeeperClient.UserInGroup(authenticatedUserID, targetUserID)
 		if err != nil {
 			log.Println(DATA_API_PREFIX, "Error looking up user in group", err)
 			return false
@@ -226,13 +221,6 @@ func main() {
 			}
 		}
 
-		pair := seagullClient.GetPrivatePair(queryParams.UserId, "uploads", shorelineClient.TokenProvide())
-		if pair == nil {
-			jsonError(res, error_no_permissons, start)
-			return
-		}
-
-		queryParams.GroupId = pair.ID
 		started := time.Now()
 
 		iter := storage.GetDeviceData(queryParams)

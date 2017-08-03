@@ -42,10 +42,7 @@ type (
 	}
 
 	Params struct {
-		//userId comes from the request
-		UserId string
-		//groupId is resolved from the incoming userid and if used storage in queries
-		GroupId  string
+		UserId   string
 		Types    []string
 		SubTypes []string
 		Date
@@ -136,7 +133,7 @@ func mgoDataCollection(cpy *mgo.Session) *mgo.Collection {
 func generateMongoQuery(p *Params) bson.M {
 
 	groupDataQuery := bson.M{
-		"_groupId":       p.GroupId,
+		"_userId":        p.UserId,
 		"_active":        true,
 		"_schemaVersion": bson.M{"$gte": p.SchemaVersion.Minimum, "$lte": p.SchemaVersion.Maximum}}
 
