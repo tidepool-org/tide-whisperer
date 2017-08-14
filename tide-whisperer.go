@@ -193,16 +193,21 @@ func main() {
 
 			// No session token so we will look at access_token
 			configuration := auth0.NewConfiguration(
-				auth0.NewJWKClient(auth0.JWKClientOptions{URI: "https://tidepool.auth0.com/.well-known/jwks.json"}),
-				[]string{"https://dev-api.tidepool.org/data", "https://tidepool.auth0.com/userinfo"},
-				"https://tidepool.auth0.com/",
+				auth0.NewJWKClient(auth0.JWKClientOptions{
+					URI: "https://tidepool-dev.auth0.com/.well-known/jwks.json",
+				}),
+				[]string{
+					"open-api",
+					"https://tidepool-dev.auth0.com/userinfo",
+				},
+				"https://tidepool-dev.auth0.com/",
 				jose.RS256,
 			)
 			validator := auth0.NewValidator(configuration)
 			token, err := validator.ValidateRequest(r)
 
 			if err != nil {
-				fmt.Println("error validating token", err)
+				fmt.Println("error validating token: ", err)
 				jsonError(w, error_no_auth_token, start)
 				return
 			}
