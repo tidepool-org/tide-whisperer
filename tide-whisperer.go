@@ -12,12 +12,9 @@ import (
 	"syscall"
 	"time"
 
-	auth0 "github.com/auth0-community/go-auth0"
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/gorilla/pat"
 	uuid "github.com/satori/go.uuid"
-	jose "gopkg.in/square/go-jose.v2"
-	jwt "gopkg.in/square/go-jose.v2/jwt"
 
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
@@ -153,34 +150,26 @@ func main() {
 		log.Printf("%s mongo processing finished after %.5f seconds and returned %d records", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds(), writeCount)
 	}
 
-	checkScope := func(r *http.Request, validator *auth0.JWTValidator, token *jwt.JSONWebToken) bool {
-		claims := map[string]interface{}{}
-		err := validator.Claims(r, token, &claims)
-
-		if err != nil {
-			fmt.Println("error validating claim", err)
-			return false
-		}
-		fmt.Println("claims", claims)
-		if strings.Contains(claims["scope"].(string), "read:data") {
-			return true
-		}
-		return false
-	}
-
 	authorize := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 			start := time.Now()
 
-			if sessionToken := r.Header.Get("x-tidepool-session-token"); sessionToken != "" {
+			token := r.Header.Get("x-tidepool-session-token")
+			accessTokenHeader := r.Header.Get("Authorization")
+			if len(accessTokenHeader) > 7 && strings.EqualFold(accessTokenHeader[0:7], "BEARER ") {
+				log.Println("Validating with access_token")
+				token = strings.Split(accessTokenHeader, " ")[1]
+			}
+
+			if token != "" {
 				queryParams, err := store.GetParams(r.URL.Query(), &config.SchemaVersion)
 				if err != nil {
 					jsonError(w, error_invalid_parameters, start)
 					return
 				}
 
-				td := shorelineClient.CheckToken(sessionToken)
+				td := shorelineClient.CheckToken(token)
 
 				if td == nil || !(td.IsServer || td.UserID == queryParams.UserId) {
 					jsonError(w, error_no_view_permisson, start)
@@ -190,36 +179,6 @@ func main() {
 				h.ServeHTTP(w, r)
 				return
 			}
-
-			// No session token so we will look at access_token
-			configuration := auth0.NewConfiguration(
-				auth0.NewJWKClient(auth0.JWKClientOptions{
-					URI: "https://tidepool-dev.auth0.com/.well-known/jwks.json",
-				}),
-				[]string{
-					"open-api",
-					"https://tidepool-dev.auth0.com/userinfo",
-				},
-				"https://tidepool-dev.auth0.com/",
-				jose.RS256,
-			)
-			validator := auth0.NewValidator(configuration)
-			token, err := validator.ValidateRequest(r)
-
-			if err != nil {
-				fmt.Println("error validating token: ", err)
-				jsonError(w, error_no_auth_token, start)
-				return
-			}
-
-			result := checkScope(r, validator, token)
-			if result == true {
-				// If the token is valid and we have the right scope, we'll pass through the middleware
-				h.ServeHTTP(w, r)
-				return
-			}
-			jsonError(w, error_wrong_auth_scope, start)
-			return
 
 		})
 	}
