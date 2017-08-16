@@ -49,9 +49,6 @@ type (
 var (
 	error_status_check = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
 
-	error_no_auth_token    = detailedError{Status: http.StatusUnauthorized, Code: "data_missing_authorization", Message: "access token is not valid or missing"}
-	error_wrong_auth_scope = detailedError{Status: http.StatusUnauthorized, Code: "data_wrong_scope", Message: "you do not have the read:data scope."}
-
 	error_no_view_permisson  = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
 	error_no_permissons      = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissons for user"}
 	error_running_query      = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
@@ -197,7 +194,7 @@ func main() {
 			jsonError(res, error_status_check.setInternalMessage(err), start)
 			return
 		}
-		res.Write([]byte("Sweet as Bro!!\n"))
+		res.Write([]byte("OK\n"))
 		return
 	}))
 
