@@ -101,6 +101,27 @@ func main() {
 		WithHttpClient(httpClient).
 		Build()
 
+	gatekeeperClient := clients.NewGatekeeperClientBuilder().
+		WithHostGetter(config.GatekeeperConfig.ToHostGetter(hakkenClient)).
+		WithHttpClient(httpClient).
+		WithTokenProvider(shorelineClient).
+		Build()
+
+	userCanViewData := func(userID, groupID string) bool {
+		if userID == groupID {
+			return true
+		}
+
+		perms, err := gatekeeperClient.UserInGroup(userID, groupID)
+		if err != nil {
+			log.Println(DATA_API_PREFIX, "Error looking up user in group", err)
+			return false
+		}
+
+		log.Println(perms)
+		return !(perms["root"] == nil && perms["view"] == nil)
+	}
+
 	//log error detail and write as application/json
 	jsonError := func(res http.ResponseWriter, err detailedError, startedAt time.Time) {
 
@@ -152,31 +173,35 @@ func main() {
 
 			start := time.Now()
 
-			token := r.Header.Get("x-tidepool-session-token")
-			accessTokenHeader := r.Header.Get("Authorization")
-			if len(accessTokenHeader) > 7 && strings.EqualFold(accessTokenHeader[0:7], "BEARER ") {
-				log.Println("Validating with access_token")
-				token = strings.Split(accessTokenHeader, " ")[1]
-			}
-
-			if token != "" {
-				queryParams, err := store.GetParams(r.URL.Query(), &config.SchemaVersion)
-				if err != nil {
-					jsonError(w, error_invalid_parameters, start)
-					return
+			var token string
+			if authorization := r.Header.Get("Authorization"); authorization != "" {
+				if parts := strings.Split(authorization, " "); len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+					log.Println("Validating with access_token")
+					token = parts[1]
 				}
-
-				td := shorelineClient.CheckToken(token)
-
-				if td == nil || !(td.IsServer || td.UserID == queryParams.UserId) {
+			}
+			if token == "" {
+				token = r.Header.Get("X-Tidepool-Session-Token")
+				if token == "" {
 					jsonError(w, error_no_view_permisson, start)
 					return
 				}
-				// If the token is valid we'll pass through the middleware
-				h.ServeHTTP(w, r)
-				return
 			}
 
+			tokenData := shorelineClient.CheckToken(token)
+			if tokenData != nil {
+				queryParams, err := store.GetParams(r.URL.Query(), &config.SchemaVersion)
+				if err == nil {
+					if userCanViewData(tokenData.UserID, queryParams.UserId) ||
+						tokenData.IsServer {
+						h.ServeHTTP(w, r)
+						return
+					}
+				}
+				jsonError(w, error_invalid_parameters, start)
+				return
+			}
+			jsonError(w, error_no_view_permisson, start)
 		})
 	}
 
