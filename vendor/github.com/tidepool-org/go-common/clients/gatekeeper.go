@@ -20,17 +20,11 @@ type (
 		//groupID  -- the Tidepool-assigned groupID
 		//
 		// returns the Permissions
-		UserInGroup(userID, groupID string) (Permissions, error)
-
-		//groupID  -- the Tidepool-assigned groupID
-		//
-		// returns the map of user id to Permissions
-		UsersInGroup(groupID string) (UsersPermissions, error)
-
+		UserInGroup(userID, groupID string) (map[string]Permissions, error)
 		//userID  -- the Tidepool-assigned userID
 		//groupID  -- the Tidepool-assigned groupID
 		//permissions -- the permisson we want to give the user for the group
-		SetPermissions(userID, groupID string, permissions Permissions) (Permissions, error)
+		SetPermissions(userID, groupID string, permissions Permissions) (map[string]Permissions, error)
 	}
 
 	gatekeeperClient struct {
@@ -45,13 +39,7 @@ type (
 		tokenProvider TokenProvider   // An object that provides tokens for communicating with gatekeeper
 	}
 
-	Permission       map[string]interface{}
-	Permissions      map[string]Permission
-	UsersPermissions map[string]Permissions
-)
-
-var (
-	Allowed Permission = Permission{}
+	Permissions map[string]interface{}
 )
 
 func NewGatekeeperClientBuilder() *gatekeeperClientBuilder {
@@ -92,7 +80,7 @@ func (b *gatekeeperClientBuilder) Build() *gatekeeperClient {
 	}
 }
 
-func (client *gatekeeperClient) UserInGroup(userID, groupID string) (Permissions, error) {
+func (client *gatekeeperClient) UserInGroup(userID, groupID string) (map[string]Permissions, error) {
 	host := client.getHost()
 	if host == nil {
 		return nil, errors.New("No known gatekeeper hosts")
@@ -102,6 +90,7 @@ func (client *gatekeeperClient) UserInGroup(userID, groupID string) (Permissions
 	req, _ := http.NewRequest("GET", host.String(), nil)
 	req.Header.Add("x-tidepool-session-token", client.tokenProvider.TokenProvide())
 
+	log.Println(req)
 	res, err := client.httpClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -109,7 +98,8 @@ func (client *gatekeeperClient) UserInGroup(userID, groupID string) (Permissions
 	defer res.Body.Close()
 
 	if res.StatusCode == 200 {
-		retVal := make(Permissions)
+		retVal := make(map[string]Permissions)
+		log.Printf(" [%v]")
 		if err := json.NewDecoder(res.Body).Decode(&retVal); err != nil {
 			log.Println(err)
 			return nil, &status.StatusError{status.NewStatus(500, "UserInGroup Unable to parse response.")}
@@ -120,39 +110,10 @@ func (client *gatekeeperClient) UserInGroup(userID, groupID string) (Permissions
 	} else {
 		return nil, &status.StatusError{status.NewStatusf(res.StatusCode, "Unknown response code from service[%s]", req.URL)}
 	}
+
 }
 
-func (client *gatekeeperClient) UsersInGroup(groupID string) (UsersPermissions, error) {
-	host := client.getHost()
-	if host == nil {
-		return nil, errors.New("No known gatekeeper hosts")
-	}
-	host.Path += fmt.Sprintf("access/%s", groupID)
-
-	req, _ := http.NewRequest("GET", host.String(), nil)
-	req.Header.Add("x-tidepool-session-token", client.tokenProvider.TokenProvide())
-
-	res, err := client.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode == 200 {
-		retVal := make(UsersPermissions)
-		if err := json.NewDecoder(res.Body).Decode(&retVal); err != nil {
-			log.Println(err)
-			return nil, &status.StatusError{status.NewStatus(500, "UserInGroup Unable to parse response.")}
-		}
-		return retVal, nil
-	} else if res.StatusCode == 404 {
-		return nil, nil
-	} else {
-		return nil, &status.StatusError{status.NewStatusf(res.StatusCode, "Unknown response code from service[%s]", req.URL)}
-	}
-}
-
-func (client *gatekeeperClient) SetPermissions(userID, groupID string, permissions Permissions) (Permissions, error) {
+func (client *gatekeeperClient) SetPermissions(userID, groupID string, permissions Permissions) (map[string]Permissions, error) {
 	host := client.getHost()
 	if host == nil {
 		return nil, errors.New("No known gatekeeper hosts")
@@ -174,7 +135,8 @@ func (client *gatekeeperClient) SetPermissions(userID, groupID string, permissio
 		defer res.Body.Close()
 
 		if res.StatusCode == 200 {
-			retVal := make(Permissions)
+
+			retVal := make(map[string]Permissions)
 			if err := json.NewDecoder(res.Body).Decode(&retVal); err != nil {
 				log.Printf("SetPermissions: Unable to parse response: [%s]", err.Error())
 				return nil, &status.StatusError{status.NewStatus(500, "SetPermissions: Unable to parse response:")}

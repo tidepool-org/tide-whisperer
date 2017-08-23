@@ -139,12 +139,8 @@ func (client *HighwaterClient) PostServer(eventName, token string, params map[st
 	req, _ := http.NewRequest("GET", host.String(), bytes.NewBuffer(client.adjustEventParams(params)))
 	req.Header.Add("x-tidepool-session-token", token)
 
-	res, err := client.httpClient.Do(req)
-	if err != nil {
+	if _, err := client.httpClient.Do(req); err != nil {
 		log.Printf("Error PostServer: [%s]  err[%v] ", req.URL, err)
-	}
-	if res != nil && res.Body != nil {
-		defer res.Body.Close()
 	}
 
 	return
@@ -162,12 +158,8 @@ func (client *HighwaterClient) PostThisUser(eventName, token string, params map[
 	req, _ := http.NewRequest("GET", host.String(), bytes.NewBuffer(client.adjustEventParams(params)))
 	req.Header.Add("x-tidepool-session-token", token)
 
-	res, err := client.httpClient.Do(req)
-	if err != nil {
+	if _, err := client.httpClient.Do(req); err != nil {
 		log.Printf("Error PostThisUser: [%s]  err[%v] ", req.URL, err)
-	}
-	if res != nil && res.Body != nil {
-		defer res.Body.Close()
 	}
 
 	return

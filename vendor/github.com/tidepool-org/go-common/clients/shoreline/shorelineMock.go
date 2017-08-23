@@ -22,11 +22,11 @@ func (client *ShorelineMockClient) Close() {
 }
 
 func (client *ShorelineMockClient) Login(username, password string) (*UserData, string, error) {
-	return &UserData{UserID: "123.456.789", Username: username, Emails: []string{username}}, client.ServerToken, nil
+	return &UserData{UserID: "123.456.789", UserName: username, Emails: []string{username}}, client.ServerToken, nil
 }
 
 func (client *ShorelineMockClient) Signup(username, password, email string) (*UserData, error) {
-	return &UserData{UserID: "123.xxx.456", Username: username, Emails: []string{email}}, nil
+	return &UserData{UserID: "123.xxx.456", UserName: username, Emails: []string{email}}, nil
 }
 
 func (client *ShorelineMockClient) CheckToken(token string) *TokenData {
@@ -38,15 +38,9 @@ func (client *ShorelineMockClient) TokenProvide() string {
 }
 
 func (client *ShorelineMockClient) GetUser(userID, token string) (*UserData, error) {
-	if userID == "NotFound" {
-		return nil, nil
-	} else if userID == "WithoutPassword" {
-		return &UserData{UserID: userID, Username: "From Mock", Emails: []string{userID}, PasswordExists: false}, nil
-	} else {
-		return &UserData{UserID: userID, Username: "From Mock", Emails: []string{userID}, PasswordExists: true}, nil
-	}
+	return &UserData{UserID: userID, UserName: "From Mock", Emails: []string{userID}}, nil
 }
 
-func (client *ShorelineMockClient) UpdateUser(userID string, userUpdate UserUpdate, token string) error {
+func (client *ShorelineMockClient) UpdateUser(user UserUpdate, token string) error {
 	return nil
 }

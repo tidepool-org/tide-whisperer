@@ -28,7 +28,7 @@ type Client interface {
 	CheckToken(token string) *TokenData
 	TokenProvide() string
 	GetUser(userID, token string) (*UserData, error)
-	UpdateUser(userID string, userUpdate UserUpdate, token string) error
+	UpdateUser(user UserUpdate, token string) error
 }
 
 // UserApiClient manages the local data for a client. A client is intended to be shared among multiple
@@ -51,22 +51,16 @@ type ShorelineClientConfig struct {
 
 // UserData is the data structure returned from a successful Login query.
 type UserData struct {
-	UserID         string   `json:"userid,omitempty"`         // the tidepool-assigned user ID
-	Username       string   `json:"username,omitempty"`       // the user-assigned name for the login (usually an email address)
-	Emails         []string `json:"emails,omitempty"`         // the array of email addresses associated with this account
-	PasswordExists bool     `json:"passwordExists,omitempty"` // Does a password exist for the user?
-	Roles          []string `json:"roles,omitempty"`          // User roles
-	EmailVerified  bool     `json:"emailVerified,omitempty"`  // the user has verified the email used as part of signup
-	TermsAccepted  string   `json:"termsAccepted,omitempty"`  // When were the terms accepted
+	UserID   string   // the tidepool-assigned user ID
+	UserName string   // the user-assigned name for the login (usually an email address)
+	Emails   []string // the array of email addresses associated with this account
 }
 
 // UserUpdate is the data structure for updating of a users details
 type UserUpdate struct {
-	Username      *string   `json:"username,omitempty"`
-	Emails        *[]string `json:"emails,omitempty"`
-	Password      *string   `json:"password,omitempty"`
-	Roles         *[]string `json:"roles,omitempty"`
-	EmailVerified *bool     `json:"emailVerified,omitempty"`
+	UserData
+	Password      string
+	Authenticated bool //the user has verified the email used as part of signup
 }
 
 // TokenData is the data structure returned from a successful CheckToken query.
@@ -79,27 +73,6 @@ type ShorelineClientBuilder struct {
 	hostGetter disc.HostGetter
 	config     *ShorelineClientConfig
 	httpClient *http.Client
-}
-
-func (u *UserData) IsCustodial() bool {
-	return !u.PasswordExists
-}
-
-func (u *UserData) HasRole(role string) bool {
-	for _, userRole := range u.Roles {
-		if userRole == role {
-			return true
-		}
-	}
-	return false
-}
-
-func (u *UserData) IsClinic() bool {
-	return u.HasRole("clinic")
-}
-
-func (u *UserUpdate) HasUpdates() bool {
-	return u.Username != nil || u.Emails != nil || u.Password != nil || u.Roles != nil || u.EmailVerified != nil
 }
 
 func NewShorelineClientBuilder() *ShorelineClientBuilder {
@@ -384,7 +357,7 @@ func (client *ShorelineClient) GetUser(userID, token string) (*UserData, error) 
 
 // Get user details for the given user
 // In this case the userID could be the actual ID or an email address
-func (client *ShorelineClient) UpdateUser(userID string, userUpdate UserUpdate, token string) error {
+func (client *ShorelineClient) UpdateUser(user UserUpdate, token string) error {
 	host := client.getHost()
 	if host == nil {
 		return errors.New("No known user-api hosts.")
@@ -395,9 +368,9 @@ func (client *ShorelineClient) UpdateUser(userID string, userUpdate UserUpdate, 
 		Updates UserUpdate `json:"updates"`
 	}
 
-	host.Path += "/user/" + userID
+	host.Path += "/user/" + user.UserID
 
-	if jsonUser, err := json.Marshal(updatesToApply{Updates: userUpdate}); err != nil {
+	if jsonUser, err := json.Marshal(updatesToApply{Updates: user}); err != nil {
 		return &status.StatusError{
 			status.NewStatusf(http.StatusInternalServerError, "Error getting user updates [%s]", err.Error())}
 	} else {

@@ -273,15 +273,6 @@ NextTagSet:
 var pingDelay = 5 * time.Second
 
 func (server *mongoServer) pinger(loop bool) {
-	var delay time.Duration
-	if raceDetector {
-		// This variable is only ever touched by tests.
-		globalMutex.Lock()
-		delay = pingDelay
-		globalMutex.Unlock()
-	} else {
-		delay = pingDelay
-	}
 	op := queryOp{
 		collection: "admin.$cmd",
 		query:      bson.D{{"ping", 1}},
@@ -290,10 +281,10 @@ func (server *mongoServer) pinger(loop bool) {
 	}
 	for {
 		if loop {
-			time.Sleep(delay)
+			time.Sleep(pingDelay)
 		}
 		op := op
-		socket, _, err := server.AcquireSocket(0, 3 * delay)
+		socket, _, err := server.AcquireSocket(0, 3 * pingDelay)
 		if err == nil {
 			start := time.Now()
 			_, _ = socket.SimpleQuery(&op)
