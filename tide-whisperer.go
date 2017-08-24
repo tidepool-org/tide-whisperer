@@ -192,8 +192,7 @@ func main() {
 			if tokenData != nil {
 				queryParams, err := store.GetParams(r.URL.Query(), &config.SchemaVersion)
 				if err == nil {
-					if userCanViewData(tokenData.UserID, queryParams.UserId) ||
-						tokenData.IsServer {
+					if tokenData.IsServer || userCanViewData(tokenData.UserID, queryParams.UserId) {
 						h.ServeHTTP(w, r)
 						return
 					}
@@ -202,7 +201,7 @@ func main() {
 				return
 			}
 			jsonError(w, error_no_view_permisson, start)
-			
+
 		})
 	}
 
