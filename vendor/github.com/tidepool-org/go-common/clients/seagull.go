@@ -80,6 +80,7 @@ func (client *seagullClient) GetPrivatePair(userID, hashName, token string) *Pri
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
 	req.Header.Add("x-tidepool-session-token", token)
+	req.Header.Add("Authorization", "bearer "+token)
 
 	log.Println(req)
 	res, err := client.httpClient.Do(req)
@@ -111,6 +112,7 @@ func (client *seagullClient) GetCollection(userID, collectionName, token string,
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
 	req.Header.Add("x-tidepool-session-token", token)
+	req.Header.Add("Authorization", "bearer "+token)
 
 	log.Println(req)
 	res, err := client.httpClient.Do(req)
