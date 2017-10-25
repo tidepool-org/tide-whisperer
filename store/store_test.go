@@ -91,6 +91,10 @@ func allParamsQuery() bson.M {
 		Types:         []string{"smbg", "cbg"},
 		SubTypes:      []string{"stuff"},
 		Carelink:      true,
+		DexcomDataSource: bson.M{
+			"dataSetIds":       []string{"123", "456"},
+			"earliestDataTime": "2015-10-07T15:00:00Z",
+		},
 	}
 
 	return generateMongoQuery(qParams)
@@ -140,6 +144,11 @@ func TestStore_generateMongoQuery_allparams(t *testing.T) {
 		"time": bson.M{
 			"$gte": "2015-10-07T15:00:00.000Z",
 			"$lte": "2015-10-11T15:00:00.000Z"},
+		"$or": []bson.M{
+			{"type": bson.M{"$ne": "cbg"}},
+			{"uploadId": bson.M{"$in": []string{"123", "456"}}},
+			{"time": bson.M{"$lt": "2015-10-07T15:00:00Z"}},
+		},
 	}
 
 	eq := reflect.DeepEqual(query, expectedQuery)

@@ -47,7 +47,9 @@ type (
 		SubTypes []string
 		Date
 		*SchemaVersion
-		Carelink bool
+		Carelink         bool
+		Dexcom           bool
+		DexcomDataSource bson.M
 	}
 
 	Date struct {
@@ -95,6 +97,17 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		}
 	}
 
+	dexcom := false
+	if values, ok := q["dexcom"]; ok {
+		if len(values) < 1 {
+			return nil, errors.New("dexcom parameter not valid")
+		}
+		dexcom, err = strconv.ParseBool(values[len(values)-1])
+		if err != nil {
+			return nil, errors.New("dexcom parameter not valid")
+		}
+	}
+
 	p := &Params{
 		UserId: q.Get(":userID"),
 		//the query params for type and subtype can contain multiple values seperated
@@ -104,6 +117,7 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		Date:          Date{startStr, endStr},
 		SchemaVersion: schema,
 		Carelink:      carelink,
+		Dexcom:        dexcom,
 	}
 
 	return p, nil
@@ -158,6 +172,14 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["source"] = bson.M{"$ne": "carelink"}
 	}
 
+	if !p.Dexcom && p.DexcomDataSource != nil {
+		groupDataQuery["$or"] = []bson.M{
+			{"type": bson.M{"$ne": "cbg"}},
+			{"uploadId": bson.M{"$in": p.DexcomDataSource["dataSetIds"]}},
+			{"time": bson.M{"$lt": p.DexcomDataSource["earliestDataTime"]}},
+		}
+	}
+
 	return groupDataQuery
 }
 
@@ -197,6 +219,31 @@ func (d MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 	}
 
 	return count > 0, nil
+}
+
+func (d MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
+	if userID == "" {
+		return nil, errors.New("user id is missing")
+	}
+
+	session := d.session.Copy()
+	defer session.Close()
+
+	query := bson.M{
+		"userId":       userID,
+		"providerType": "oauth",
+		"providerName": "dexcom",
+	}
+
+	dataSources := []bson.M{}
+	err := session.DB("tidepool").C("data_sources").Find(query).Limit(1).All(&dataSources)
+	if err != nil {
+		return nil, err
+	} else if len(dataSources) == 0 {
+		return nil, nil
+	}
+
+	return dataSources[0], nil
 }
 
 func (d MongoStoreClient) GetDeviceData(p *Params) StorageIterator {

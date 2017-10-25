@@ -212,12 +212,21 @@ func main() {
 		}
 
 		if _, ok := req.URL.Query()["carelink"]; !ok {
-			if hasMedtronicDirectData, err := storage.HasMedtronicDirectData(queryParams.UserId); err != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Medtronic Direct data: %s", err))
+			if hasMedtronicDirectData, medtronicErr := storage.HasMedtronicDirectData(queryParams.UserId); medtronicErr != nil {
+				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Medtronic Direct data: %s", medtronicErr))
 				jsonError(res, error_running_query, start)
 				return
 			} else if !hasMedtronicDirectData {
 				queryParams.Carelink = true
+			}
+		}
+		if !queryParams.Dexcom {
+			if dexcomDataSource, dexcomErr := storage.GetDexcomDataSource(queryParams.UserId); dexcomErr != nil {
+				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Dexcom data source: %s", dexcomErr))
+				jsonError(res, error_running_query, start)
+				return
+			} else {
+				queryParams.DexcomDataSource = dexcomDataSource
 			}
 		}
 
