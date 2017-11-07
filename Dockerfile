@@ -22,7 +22,7 @@ RUN sed -i -e 's/mongodb:\/\/localhost\/data/mongodb:\/\/mongo\/data/g' config/s
            -e 's/localhost:9120/seagull:9120/g' \
            -e's/localhost:9107/shoreline:9107/g' config/env.json \
 # Build
- && ./build \
+ && ./build.sh \
 # Remove files no longer needed after the build to reduce fs layer size
  && rm -rf .git .gitignore
 
