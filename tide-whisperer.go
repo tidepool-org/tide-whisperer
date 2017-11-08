@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -154,7 +155,7 @@ func main() {
 					}
 					response.Write([]byte("\n"))
 					response.Write(bytes)
-					writeCount += 1
+					writeCount++
 				}
 			}
 		}
@@ -165,6 +166,43 @@ func main() {
 		response.Write([]byte("]"))
 
 		log.Printf("%s mongo processing finished after %.5f seconds and returned %d records", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds(), writeCount)
+	}
+
+	authorize := func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+			start := time.Now()
+
+			var token string
+			if authorization := r.Header.Get("Authorization"); authorization != "" {
+				if parts := strings.Split(authorization, " "); len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+					log.Println("Validating with access_token")
+					token = parts[1]
+				}
+			}
+			if token == "" {
+				token = r.Header.Get("X-Tidepool-Session-Token")
+				if token == "" {
+					jsonError(w, error_no_view_permisson, start)
+					return
+				}
+			}
+
+			tokenData := shorelineClient.CheckToken(token)
+			if tokenData != nil {
+				queryParams, err := store.GetParams(r.URL.Query(), &config.SchemaVersion)
+				if err == nil {
+					if tokenData.IsServer || userCanViewData(tokenData.UserID, queryParams.UserId) {
+						h.ServeHTTP(w, r)
+						return
+					}
+				}
+				jsonError(w, error_invalid_parameters, start)
+				return
+			}
+			jsonError(w, error_no_view_permisson, start)
+
+		})
 	}
 
 	if err := shorelineClient.Start(); err != nil {
@@ -197,22 +235,13 @@ func main() {
 	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
 	// endDate (optional) : Only objects with 'time' field less than to or equal to start date will be returned .
 	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
-	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+	router.Add("GET", "/{userID}", authorize(httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
-
 		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion)
 
 		if err != nil {
 			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing date: %s", err))
 			jsonError(res, error_invalid_parameters, start)
-			return
-		}
-
-		token := req.Header.Get("x-tidepool-session-token")
-		td := shorelineClient.CheckToken(token)
-
-		if td == nil || !(td.IsServer || td.UserID == queryParams.UserId || userCanViewData(td.UserID, queryParams.UserId)) {
-			jsonError(res, error_no_view_permisson, start)
 			return
 		}
 
@@ -239,7 +268,7 @@ func main() {
 		defer iter.Close()
 
 		processResults(res, iter, started)
-	})))
+	}))))
 
 	done := make(chan bool)
 	server := common.NewServer(&http.Server{
