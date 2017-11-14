@@ -233,6 +233,15 @@ func (d MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 		"userId":       userID,
 		"providerType": "oauth",
 		"providerName": "dexcom",
+		"dataSetIds": bson.M{
+			"$exists": true,
+			"$not": bson.M{
+				"$size": 0,
+			},
+		},
+		"earliestDataTime": bson.M{
+			"$exists": true,
+		},
 	}
 
 	dataSources := []bson.M{}
