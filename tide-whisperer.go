@@ -168,40 +168,40 @@ func main() {
 		log.Printf("%s mongo processing finished after %.5f seconds and returned %d records", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds(), writeCount)
 	}
 
+	getToken := func(r *http.Request) string {
+		var token string
+		if authorization := r.Header.Get("Authorization"); authorization != "" {
+			if parts := strings.Split(authorization, " "); len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+				token = parts[1]
+			}
+		}
+		if token == "" {
+			token = r.Header.Get("X-Tidepool-Session-Token")
+		}
+		return token
+	}
+
 	authorize := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
 			start := time.Now()
 
-			var token string
-			if authorization := r.Header.Get("Authorization"); authorization != "" {
-				if parts := strings.Split(authorization, " "); len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
-					log.Println("Validating with access_token")
-					token = parts[1]
-				}
-			}
-			if token == "" {
-				token = r.Header.Get("X-Tidepool-Session-Token")
-				if token == "" {
-					jsonError(w, error_no_view_permisson, start)
-					return
-				}
-			}
+			if token := getToken(r); token != "" {
+				tokenData := shorelineClient.CheckToken(token)
+				if tokenData != nil {
+					queryParams, err := store.GetParams(r.URL.Query(), &config.SchemaVersion)
+					if err != nil {
+						log.Println(DATA_API_PREFIX, err.Error())
+						jsonError(w, error_invalid_parameters, start)
+						return
+					}
 
-			tokenData := shorelineClient.CheckToken(token)
-			if tokenData != nil {
-				queryParams, err := store.GetParams(r.URL.Query(), &config.SchemaVersion)
-				if err == nil {
 					if tokenData.IsServer || userCanViewData(tokenData.UserID, queryParams.UserId) {
 						h.ServeHTTP(w, r)
 						return
 					}
 				}
-				jsonError(w, error_invalid_parameters, start)
-				return
 			}
 			jsonError(w, error_no_view_permisson, start)
-
 		})
 	}
 
