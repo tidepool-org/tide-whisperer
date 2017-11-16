@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -132,7 +131,7 @@ func main() {
 
 		err.Id = uuid.NewV4().String()
 
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s][%s] failed after [%.5f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
+		serviceLog.Printf("[%s][%s] failed after [%.5f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage)
 
 		jsonErr, _ := json.Marshal(err)
 
@@ -249,7 +248,7 @@ func main() {
 		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion)
 
 		if err != nil {
-			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing date: %s", err))
+			serviceLog.Printf("Error parsing date: %s", err)
 			jsonError(res, invalidParametersError, start)
 			return
 		}
