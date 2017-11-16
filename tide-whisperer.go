@@ -49,11 +49,14 @@ type (
 var (
 	error_status_check = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
 
-	error_no_view_permisson  = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
-	error_no_permissons      = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissons for user"}
-	error_running_query      = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
-	error_loading_events     = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
-	error_invalid_parameters = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
+	viewPermissonError = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
+	tokenError         = detailedError{Status: http.StatusUnauthorized, Code: "no_token", Message: "no token was given"}
+	//TODO: 500 doesn't seem correct
+	invalidParametersError = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
+
+	error_no_permissons  = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissons for user"}
+	error_running_query  = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
+	error_loading_events = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
 
 	storage store.Storage
 )
@@ -107,18 +110,19 @@ func main() {
 		WithTokenProvider(shorelineClient).
 		Build()
 
-	userCanViewData := func(userID, groupID string) bool {
-		if userID == groupID {
+	userCanViewData := func(tokenData *shoreline.TokenData, groupID string) bool {
+		if tokenData.IsServer {
+			return true
+		}
+		if tokenData.UserID == groupID {
 			return true
 		}
 
-		perms, err := gatekeeperClient.UserInGroup(userID, groupID)
+		perms, err := gatekeeperClient.UserInGroup(tokenData.UserID, groupID)
 		if err != nil {
 			log.Println(DATA_API_PREFIX, "Error looking up user in group", err)
 			return false
 		}
-
-		log.Println(perms)
 		return !(perms["root"] == nil && perms["view"] == nil)
 	}
 
@@ -184,24 +188,23 @@ func main() {
 	authorize := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-
 			if token := getToken(r); token != "" {
-				tokenData := shorelineClient.CheckToken(token)
-				if tokenData != nil {
+				if tokenData := shorelineClient.CheckToken(token); tokenData != nil {
 					queryParams, err := store.GetParams(r.URL.Query(), &config.SchemaVersion)
 					if err != nil {
 						log.Println(DATA_API_PREFIX, err.Error())
-						jsonError(w, error_invalid_parameters, start)
+						jsonError(w, invalidParametersError, start)
 						return
 					}
-
-					if tokenData.IsServer || userCanViewData(tokenData.UserID, queryParams.UserId) {
+					if userCanViewData(tokenData, queryParams.UserId) {
 						h.ServeHTTP(w, r)
 						return
 					}
+					jsonError(w, viewPermissonError, start)
+					return
 				}
 			}
-			jsonError(w, error_no_view_permisson, start)
+			jsonError(w, tokenError, start)
 		})
 	}
 
@@ -241,10 +244,11 @@ func main() {
 
 		if err != nil {
 			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing date: %s", err))
-			jsonError(res, error_invalid_parameters, start)
+			jsonError(res, invalidParametersError, start)
 			return
 		}
-
+		//TODO: If the user has a legitimate token but no data storage
+		// account we should be returning a `StatusNotFound` 404
 		if _, ok := req.URL.Query()["carelink"]; !ok {
 			if hasMedtronicDirectData, err := storage.HasMedtronicDirectData(queryParams.UserId); err != nil {
 				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Medtronic Direct data: %s", err))
