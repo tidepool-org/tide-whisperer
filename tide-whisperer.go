@@ -47,21 +47,20 @@ type (
 )
 
 var (
-	error_status_check = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
-
 	viewPermissonError = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
 	tokenError         = detailedError{Status: http.StatusUnauthorized, Code: "no_token", Message: "no token was given"}
-	//TODO: 500 doesn't seem correct
+	//TODO: 500 doesn't seem correct??
 	invalidParametersError = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
 
+	error_status_check   = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
 	error_no_permissons  = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissons for user"}
 	error_running_query  = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
 	error_loading_events = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
 
 	storage store.Storage
-)
 
-const DATA_API_PREFIX = "api/data"
+	serviceLog = log.New(os.Stdout, "api/data", log.Lshortfile)
+)
 
 //set the intenal message that we will use for logging
 func (d detailedError) setInternalMessage(internal error) detailedError {
@@ -72,7 +71,7 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 func main() {
 	var config Config
 	if err := common.LoadConfig([]string{"./config/env.json", "./config/server.json"}, &config); err != nil {
-		log.Fatal(DATA_API_PREFIX, "Problem loading config: ", err)
+		serviceLog.Fatal("Problem loading config: ", err)
 	}
 
 	tr := &http.Transport{
@@ -85,11 +84,11 @@ func main() {
 		Build()
 
 	if err := hakkenClient.Start(); err != nil {
-		log.Fatal(DATA_API_PREFIX, err)
+		serviceLog.Fatal(err)
 	}
 	defer func() {
 		if err := hakkenClient.Close(); err != nil {
-			log.Panic(DATA_API_PREFIX, "Error closing hakkenClient, panicing to get stacks: ", err)
+			serviceLog.Panic("Error closing hakkenClient, panicing to get stacks: ", err)
 		}
 	}()
 
@@ -111,6 +110,7 @@ func main() {
 		Build()
 
 	userCanViewData := func(tokenData *shoreline.TokenData, groupID string) bool {
+		serviceLog.Println("DEBUG: ", tokenData, groupID)
 		if tokenData.IsServer {
 			return true
 		}
@@ -120,9 +120,10 @@ func main() {
 
 		perms, err := gatekeeperClient.UserInGroup(tokenData.UserID, groupID)
 		if err != nil {
-			log.Println(DATA_API_PREFIX, "Error looking up user in group", err)
+			serviceLog.Println("Error looking up user in group", err)
 			return false
 		}
+		serviceLog.Println("DEBUG: ", perms)
 		return !(perms["root"] == nil && perms["view"] == nil)
 	}
 
@@ -143,7 +144,7 @@ func main() {
 	processResults := func(response http.ResponseWriter, iterator store.StorageIterator, startTime time.Time) {
 		var writeCount int
 
-		log.Printf("%s mongo processing started after %.5f seconds", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds())
+		serviceLog.Printf("mongo processing started after %.5f seconds", time.Now().Sub(startTime).Seconds())
 
 		response.Header().Add("Content-Type", "application/json")
 		response.Write([]byte("["))
@@ -152,7 +153,7 @@ func main() {
 		for iterator.Next(&results) {
 			if len(results) > 0 {
 				if bytes, err := json.Marshal(results); err != nil {
-					log.Printf("%s failed to marshal mongo result with error: %s", DATA_API_PREFIX, err)
+					serviceLog.Printf("failed to marshal mongo result with error: %s", err)
 				} else {
 					if writeCount > 0 {
 						response.Write([]byte(","))
@@ -169,7 +170,7 @@ func main() {
 		}
 		response.Write([]byte("]"))
 
-		log.Printf("%s mongo processing finished after %.5f seconds and returned %d records", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds(), writeCount)
+		serviceLog.Printf("mongo processing finished after %.5f seconds and returned %d records", time.Now().Sub(startTime).Seconds(), writeCount)
 	}
 
 	getToken := func(r *http.Request) string {
@@ -191,25 +192,30 @@ func main() {
 			if token := getToken(r); token != "" {
 				if tokenData := shorelineClient.CheckToken(token); tokenData != nil {
 					queryParams, err := store.GetParams(r.URL.Query(), &config.SchemaVersion)
+					serviceLog.Println("DEBUG: ", queryParams)
 					if err != nil {
-						log.Println(DATA_API_PREFIX, err.Error())
+						serviceLog.Println("DEBUG: ", invalidParametersError)
+						serviceLog.Println(err.Error())
 						jsonError(w, invalidParametersError, start)
 						return
 					}
+					serviceLog.Println("DEBUG: ", tokenData)
 					if userCanViewData(tokenData, queryParams.UserId) {
 						h.ServeHTTP(w, r)
 						return
 					}
+					serviceLog.Println("DEBUG: ", viewPermissonError)
 					jsonError(w, viewPermissonError, start)
 					return
 				}
 			}
+			serviceLog.Println("DEBUG: ", tokenError)
 			jsonError(w, tokenError, start)
 		})
 	}
 
 	if err := shorelineClient.Start(); err != nil {
-		log.Fatal(err)
+		serviceLog.Fatal(err)
 	}
 
 	storage := store.NewMongoStoreClient(&config.Mongo)
@@ -251,7 +257,7 @@ func main() {
 		// account we should be returning a `StatusNotFound` 404
 		if _, ok := req.URL.Query()["carelink"]; !ok {
 			if hasMedtronicDirectData, err := storage.HasMedtronicDirectData(queryParams.UserId); err != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Medtronic Direct data: %s", err))
+				serviceLog.Printf("Error while querying for Medtronic Direct data: %s", err)
 				jsonError(res, error_running_query, start)
 				return
 			} else if !hasMedtronicDirectData {
@@ -288,7 +294,7 @@ func main() {
 		start = func() error { return server.ListenAndServe() }
 	}
 	if err := start(); err != nil {
-		log.Fatal(DATA_API_PREFIX, err)
+		serviceLog.Fatal(err)
 	}
 	hakkenClient.Publish(&config.Service)
 
@@ -297,7 +303,7 @@ func main() {
 	go func() {
 		for {
 			sig := <-signals
-			log.Printf(DATA_API_PREFIX+" Got signal [%s]", sig)
+			serviceLog.Printf(" Got signal [%s]", sig)
 
 			if sig == syscall.SIGINT || sig == syscall.SIGTERM {
 				server.Close()
