@@ -15,12 +15,6 @@ import (
 
 var testingConfig = &mongo.Config{ConnectionString: "mongodb://localhost/data_test"}
 
-const (
-	typeCursor    = "BtreeCursor type_1"
-	subTypeCursor = "BtreeCursor subType_1"
-	baseCursor    = "BtreeCursor _groupId_1__active_1__schemaVersion_1"
-)
-
 func before(t *testing.T, docs ...interface{}) *MongoStoreClient {
 
 	store := NewMongoStoreClient(testingConfig)
@@ -80,56 +74,9 @@ func contains(s []string, e string) bool {
 	return false
 }
 
-// FIXME: Mismatch between new MongoDB version 3.0.7 and old mgo package causes
-// the Indexes() command to silently fail. Not worth the effort at this point to
-// bump the old mgo package
-// func TestStore_IndexesExist(t *testing.T) {
-//
-// 	const (
-// 		//index names based on feilds used
-// 		subtype_idx = "subType_1"
-// 		type_idx    = "type_1"
-// 		basic_idx   = "_groupId_1__active_1__schemaVersion_1"
-// 		id_idx      = "_id_"
-// 	)
-//
-// 	store := before(t)
-//
-// 	sCopy := store.session
-// 	defer sCopy.Close()
-//
-// 	if idxs, err := mgoDataCollection(sCopy).Indexes(); err != nil {
-// 		t.Error("TestStore_IndexesExist unexpected error ", err.Error())
-// 	} else {
-// 		// there are the two we have added and also the standard index
-// 		if len(idxs) != 4 {
-// 			t.Fatalf("TestStore_IndexesExist should be THREE but found [%d] ", len(idxs))
-// 		}
-//
-// 		if idxs[3].Name != type_idx {
-// 			t.Errorf("TestStore_IndexesExist expected [%s] got [%s] ", type_idx, idxs[3].Name)
-// 		}
-//
-// 		if idxs[2].Name != subtype_idx {
-// 			t.Errorf("TestStore_IndexesExist expected [%s] got [%s] ", subtype_idx, idxs[2].Name)
-// 		}
-//
-// 		if idxs[1].Name != id_idx {
-// 			t.Errorf("TestStore_IndexesExist expected [%s] got [%s] ", id_idx, idxs[1].Name)
-// 		}
-//
-// 		if idxs[0].Name != basic_idx {
-// 			t.Errorf("TestStore_IndexesExist expected [%s] got [%s] ", basic_idx, idxs[0].Name)
-// 		}
-//
-// 	}
-//
-// }
-
 func basicQuery() bson.M {
 	qParams := &Params{
-		GroupId:       "123",
-		UserId:        "321",
+		UserId:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 	}
 
@@ -138,48 +85,28 @@ func basicQuery() bson.M {
 
 func allParamsQuery() bson.M {
 	qParams := &Params{
-		GroupId:       "123ggf",
 		UserId:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		Date:          Date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
 		Types:         []string{"smbg", "cbg"},
 		SubTypes:      []string{"stuff"},
 		Carelink:      true,
+		DexcomDataSource: bson.M{
+			"dataSetIds":       []string{"123", "456"},
+			"earliestDataTime": "2015-10-07T15:00:00Z",
+		},
 	}
 
-	return generateMongoQuery(qParams)
-}
-
-func dateAndTypeQuery() bson.M {
-	qParams := &Params{
-		GroupId:       "123ggf",
-		UserId:        "abc123",
-		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		Date:          Date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
-		Types:         []string{"smbg", "cbg", "bolus", "basal"},
-	}
 	return generateMongoQuery(qParams)
 }
 
 func typeAndSubtypeQuery() bson.M {
 	qParams := &Params{
-		GroupId:       "123ggf",
 		UserId:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		Types:         []string{"smbg", "cbg"},
 		SubTypes:      []string{"stuff"},
 	}
-	return generateMongoQuery(qParams)
-}
-
-func dateQuery() bson.M {
-	qParams := &Params{
-		GroupId:       "123",
-		UserId:        "321",
-		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		Date:          Date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
-	}
-
 	return generateMongoQuery(qParams)
 }
 
@@ -188,7 +115,8 @@ func TestStore_generateMongoQuery_basic(t *testing.T) {
 	time.Now()
 	query := basicQuery()
 
-	expectedQuery := bson.M{"_groupId": "123",
+	expectedQuery := bson.M{
+		"_userId":        "abc123",
 		"_active":        true,
 		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
 		"source": bson.M{
@@ -208,7 +136,7 @@ func TestStore_generateMongoQuery_allparams(t *testing.T) {
 	query := allParamsQuery()
 
 	expectedQuery := bson.M{
-		"_groupId":       "123ggf",
+		"_userId":        "abc123",
 		"_active":        true,
 		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
 		"type":           bson.M{"$in": strings.Split("smbg,cbg", ",")},
@@ -216,6 +144,11 @@ func TestStore_generateMongoQuery_allparams(t *testing.T) {
 		"time": bson.M{
 			"$gte": "2015-10-07T15:00:00.000Z",
 			"$lte": "2015-10-11T15:00:00.000Z"},
+		"$or": []bson.M{
+			{"type": bson.M{"$ne": "cbg"}},
+			{"uploadId": bson.M{"$in": []string{"123", "456"}}},
+			{"time": bson.M{"$lt": "2015-10-07T15:00:00Z"}},
+		},
 	}
 
 	eq := reflect.DeepEqual(query, expectedQuery)
@@ -229,7 +162,7 @@ func TestStore_generateMongoQuery_noDates(t *testing.T) {
 	query := typeAndSubtypeQuery()
 
 	expectedQuery := bson.M{
-		"_groupId":       "123ggf",
+		"_userId":        "abc123",
 		"_active":        true,
 		"type":           bson.M{"$in": strings.Split("smbg,cbg", ",")},
 		"subType":        bson.M{"$in": strings.Split("stuff", ",")},
@@ -254,111 +187,6 @@ func TestStore_Ping(t *testing.T) {
 		t.Error("there should be no error but got", err.Error())
 	}
 }
-
-// FIXME: Mismatch between new MongoDB version 3.0.7 and old mgo package causes
-// the Indexes() command to silently fail. Not worth the effort at this point to
-// bump the old mgo package
-// func TestStore_IndexUse_basicQuery(t *testing.T) {
-//
-// 	const expectedCursor = "BtreeCursor _groupId_1__active_1__schemaVersion_1"
-//
-// 	store := before(t)
-// 	sCopy := store.session
-// 	defer sCopy.Close()
-//
-// 	query := basicQuery()
-//
-// 	var executedPlan map[string]interface{}
-//
-// 	err := mgoDataCollection(sCopy).Find(query).Explain(&executedPlan)
-//
-// 	if err != nil {
-// 		t.Error("there should be no error execting the query", err.Error())
-// 	}
-//
-// 	usedCursors := getCursors(executedPlan["allPlans"])
-//
-// 	if !contains(usedCursors, baseCursor) {
-// 		t.Errorf("excpected [%s] to be in  [%v]", baseCursor, usedCursors)
-// 	}
-//
-// 	if contains(usedCursors, typeCursor) {
-// 		t.Errorf("didn't expect [%s] to be in  [%v]", typeCursor, usedCursors)
-// 	}
-//
-// }
-
-// FIXME: Mismatch between new MongoDB version 3.0.7 and old mgo package causes
-// the Indexes() command to silently fail. Not worth the effort at this point to
-// bump the old mgo package
-// func TestStore_IndexUse_fullQuery(t *testing.T) {
-//
-// 	const expectedCursor = "BtreeCursor type_1"
-//
-// 	store := before(t)
-// 	sCopy := store.session
-// 	defer sCopy.Close()
-//
-// 	query := allParamsQuery()
-//
-// 	var executedPlan map[string]interface{}
-//
-// 	err := mgoDataCollection(sCopy).Find(query).Explain(&executedPlan)
-//
-// 	if err != nil {
-// 		t.Error("there should be no error execting the query", err.Error())
-// 	}
-//
-// 	usedCursors := getCursors(executedPlan["allPlans"])
-//
-// 	if !contains(usedCursors, typeCursor) {
-// 		t.Errorf("excpected [%s] to be in  [%v]", typeCursor, usedCursors)
-// 	}
-//
-// 	if !contains(usedCursors, subTypeCursor) {
-// 		t.Errorf("excpected [%s] to be in  [%v]", subTypeCursor, usedCursors)
-// 	}
-//
-// 	if !contains(usedCursors, baseCursor) {
-// 		t.Errorf("excpected [%s] to be in  [%v]", baseCursor, usedCursors)
-// 	}
-//
-// }
-
-// FIXME: Mismatch between new MongoDB version 3.0.7 and old mgo package causes
-// the Indexes() command to silently fail. Not worth the effort at this point to
-// bump the old mgo package
-// func TestStore_IndexUse_typeQuery(t *testing.T) {
-//
-// 	store := before(t)
-// 	sCopy := store.session
-// 	defer sCopy.Close()
-//
-// 	query := dateAndTypeQuery()
-//
-// 	var executedPlan map[string]interface{}
-//
-// 	err := mgoDataCollection(sCopy).Find(query).Explain(&executedPlan)
-//
-// 	if err != nil {
-// 		t.Error("there should be no error execting the query", err.Error())
-// 	}
-//
-// 	usedCursors := getCursors(executedPlan["allPlans"])
-//
-// 	if !contains(usedCursors, typeCursor) {
-// 		t.Errorf("excpected [%s] to be in  [%v]", typeCursor, usedCursors)
-// 	}
-//
-// 	if !contains(usedCursors, baseCursor) {
-// 		t.Errorf("excpected [%s] to be in  [%v]", baseCursor, usedCursors)
-// 	}
-//
-// 	if contains(usedCursors, subTypeCursor) {
-// 		t.Errorf("didn't expect [%s] to be in  [%v]", subTypeCursor, usedCursors)
-// 	}
-//
-// }
 
 func TestStore_cleanDateString_empty(t *testing.T) {
 
