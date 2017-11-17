@@ -58,7 +58,7 @@ var (
 
 	storage store.Storage
 
-	serviceLog = log.New(os.Stdout, "api/data", log.Lshortfile)
+	serviceLog = log.New(os.Stdout, "api/data: ", log.Lshortfile)
 )
 
 //set the intenal message that we will use for logging
@@ -203,11 +203,13 @@ func main() {
 						h.ServeHTTP(w, r)
 						return
 					}
-					serviceLog.Println("DEBUG: ", viewPermissonError)
-					jsonError(w, viewPermissonError, start)
-					return
 				}
+				//we have a token but it is invalid
+				serviceLog.Println("DEBUG: ", viewPermissonError)
+				jsonError(w, viewPermissonError, start)
+				return
 			}
+			//we have no token at all
 			serviceLog.Println("DEBUG: ", tokenError)
 			jsonError(w, tokenError, start)
 		})
