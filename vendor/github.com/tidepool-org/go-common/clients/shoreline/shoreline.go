@@ -359,6 +359,7 @@ func (client *ShorelineClient) GetUser(userID, token string) (*UserData, error) 
 	host.Path += fmt.Sprintf("user/%s", userID)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
+	req.Header.Add("Authorization", "bearer "+token)
 	req.Header.Add("x-tidepool-session-token", token)
 
 	res, err := client.httpClient.Do(req)
@@ -403,6 +404,7 @@ func (client *ShorelineClient) UpdateUser(userID string, userUpdate UserUpdate, 
 	} else {
 
 		req, _ := http.NewRequest("PUT", host.String(), bytes.NewBuffer(jsonUser))
+		req.Header.Add("Authorization", "bearer "+token)
 		req.Header.Add("x-tidepool-session-token", token)
 
 		res, err := client.httpClient.Do(req)
