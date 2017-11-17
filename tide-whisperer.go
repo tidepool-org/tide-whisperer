@@ -109,7 +109,6 @@ func main() {
 		Build()
 
 	userCanViewData := func(tokenData *shoreline.TokenData, groupID string) bool {
-		serviceLog.Println("DEBUG: ", tokenData, groupID)
 		if tokenData.IsServer {
 			return true
 		}
@@ -122,7 +121,6 @@ func main() {
 			serviceLog.Println("Error looking up user in group", err)
 			return false
 		}
-		serviceLog.Println("DEBUG: ", perms)
 		return !(perms["root"] == nil && perms["view"] == nil)
 	}
 
@@ -191,26 +189,21 @@ func main() {
 			if token := getToken(r); token != "" {
 				if tokenData := shorelineClient.CheckToken(token); tokenData != nil {
 					queryParams, err := store.GetParams(r.URL.Query(), &config.SchemaVersion)
-					serviceLog.Println("DEBUG: ", queryParams)
 					if err != nil {
-						serviceLog.Println("DEBUG: ", invalidParametersError)
 						serviceLog.Println(err.Error())
 						jsonError(w, invalidParametersError, start)
 						return
 					}
-					serviceLog.Println("DEBUG: ", tokenData)
 					if userCanViewData(tokenData, queryParams.UserId) {
 						h.ServeHTTP(w, r)
 						return
 					}
 				}
 				//we have a token but it is invalid
-				serviceLog.Println("DEBUG: ", viewPermissonError)
 				jsonError(w, viewPermissonError, start)
 				return
 			}
 			//we have no token at all
-			serviceLog.Println("DEBUG: ", tokenError)
 			jsonError(w, tokenError, start)
 		})
 	}
