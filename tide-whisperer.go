@@ -255,7 +255,7 @@ func main() {
 		}
 		if !queryParams.Dexcom {
 			if dexcomDataSource, dexcomErr := storage.GetDexcomDataSource(queryParams.UserId); dexcomErr != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Dexcom data source: %s", dexcomErr))
+				serviceLog.Printf("Error while querying for Dexcom data source: %s", dexcomErr)
 				jsonError(res, error_running_query, start)
 				return
 			} else {
