@@ -173,11 +173,17 @@ func generateMongoQuery(p *Params) bson.M {
 	}
 
 	if !p.Dexcom && p.DexcomDataSource != nil {
-		groupDataQuery["$or"] = []bson.M{
+		dexcomQuery := []bson.M{
 			{"type": bson.M{"$ne": "cbg"}},
 			{"uploadId": bson.M{"$in": p.DexcomDataSource["dataSetIds"]}},
-			{"time": bson.M{"$lt": p.DexcomDataSource["earliestDataTime"]}},
 		}
+		if earliestDataTime, ok := p.DexcomDataSource["earliestDataTime"].(time.Time); ok {
+			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}})
+		}
+		if latestDataTime, ok := p.DexcomDataSource["latestDataTime"].(time.Time); ok {
+			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}})
+		}
+		groupDataQuery["$or"] = dexcomQuery
 	}
 
 	return groupDataQuery
@@ -240,6 +246,9 @@ func (d MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 			},
 		},
 		"earliestDataTime": bson.M{
+			"$exists": true,
+		},
+		"latestDataTime": bson.M{
 			"$exists": true,
 		},
 	}
