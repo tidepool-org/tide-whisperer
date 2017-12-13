@@ -1,4 +1,4 @@
-export TIDEPOOL_TIDEWHISPERER_ENV='{
+export TIDEPOOL_TIDE_WHISPERER_ENV='{
   "hakken": { "host": "localhost:8000" },
   "gatekeeper": { "serviceSpec": { "type": "static", "hosts": ["http://localhost:9123"] } },
   "seagull": { "serviceSpec": { "type": "static", "hosts": ["http://localhost:9120"] } },
@@ -10,7 +10,7 @@ export TIDEPOOL_TIDEWHISPERER_ENV='{
   }
 }'
 
-export TIDEPOOL_TIDEWHISPERER_SERVICE='{
+export TIDEPOOL_TIDE_WHISPERER_SERVICE='{
   "service": {
     "service": "tide-whisperer-local",
     "protocol": "http",

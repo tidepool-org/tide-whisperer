@@ -1,3 +1,4 @@
-#!/bin/sh -eu
+#!/bin/bash -eu
 
+source env.sh
 exec ./tide-whisperer

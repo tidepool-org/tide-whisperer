@@ -69,7 +69,7 @@ func main() {
 	var config Config
 
 	if err := common.LoadEnvironmentConfig(
-		[]string{"TIDEPOOL_TIDEWHISPERER_SERVICE", "TIDEPOOL_TIDEWHISPERER_ENV"},
+		[]string{"TIDEPOOL_TIDE_WHISPERER_SERVICE", "TIDEPOOL_TIDE_WHISPERER_ENV"},
 		&config,
 	); err != nil {
 		log.Fatal(DATA_API_PREFIX, " Problem loading config: ", err)
