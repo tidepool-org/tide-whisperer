@@ -99,23 +99,18 @@ func main() {
 		WithConfig(&config.ShorelineConfig.ShorelineClientConfig).
 		Build()
 
-	seagullClient := clients.NewSeagullClientBuilder().
-		WithHostGetter(config.SeagullConfig.ToHostGetter(hakkenClient)).
-		WithHttpClient(httpClient).
-		Build()
-
 	gatekeeperClient := clients.NewGatekeeperClientBuilder().
 		WithHostGetter(config.GatekeeperConfig.ToHostGetter(hakkenClient)).
 		WithHttpClient(httpClient).
 		WithTokenProvider(shorelineClient).
 		Build()
 
-	userCanViewData := func(userID, groupID string) bool {
-		if userID == groupID {
+	userCanViewData := func(authenticatedUserID string, targetUserID string) bool {
+		if authenticatedUserID == targetUserID {
 			return true
 		}
 
-		perms, err := gatekeeperClient.UserInGroup(userID, groupID)
+		perms, err := gatekeeperClient.UserInGroup(authenticatedUserID, targetUserID)
 		if err != nil {
 			log.Println(DATA_API_PREFIX, "Error looking up user in group", err)
 			return false
@@ -221,22 +216,24 @@ func main() {
 		}
 
 		if _, ok := req.URL.Query()["carelink"]; !ok {
-			if hasMedtronicDirectData, err := storage.HasMedtronicDirectData(queryParams.UserId); err != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Medtronic Direct data: %s", err))
+			if hasMedtronicDirectData, medtronicErr := storage.HasMedtronicDirectData(queryParams.UserId); medtronicErr != nil {
+				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Medtronic Direct data: %s", medtronicErr))
 				jsonError(res, error_running_query, start)
 				return
 			} else if !hasMedtronicDirectData {
 				queryParams.Carelink = true
 			}
 		}
-
-		pair := seagullClient.GetPrivatePair(queryParams.UserId, "uploads", shorelineClient.TokenProvide())
-		if pair == nil {
-			jsonError(res, error_no_permissons, start)
-			return
+		if !queryParams.Dexcom {
+			if dexcomDataSource, dexcomErr := storage.GetDexcomDataSource(queryParams.UserId); dexcomErr != nil {
+				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Dexcom data source: %s", dexcomErr))
+				jsonError(res, error_running_query, start)
+				return
+			} else {
+				queryParams.DexcomDataSource = dexcomDataSource
+			}
 		}
 
-		queryParams.GroupId = pair.ID
 		started := time.Now()
 
 		iter := storage.GetDeviceData(queryParams)
