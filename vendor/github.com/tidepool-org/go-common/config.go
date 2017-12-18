@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 )
@@ -19,6 +20,20 @@ func LoadConfig(filenames []string, obj interface{}) error {
 
 		if err := json.Unmarshal(bytes, obj); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func LoadEnvironmentConfig(envVars []string, obj interface{}) error {
+	for _, envVar := range envVars {
+		envValue := os.Getenv(envVar)
+		if envValue == "" {
+			return fmt.Errorf("%s not found", envVar)
+		}
+
+		if err := json.Unmarshal([]byte(envValue), obj); err != nil {
+			return fmt.Errorf("%s errored: %s", envVar, err.Error())
 		}
 	}
 	return nil
