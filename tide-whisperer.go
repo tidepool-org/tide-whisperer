@@ -69,8 +69,12 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 
 func main() {
 	var config Config
-	if err := common.LoadConfig([]string{"./config/env.json", "./config/server.json"}, &config); err != nil {
-		serviceLog.Fatal("Problem loading config: ", err)
+
+	if err := common.LoadEnvironmentConfig(
+		[]string{"TIDEPOOL_TIDE_WHISPERER_SERVICE", "TIDEPOOL_TIDE_WHISPERER_ENV"},
+		&config,
+	); err != nil {
+		log.Fatal(DATA_API_PREFIX, " Problem loading config: ", err)
 	}
 
 	tr := &http.Transport{

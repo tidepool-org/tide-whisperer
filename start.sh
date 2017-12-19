@@ -1,7 +1,4 @@
-#!/bin/sh -eu
+#!/bin/bash -eu
 
-if [ -r config/goenv.sh ]; then
-  . config/goenv.sh
-fi
-
+source env.sh
 exec ./tide-whisperer

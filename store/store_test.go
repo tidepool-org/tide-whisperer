@@ -84,6 +84,8 @@ func basicQuery() bson.M {
 }
 
 func allParamsQuery() bson.M {
+	earliestDataTime, _ := time.Parse(time.RFC3339, "2015-10-07T15:00:00Z")
+	latestDataTime, _ := time.Parse(time.RFC3339, "2016-12-13T02:00:00Z")
 	qParams := &Params{
 		UserId:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
@@ -93,7 +95,8 @@ func allParamsQuery() bson.M {
 		Carelink:      true,
 		DexcomDataSource: bson.M{
 			"dataSetIds":       []string{"123", "456"},
-			"earliestDataTime": "2015-10-07T15:00:00Z",
+			"earliestDataTime": earliestDataTime,
+			"latestDataTime":   latestDataTime,
 		},
 	}
 
@@ -148,6 +151,7 @@ func TestStore_generateMongoQuery_allparams(t *testing.T) {
 			{"type": bson.M{"$ne": "cbg"}},
 			{"uploadId": bson.M{"$in": []string{"123", "456"}}},
 			{"time": bson.M{"$lt": "2015-10-07T15:00:00Z"}},
+			{"time": bson.M{"$gt": "2016-12-13T02:00:00Z"}},
 		},
 	}
 
