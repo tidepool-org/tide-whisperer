@@ -74,7 +74,7 @@ func main() {
 		[]string{"TIDEPOOL_TIDE_WHISPERER_SERVICE", "TIDEPOOL_TIDE_WHISPERER_ENV"},
 		&config,
 	); err != nil {
-		log.Fatal(DATA_API_PREFIX, " Problem loading config: ", err)
+		serviceLog.Fatal(" Problem loading config: ", err)
 	}
 
 	tr := &http.Transport{
