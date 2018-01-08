@@ -3,14 +3,16 @@ package mongo
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/tidepool-org/go-common/errors"
-	"github.com/tidepool-org/go-common/jepson"
-	"labix.org/v2/mgo"
 	"log"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/tidepool-org/go-common/errors"
+	"github.com/tidepool-org/go-common/jepson"
+	"labix.org/v2/mgo"
 )
 
 type Config struct {
@@ -87,8 +89,10 @@ func DialWithTimeout(url string, timeout time.Duration) (*mgo.Session, error) {
 		case "gssapiServiceName":
 			service = v
 		case "ssl":
-			dialServer = func(addr *mgo.ServerAddr) (net.Conn, error) {
-				return tls.Dial("tcp", addr.String(), &tls.Config{InsecureSkipVerify: true})
+			if ssl, sslErr := strconv.ParseBool(v); sslErr == nil && ssl {
+				dialServer = func(addr *mgo.ServerAddr) (net.Conn, error) {
+					return tls.Dial("tcp", addr.String(), &tls.Config{InsecureSkipVerify: true})
+				}
 			}
 		case "connect":
 			if v == "direct" {
