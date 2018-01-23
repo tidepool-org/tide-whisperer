@@ -12,7 +12,9 @@ CMD ["./dist/tide-whisperer"]
 # Release
 FROM alpine:latest AS release
 
-RUN adduser -D tide-whisperer
+RUN ["apk", "add", "--no-cache", "ca-certificates"]
+
+RUN ["adduser", "-D", "tide-whisperer"]
 
 WORKDIR /home/tide-whisperer
 
