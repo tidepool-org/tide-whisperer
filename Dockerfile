@@ -14,12 +14,12 @@ FROM alpine:latest AS release
 
 RUN ["apk", "add", "--no-cache", "ca-certificates"]
 
-RUN ["adduser", "-D", "tide-whisperer"]
+RUN ["adduser", "-D", "tidepool"]
 
-WORKDIR /home/tide-whisperer
+WORKDIR /home/tidepool
 
-USER tide-whisperer
+USER tidepool
 
-COPY --from=development --chown=tide-whisperer /go/src/github.com/tidepool-org/tide-whisperer/dist/tide-whisperer .
+COPY --from=development --chown=tidepool /go/src/github.com/tidepool-org/tide-whisperer/dist/tide-whisperer .
 
 CMD ["./tide-whisperer"]
