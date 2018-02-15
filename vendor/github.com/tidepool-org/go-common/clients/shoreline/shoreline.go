@@ -26,6 +26,7 @@ type Client interface {
 	Login(username, password string) (*UserData, string, error)
 	Signup(username, password, email string) (*UserData, error)
 	CheckToken(token string) *TokenData
+	CheckTokenForScopes(requiredScopes, token string) *TokenData
 	TokenProvide() string
 	GetUser(userID, token string) (*UserData, error)
 	UpdateUser(userID string, userUpdate UserUpdate, token string) error
@@ -341,6 +342,41 @@ func (client *ShorelineClient) CheckToken(token string) *TokenData {
 	}
 }
 
+// CheckTokenForScopes tests a token with the user-api to make sure it's current;
+// and has the correct scopes. If so, it returns the data encoded in the token.
+func (client *ShorelineClient) CheckTokenForScopes(requiredScopes, token string) *TokenData {
+	host := client.getHost()
+	if host == nil {
+		return nil
+	}
+
+	host.Path += fmt.Sprintf("/token/%s/%s", token, requiredScopes)
+
+	req, _ := http.NewRequest("GET", host.String(), nil)
+	req.Header.Add("x-tidepool-session-token", client.serverToken)
+
+	res, err := client.httpClient.Do(req)
+	if err != nil {
+		log.Println("Error checking token", err)
+		return nil
+	}
+
+	switch res.StatusCode {
+	case 200:
+		var td TokenData
+		if err = json.NewDecoder(res.Body).Decode(&td); err != nil {
+			log.Println("Error parsing JSON results", err)
+			return nil
+		}
+		return &td
+	case 404:
+		return nil
+	default:
+		log.Printf("Unknown response code[%d] from service[%s]", res.StatusCode, req.URL)
+		return nil
+	}
+}
+
 func (client *ShorelineClient) TokenProvide() string {
 	client.mut.Lock()
 	defer client.mut.Unlock()
@@ -359,6 +395,7 @@ func (client *ShorelineClient) GetUser(userID, token string) (*UserData, error) 
 	host.Path += fmt.Sprintf("user/%s", userID)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
+	req.Header.Add("Authorization", "bearer "+token)
 	req.Header.Add("x-tidepool-session-token", token)
 
 	res, err := client.httpClient.Do(req)
@@ -403,6 +440,7 @@ func (client *ShorelineClient) UpdateUser(userID string, userUpdate UserUpdate, 
 	} else {
 
 		req, _ := http.NewRequest("PUT", host.String(), bytes.NewBuffer(jsonUser))
+		req.Header.Add("Authorization", "bearer "+token)
 		req.Header.Add("x-tidepool-session-token", token)
 
 		res, err := client.httpClient.Do(req)

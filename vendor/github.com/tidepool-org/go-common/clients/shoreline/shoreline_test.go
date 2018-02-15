@@ -12,7 +12,7 @@ import (
 
 const name = "test"
 const secret = "howdy ho, neighbor joe"
-const token = "this is a token"
+const token = "three.part.token"
 
 func TestStart(t *testing.T) {
 	srvr := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {

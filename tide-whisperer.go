@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -21,6 +20,7 @@ import (
 	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/shoreline"
+	"github.com/tidepool-org/go-common/tokens"
 	"github.com/tidepool-org/tide-whisperer/store"
 )
 
@@ -46,18 +46,20 @@ type (
 )
 
 var (
-	error_status_check = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
+	viewPermissonError = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
+	tokenError         = detailedError{Status: http.StatusUnauthorized, Code: "no_token", Message: "no token was given"}
+	//TODO: 500 doesn't seem correct??
+	invalidParametersError = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
 
-	error_no_view_permisson  = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
-	error_no_permissons      = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissons for user"}
-	error_running_query      = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
-	error_loading_events     = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
-	error_invalid_parameters = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
+	error_status_check   = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
+	error_no_permissons  = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissons for user"}
+	error_running_query  = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
+	error_loading_events = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
 
 	storage store.Storage
-)
 
-const DATA_API_PREFIX = "api/data"
+	serviceLog = log.New(os.Stdout, "api/data: ", log.Lshortfile)
+)
 
 //set the intenal message that we will use for logging
 func (d detailedError) setInternalMessage(internal error) detailedError {
@@ -72,7 +74,7 @@ func main() {
 		[]string{"TIDEPOOL_TIDE_WHISPERER_SERVICE", "TIDEPOOL_TIDE_WHISPERER_ENV"},
 		&config,
 	); err != nil {
-		log.Fatal(DATA_API_PREFIX, " Problem loading config: ", err)
+		serviceLog.Fatal(" Problem loading config: ", err)
 	}
 
 	tr := &http.Transport{
@@ -85,11 +87,11 @@ func main() {
 		Build()
 
 	if err := hakkenClient.Start(); err != nil {
-		log.Fatal(DATA_API_PREFIX, err)
+		serviceLog.Fatal(err)
 	}
 	defer func() {
 		if err := hakkenClient.Close(); err != nil {
-			log.Panic(DATA_API_PREFIX, "Error closing hakkenClient, panicing to get stacks: ", err)
+			serviceLog.Panic("Error closing hakkenClient, panicing to get stacks: ", err)
 		}
 	}()
 
@@ -105,18 +107,19 @@ func main() {
 		WithTokenProvider(shorelineClient).
 		Build()
 
-	userCanViewData := func(authenticatedUserID string, targetUserID string) bool {
-		if authenticatedUserID == targetUserID {
+	userCanViewData := func(tokenData *shoreline.TokenData, targetUserID string) bool {
+		if tokenData.IsServer {
+			return true
+		}
+		if tokenData.UserID == targetUserID {
 			return true
 		}
 
-		perms, err := gatekeeperClient.UserInGroup(authenticatedUserID, targetUserID)
+		perms, err := gatekeeperClient.UserInGroup(tokenData.UserID, targetUserID)
 		if err != nil {
-			log.Println(DATA_API_PREFIX, "Error looking up user in group", err)
+			serviceLog.Println("Error looking up user in group", err)
 			return false
 		}
-
-		log.Println(perms)
 		return !(perms["root"] == nil && perms["view"] == nil)
 	}
 
@@ -125,7 +128,7 @@ func main() {
 
 		err.Id = uuid.NewV4().String()
 
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s][%s] failed after [%.5f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
+		serviceLog.Printf("[%s][%s] failed after [%.5f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage)
 
 		jsonErr, _ := json.Marshal(err)
 
@@ -137,7 +140,7 @@ func main() {
 	processResults := func(response http.ResponseWriter, iterator store.StorageIterator, startTime time.Time) {
 		var writeCount int
 
-		log.Printf("%s mongo processing started after %.5f seconds", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds())
+		serviceLog.Printf("mongo processing started after %.5f seconds", time.Now().Sub(startTime).Seconds())
 
 		response.Header().Add("Content-Type", "application/json")
 		response.Write([]byte("["))
@@ -146,14 +149,14 @@ func main() {
 		for iterator.Next(&results) {
 			if len(results) > 0 {
 				if bytes, err := json.Marshal(results); err != nil {
-					log.Printf("%s failed to marshal mongo result with error: %s", DATA_API_PREFIX, err)
+					serviceLog.Printf("failed to marshal mongo result with error: %s", err)
 				} else {
 					if writeCount > 0 {
 						response.Write([]byte(","))
 					}
 					response.Write([]byte("\n"))
 					response.Write(bytes)
-					writeCount += 1
+					writeCount++
 				}
 			}
 		}
@@ -163,11 +166,11 @@ func main() {
 		}
 		response.Write([]byte("]"))
 
-		log.Printf("%s mongo processing finished after %.5f seconds and returned %d records", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds(), writeCount)
+		serviceLog.Printf("mongo processing finished after %.5f seconds and returned %d records", time.Now().Sub(startTime).Seconds(), writeCount)
 	}
 
 	if err := shorelineClient.Start(); err != nil {
-		log.Fatal(err)
+		serviceLog.Fatal(err)
 	}
 
 	storage := store.NewMongoStoreClient(&config.Mongo)
@@ -196,28 +199,31 @@ func main() {
 	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
 	// endDate (optional) : Only objects with 'time' field less than to or equal to start date will be returned .
 	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
+
 	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		token := tokens.CheckToken(res, req, tokens.TidepoolPublicScope, shorelineClient)
+		if token == nil {
+			return
+		}
+
 		start := time.Now()
-
 		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion)
-
 		if err != nil {
-			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing date: %s", err))
-			jsonError(res, error_invalid_parameters, start)
+			serviceLog.Printf("Error parsing date: %s", err)
+			jsonError(res, invalidParametersError, start)
 			return
 		}
 
-		token := req.Header.Get("x-tidepool-session-token")
-		td := shorelineClient.CheckToken(token)
-
-		if td == nil || !(td.IsServer || td.UserID == queryParams.UserId || userCanViewData(td.UserID, queryParams.UserId)) {
-			jsonError(res, error_no_view_permisson, start)
+		if !userCanViewData(token, queryParams.UserId) {
+			jsonError(res, viewPermissonError, start)
 			return
 		}
 
+		//TODO: If the user has a legitimate token but no data storage
+		// account we should be returning a `StatusNotFound` 404
 		if _, ok := req.URL.Query()["carelink"]; !ok {
 			if hasMedtronicDirectData, medtronicErr := storage.HasMedtronicDirectData(queryParams.UserId); medtronicErr != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Medtronic Direct data: %s", medtronicErr))
+				serviceLog.Printf("Error while querying for Medtronic Direct data: %s", medtronicErr)
 				jsonError(res, error_running_query, start)
 				return
 			} else if !hasMedtronicDirectData {
@@ -226,7 +232,7 @@ func main() {
 		}
 		if !queryParams.Dexcom {
 			if dexcomDataSource, dexcomErr := storage.GetDexcomDataSource(queryParams.UserId); dexcomErr != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Dexcom data source: %s", dexcomErr))
+				serviceLog.Printf("Error while querying for Dexcom data source: %s", dexcomErr)
 				jsonError(res, error_running_query, start)
 				return
 			} else {
@@ -256,7 +262,7 @@ func main() {
 		start = func() error { return server.ListenAndServe() }
 	}
 	if err := start(); err != nil {
-		log.Fatal(DATA_API_PREFIX, err)
+		serviceLog.Fatal(err)
 	}
 	hakkenClient.Publish(&config.Service)
 
@@ -265,7 +271,7 @@ func main() {
 	go func() {
 		for {
 			sig := <-signals
-			log.Printf(DATA_API_PREFIX+" Got signal [%s]", sig)
+			serviceLog.Printf(" Got signal [%s]", sig)
 
 			if sig == syscall.SIGINT || sig == syscall.SIGTERM {
 				server.Close()

@@ -33,6 +33,10 @@ func (client *ShorelineMockClient) CheckToken(token string) *TokenData {
 	return &TokenData{UserID: "987.654.321", IsServer: true}
 }
 
+func (client *ShorelineMockClient) CheckTokenForScopes(requiredScopes, token string) *TokenData {
+	return &TokenData{UserID: "987.654.321", IsServer: true}
+}
+
 func (client *ShorelineMockClient) TokenProvide() string {
 	return client.ServerToken
 }
