@@ -45,8 +45,8 @@ func TestStart(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed start with error[%v]", err)
 	}
-	if tok := shorelineClient.TokenProvide(); tok != token {
-		t.Errorf("Unexpected token[%s]", tok)
+	if tok := shorelineClient.SecretProvide(); tok != secret {
+		t.Errorf("Unexpected secret[%s]", tok)
 	}
 
 	<-time.After(100 * time.Millisecond)

@@ -27,7 +27,7 @@ type Client interface {
 	Signup(username, password, email string) (*UserData, error)
 	CheckToken(token string) *TokenData
 	CheckTokenForScopes(requiredScopes, token string) *TokenData
-	TokenProvide() string
+	SecretProvide() string
 	GetUser(userID, token string) (*UserData, error)
 	UpdateUser(userID string, userUpdate UserUpdate, token string) error
 }
@@ -167,21 +167,12 @@ func (b *ShorelineClientBuilder) Build() *ShorelineClient {
 // Start starts the client and makes it ready for us.  This must be done before using any of the functionality
 // that requires a server token
 func (client *ShorelineClient) Start() error {
-	if err := client.serverLogin(); err != nil {
-		log.Printf("Problem with initial server token acquisition, [%v]", err)
-	}
-
 	go func() {
 		for {
-			timer := time.After(time.Duration(client.config.TokenRefreshInterval))
 			select {
 			case twoWay := <-client.closed:
 				twoWay <- true
 				return
-			case <-timer:
-				if err := client.serverLogin(); err != nil {
-					log.Print("Error when refreshing server login", err)
-				}
 			}
 		}
 	}()
@@ -195,41 +186,6 @@ func (client *ShorelineClient) Close() {
 
 	client.mut.Lock()
 	defer client.mut.Unlock()
-	client.serverToken = ""
-}
-
-// serverLogin issues a request to the server for a login, using the stored
-// secret that was passed in on the creation of the client object. If
-// successful, it stores the returned token in ServerToken.
-func (client *ShorelineClient) serverLogin() error {
-	host := client.getHost()
-	if host == nil {
-		return errors.New("No known user-api hosts.")
-	}
-
-	host.Path += "/serverlogin"
-
-	req, _ := http.NewRequest("POST", host.String(), nil)
-	req.Header.Add("x-tidepool-server-name", client.config.Name)
-	req.Header.Add("x-tidepool-server-secret", client.config.Secret)
-
-	res, err := client.httpClient.Do(req)
-	if err != nil {
-		return errors.Wrap(err, "Failure to obtain a server token")
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != 200 {
-		return &status.StatusError{
-			status.NewStatusf(res.StatusCode, "Unknown response code from service[%s]", req.URL)}
-	}
-	token := res.Header.Get("x-tidepool-session-token")
-
-	client.mut.Lock()
-	defer client.mut.Unlock()
-	client.serverToken = token
-
-	return nil
 }
 
 func extractUserData(r io.Reader) (*UserData, error) {
@@ -318,7 +274,7 @@ func (client *ShorelineClient) CheckToken(token string) *TokenData {
 	host.Path += "/token/" + token
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
-	req.Header.Add("x-tidepool-session-token", client.serverToken)
+	req.Header.Add("X-Tidepool-Legacy-Service-Secret", client.config.Secret)
 
 	res, err := client.httpClient.Do(req)
 	if err != nil {
@@ -353,7 +309,7 @@ func (client *ShorelineClient) CheckTokenForScopes(requiredScopes, token string)
 	host.Path += fmt.Sprintf("/token/%s/%s", token, requiredScopes)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
-	req.Header.Add("x-tidepool-session-token", client.serverToken)
+	req.Header.Add("X-Tidepool-Legacy-Service-Secret", client.config.Secret)
 
 	res, err := client.httpClient.Do(req)
 	if err != nil {
@@ -377,11 +333,16 @@ func (client *ShorelineClient) CheckTokenForScopes(requiredScopes, token string)
 	}
 }
 
-func (client *ShorelineClient) TokenProvide() string {
-	client.mut.Lock()
-	defer client.mut.Unlock()
+func (client *ShorelineClient) SecretProvide() string {
+	return client.config.Secret
+}
 
-	return client.serverToken
+func (client *ShorelineClient) addAuthHeader(request *http.Request, token string) {
+	if token == client.config.Secret {
+		request.Header.Add("X-Tidepool-Legacy-Service-Secret", token)
+	} else {
+		request.Header.Add("Authorization", "bearer "+token)
+	}
 }
 
 // Get user details for the given user
@@ -395,8 +356,7 @@ func (client *ShorelineClient) GetUser(userID, token string) (*UserData, error) 
 	host.Path += fmt.Sprintf("user/%s", userID)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
-	req.Header.Add("Authorization", "bearer "+token)
-	req.Header.Add("x-tidepool-session-token", token)
+	client.addAuthHeader(req, token)
 
 	res, err := client.httpClient.Do(req)
 	if err != nil {
@@ -440,8 +400,7 @@ func (client *ShorelineClient) UpdateUser(userID string, userUpdate UserUpdate, 
 	} else {
 
 		req, _ := http.NewRequest("PUT", host.String(), bytes.NewBuffer(jsonUser))
-		req.Header.Add("Authorization", "bearer "+token)
-		req.Header.Add("x-tidepool-session-token", token)
+		client.addAuthHeader(req, token)
 
 		res, err := client.httpClient.Do(req)
 		if err != nil {

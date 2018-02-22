@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/tidepool-org/go-common/tokens"
+
 	"github.com/tidepool-org/go-common/clients/disc"
 	"github.com/tidepool-org/go-common/clients/status"
 )
@@ -29,13 +31,15 @@ type (
 	}
 
 	seagullClient struct {
-		httpClient *http.Client    // store a reference to the http client so we can reuse it
-		hostGetter disc.HostGetter // The getter that provides the host to talk to for the client
+		httpClient     *http.Client    // store a reference to the http client so we can reuse it
+		hostGetter     disc.HostGetter // The getter that provides the host to talk to for the client
+		SecretProvider SecretProvider  // An object that provides tokens for communicating with gatekeeper
 	}
 
 	seagullClientBuilder struct {
-		httpClient *http.Client
-		hostGetter disc.HostGetter
+		httpClient     *http.Client
+		hostGetter     disc.HostGetter
+		SecretProvider SecretProvider
 	}
 
 	PrivatePair struct {
@@ -58,6 +62,11 @@ func (b *seagullClientBuilder) WithHostGetter(hostGetter disc.HostGetter) *seagu
 	return b
 }
 
+func (b *seagullClientBuilder) WithSecretProvider(SecretProvider SecretProvider) *seagullClientBuilder {
+	b.SecretProvider = SecretProvider
+	return b
+}
+
 func (b *seagullClientBuilder) Build() *seagullClient {
 	if b.httpClient == nil {
 		panic("seagullClient requires an httpClient to be set")
@@ -65,9 +74,21 @@ func (b *seagullClientBuilder) Build() *seagullClient {
 	if b.hostGetter == nil {
 		panic("seagullClient requires a hostGetter to be set")
 	}
+	if b.SecretProvider == nil {
+		panic("seagullClient requires a SecretProvider to be set")
+	}
 	return &seagullClient{
-		httpClient: b.httpClient,
-		hostGetter: b.hostGetter,
+		httpClient:     b.httpClient,
+		hostGetter:     b.hostGetter,
+		SecretProvider: b.SecretProvider,
+	}
+}
+
+func (client *seagullClient) addAuthHeader(request *http.Request, token string) {
+	if token == client.SecretProvider.SecretProvide() {
+		request.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, token)
+	} else {
+		request.Header.Add(tokens.AuthorizationHeaderKey, "bearer "+token)
 	}
 }
 
@@ -79,8 +100,7 @@ func (client *seagullClient) GetPrivatePair(userID, hashName, token string) *Pri
 	host.Path += fmt.Sprintf("%s/private/%s", userID, hashName)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
-	req.Header.Add("x-tidepool-session-token", token)
-	req.Header.Add("Authorization", "bearer "+token)
+	client.addAuthHeader(req, token)
 
 	log.Println(req)
 	res, err := client.httpClient.Do(req)
@@ -111,8 +131,7 @@ func (client *seagullClient) GetCollection(userID, collectionName, token string,
 	host.Path += fmt.Sprintf("%s/%s", userID, collectionName)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
-	req.Header.Add("x-tidepool-session-token", token)
-	req.Header.Add("Authorization", "bearer "+token)
+	client.addAuthHeader(req, token)
 
 	log.Println(req)
 	res, err := client.httpClient.Do(req)
@@ -143,7 +162,6 @@ func (client *seagullClient) getHost() *url.URL {
 		cpy := new(url.URL)
 		*cpy = hostArr[0]
 		return cpy
-	} else {
-		return nil
 	}
+	return nil
 }

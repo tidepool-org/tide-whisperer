@@ -6,16 +6,17 @@ import (
 
 func TestMock(t *testing.T) {
 
-	const mockToken = "this is a token"
+	const testSecret = "this is a big big secret"
+	const testToken = "this.is.atoken"
 
-	client := NewMock(mockToken)
+	client := NewMock(testSecret)
 
 	if err := client.Start(); err != nil {
 		t.Errorf("Failed start with error[%v]", err)
 	}
 
-	if tok := client.TokenProvide(); tok != mockToken {
-		t.Errorf("Unexpected token[%s]", tok)
+	if secret := client.SecretProvide(); secret != testSecret {
+		t.Errorf("Unexpected token[%s]", secret)
 	}
 
 	if usr, token, err := client.Login("billy", "howdy"); err != nil {
@@ -29,15 +30,15 @@ func TestMock(t *testing.T) {
 		}
 	}
 
-	if checkedTd := client.CheckToken(mockToken); checkedTd == nil {
+	if checkedTd := client.CheckToken(testToken); checkedTd == nil {
 		t.Error("Should give us token data")
 	}
 
-	if checkedTd := client.CheckTokenForScopes("read:profile, write:profile", mockToken); checkedTd == nil {
+	if checkedTd := client.CheckTokenForScopes("read:profile, write:profile", testToken); checkedTd == nil {
 		t.Error("Should give us token data")
 	}
 
-	if usr, _ := client.GetUser("billy@howdy.org", mockToken); usr == nil {
+	if usr, _ := client.GetUser("billy@howdy.org", testToken); usr == nil {
 		t.Error("Should give us a mock user")
 	}
 
@@ -45,7 +46,7 @@ func TestMock(t *testing.T) {
 	password := "myN3wPw"
 	user := UserUpdate{Username: &username, Emails: &[]string{"an@email.org"}, Password: &password}
 
-	if err := client.UpdateUser("123", user, mockToken); err != nil {
+	if err := client.UpdateUser("123", user, testToken); err != nil {
 		t.Error("Should return no error on success")
 	}
 

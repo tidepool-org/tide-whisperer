@@ -2,12 +2,12 @@
 // services in the tidepool platform
 package clients
 
-type TokenProvider interface {
-	TokenProvide() string
+type SecretProvider interface {
+	SecretProvide() string
 }
 
-type TokenProviderFunc func() string
+type SecretProviderFunc func() string
 
-func (t TokenProviderFunc) TokenProvide() string {
+func (t SecretProviderFunc) SecretProvide() string {
 	return t()
 }

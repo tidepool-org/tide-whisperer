@@ -5,11 +5,11 @@ import (
 )
 
 type ShorelineMockClient struct {
-	ServerToken string
+	ServerSecret string
 }
 
-func NewMock(token string) *ShorelineMockClient {
-	return &ShorelineMockClient{ServerToken: token}
+func NewMock(secret string) *ShorelineMockClient {
+	return &ShorelineMockClient{ServerSecret: secret}
 }
 
 func (client *ShorelineMockClient) Start() error {
@@ -22,7 +22,7 @@ func (client *ShorelineMockClient) Close() {
 }
 
 func (client *ShorelineMockClient) Login(username, password string) (*UserData, string, error) {
-	return &UserData{UserID: "123.456.789", Username: username, Emails: []string{username}}, client.ServerToken, nil
+	return &UserData{UserID: "123.456.789", Username: username, Emails: []string{username}}, client.ServerSecret, nil
 }
 
 func (client *ShorelineMockClient) Signup(username, password, email string) (*UserData, error) {
@@ -37,8 +37,8 @@ func (client *ShorelineMockClient) CheckTokenForScopes(requiredScopes, token str
 	return &TokenData{UserID: "987.654.321", IsServer: true}
 }
 
-func (client *ShorelineMockClient) TokenProvide() string {
-	return client.ServerToken
+func (client *ShorelineMockClient) SecretProvide() string {
+	return client.ServerSecret
 }
 
 func (client *ShorelineMockClient) GetUser(userID, token string) (*UserData, error) {

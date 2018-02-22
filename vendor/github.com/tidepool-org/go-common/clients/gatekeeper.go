@@ -11,6 +11,7 @@ import (
 	"github.com/tidepool-org/go-common/clients/disc"
 	"github.com/tidepool-org/go-common/clients/status"
 	"github.com/tidepool-org/go-common/errors"
+	"github.com/tidepool-org/go-common/tokens"
 )
 
 type (
@@ -34,15 +35,15 @@ type (
 	}
 
 	gatekeeperClient struct {
-		httpClient    *http.Client    // store a reference to the http client so we can reuse it
-		hostGetter    disc.HostGetter // The getter that provides the host to talk to for the client
-		tokenProvider TokenProvider   // An object that provides tokens for communicating with gatekeeper
+		httpClient     *http.Client    // store a reference to the http client so we can reuse it
+		hostGetter     disc.HostGetter // The getter that provides the host to talk to for the client
+		SecretProvider SecretProvider  // An object that provides tokens for communicating with gatekeeper
 	}
 
 	gatekeeperClientBuilder struct {
-		httpClient    *http.Client    // store a reference to the http client so we can reuse it
-		hostGetter    disc.HostGetter // The getter that provides the host to talk to for the client
-		tokenProvider TokenProvider   // An object that provides tokens for communicating with gatekeeper
+		httpClient     *http.Client    // store a reference to the http client so we can reuse it
+		hostGetter     disc.HostGetter // The getter that provides the host to talk to for the client
+		SecretProvider SecretProvider  // An object that provides tokens for communicating with gatekeeper
 	}
 
 	Permission       map[string]interface{}
@@ -68,8 +69,8 @@ func (b *gatekeeperClientBuilder) WithHostGetter(hostGetter disc.HostGetter) *ga
 	return b
 }
 
-func (b *gatekeeperClientBuilder) WithTokenProvider(tokenProvider TokenProvider) *gatekeeperClientBuilder {
-	b.tokenProvider = tokenProvider
+func (b *gatekeeperClientBuilder) WithSecretProvider(SecretProvider SecretProvider) *gatekeeperClientBuilder {
+	b.SecretProvider = SecretProvider
 	return b
 }
 
@@ -77,8 +78,8 @@ func (b *gatekeeperClientBuilder) Build() *gatekeeperClient {
 	if b.hostGetter == nil {
 		panic("gatekeeperClient requires a hostGetter to be set")
 	}
-	if b.tokenProvider == nil {
-		panic("gatekeeperClient requires a tokenProvider to be set")
+	if b.SecretProvider == nil {
+		panic("gatekeeperClient requires a SecretProvider to be set")
 	}
 
 	if b.httpClient == nil {
@@ -86,9 +87,9 @@ func (b *gatekeeperClientBuilder) Build() *gatekeeperClient {
 	}
 
 	return &gatekeeperClient{
-		httpClient:    b.httpClient,
-		hostGetter:    b.hostGetter,
-		tokenProvider: b.tokenProvider,
+		httpClient:     b.httpClient,
+		hostGetter:     b.hostGetter,
+		SecretProvider: b.SecretProvider,
 	}
 }
 
@@ -100,7 +101,7 @@ func (client *gatekeeperClient) UserInGroup(userID, groupID string) (Permissions
 	host.Path += fmt.Sprintf("access/%s/%s", groupID, userID)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
-	req.Header.Add("x-tidepool-session-token", client.tokenProvider.TokenProvide())
+	req.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, client.SecretProvider.SecretProvide())
 
 	res, err := client.httpClient.Do(req)
 	if err != nil {
@@ -130,7 +131,7 @@ func (client *gatekeeperClient) UsersInGroup(groupID string) (UsersPermissions, 
 	host.Path += fmt.Sprintf("access/%s", groupID)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
-	req.Header.Add("x-tidepool-session-token", client.tokenProvider.TokenProvide())
+	req.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, client.SecretProvider.SecretProvide())
 
 	res, err := client.httpClient.Do(req)
 	if err != nil {
@@ -165,7 +166,7 @@ func (client *gatekeeperClient) SetPermissions(userID, groupID string, permissio
 	} else {
 		req, _ := http.NewRequest("POST", host.String(), bytes.NewBuffer(jsonPerms))
 		req.Header.Set("content-type", "application/json")
-		req.Header.Add("x-tidepool-session-token", client.tokenProvider.TokenProvide())
+		req.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, client.SecretProvider.SecretProvide())
 
 		res, err := client.httpClient.Do(req)
 		if err != nil {

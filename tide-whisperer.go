@@ -104,7 +104,7 @@ func main() {
 	gatekeeperClient := clients.NewGatekeeperClientBuilder().
 		WithHostGetter(config.GatekeeperConfig.ToHostGetter(hakkenClient)).
 		WithHttpClient(httpClient).
-		WithTokenProvider(shorelineClient).
+		WithSecretProvider(shorelineClient).
 		Build()
 
 	userCanViewData := func(tokenData *shoreline.TokenData, targetUserID string) bool {
