@@ -19,27 +19,25 @@ type (
 		//
 		// userID -- the Tidepool-assigned userId
 		// hashName -- the name of what we are trying to get
-		// token -- a server token or the user token
-		GetPrivatePair(userID, hashName, token string) *PrivatePair
+		GetPrivatePair(userID string, hashName string) *PrivatePair
 		// Retrieves arbitrary collection information from metadata
 		//
 		// userID -- the Tidepool-assigned userId
 		// collectionName -- the collection being retrieved
-		// token -- a server token or the user token
 		// v - the interface to return the value in
-		GetCollection(userID, collectionName, token string, v interface{}) error
+		GetCollection(userID string, collectionName string, v interface{}) error
 	}
 
 	seagullClient struct {
-		httpClient     *http.Client    // store a reference to the http client so we can reuse it
-		hostGetter     disc.HostGetter // The getter that provides the host to talk to for the client
-		SecretProvider SecretProvider  // An object that provides tokens for communicating with gatekeeper
+		httpClient   *http.Client    // store a reference to the http client so we can reuse it
+		hostGetter   disc.HostGetter // The getter that provides the host to talk to for the client
+		serverSecret string          // An object that provides tokens for communicating with gatekeeper
 	}
 
 	seagullClientBuilder struct {
-		httpClient     *http.Client
-		hostGetter     disc.HostGetter
-		SecretProvider SecretProvider
+		httpClient   *http.Client
+		hostGetter   disc.HostGetter
+		serverSecret string
 	}
 
 	PrivatePair struct {
@@ -62,8 +60,8 @@ func (b *seagullClientBuilder) WithHostGetter(hostGetter disc.HostGetter) *seagu
 	return b
 }
 
-func (b *seagullClientBuilder) WithSecretProvider(SecretProvider SecretProvider) *seagullClientBuilder {
-	b.SecretProvider = SecretProvider
+func (b *seagullClientBuilder) WithSecret(serverSecret string) *seagullClientBuilder {
+	b.serverSecret = serverSecret
 	return b
 }
 
@@ -74,25 +72,17 @@ func (b *seagullClientBuilder) Build() *seagullClient {
 	if b.hostGetter == nil {
 		panic("seagullClient requires a hostGetter to be set")
 	}
-	if b.SecretProvider == nil {
-		panic("seagullClient requires a SecretProvider to be set")
+	if b.serverSecret == "" {
+		panic("seagullClient requires a serverSecret to be set")
 	}
 	return &seagullClient{
-		httpClient:     b.httpClient,
-		hostGetter:     b.hostGetter,
-		SecretProvider: b.SecretProvider,
+		httpClient:   b.httpClient,
+		hostGetter:   b.hostGetter,
+		serverSecret: b.serverSecret,
 	}
 }
 
-func (client *seagullClient) addAuthHeader(request *http.Request, token string) {
-	if token == client.SecretProvider.SecretProvide() {
-		request.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, token)
-	} else {
-		request.Header.Add(tokens.AuthorizationHeaderKey, "bearer "+token)
-	}
-}
-
-func (client *seagullClient) GetPrivatePair(userID, hashName, token string) *PrivatePair {
+func (client *seagullClient) GetPrivatePair(userID string, hashName string) *PrivatePair {
 	host := client.getHost()
 	if host == nil {
 		return nil
@@ -100,7 +90,7 @@ func (client *seagullClient) GetPrivatePair(userID, hashName, token string) *Pri
 	host.Path += fmt.Sprintf("%s/private/%s", userID, hashName)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
-	client.addAuthHeader(req, token)
+	req.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, client.serverSecret)
 
 	log.Println(req)
 	res, err := client.httpClient.Do(req)
@@ -123,7 +113,7 @@ func (client *seagullClient) GetPrivatePair(userID, hashName, token string) *Pri
 	return &retVal
 }
 
-func (client *seagullClient) GetCollection(userID, collectionName, token string, v interface{}) error {
+func (client *seagullClient) GetCollection(userID string, collectionName string, v interface{}) error {
 	host := client.getHost()
 	if host == nil {
 		return nil
@@ -131,7 +121,7 @@ func (client *seagullClient) GetCollection(userID, collectionName, token string,
 	host.Path += fmt.Sprintf("%s/%s", userID, collectionName)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
-	client.addAuthHeader(req, token)
+	req.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, client.serverSecret)
 
 	log.Println(req)
 	res, err := client.httpClient.Do(req)

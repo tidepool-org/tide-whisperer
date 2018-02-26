@@ -21,7 +21,7 @@ type (
 		//groupID  -- the Tidepool-assigned groupID
 		//
 		// returns the Permissions
-		UserInGroup(userID, groupID string) (Permissions, error)
+		UserInGroup(userID string, groupID string) (Permissions, error)
 
 		//groupID  -- the Tidepool-assigned groupID
 		//
@@ -31,19 +31,19 @@ type (
 		//userID  -- the Tidepool-assigned userID
 		//groupID  -- the Tidepool-assigned groupID
 		//permissions -- the permisson we want to give the user for the group
-		SetPermissions(userID, groupID string, permissions Permissions) (Permissions, error)
+		SetPermissions(userID string, groupID string, permissions Permissions) (Permissions, error)
 	}
 
 	gatekeeperClient struct {
-		httpClient     *http.Client    // store a reference to the http client so we can reuse it
-		hostGetter     disc.HostGetter // The getter that provides the host to talk to for the client
-		SecretProvider SecretProvider  // An object that provides tokens for communicating with gatekeeper
+		httpClient   *http.Client    // store a reference to the http client so we can reuse it
+		hostGetter   disc.HostGetter // The getter that provides the host to talk to for the client
+		serverSecret string          // An object that provides tokens for communicating with gatekeeper
 	}
 
 	gatekeeperClientBuilder struct {
-		httpClient     *http.Client    // store a reference to the http client so we can reuse it
-		hostGetter     disc.HostGetter // The getter that provides the host to talk to for the client
-		SecretProvider SecretProvider  // An object that provides tokens for communicating with gatekeeper
+		httpClient   *http.Client    // store a reference to the http client so we can reuse it
+		hostGetter   disc.HostGetter // The getter that provides the host to talk to for the client
+		serverSecret string          // An object that provides tokens for communicating with gatekeeper
 	}
 
 	Permission       map[string]interface{}
@@ -69,8 +69,8 @@ func (b *gatekeeperClientBuilder) WithHostGetter(hostGetter disc.HostGetter) *ga
 	return b
 }
 
-func (b *gatekeeperClientBuilder) WithSecretProvider(SecretProvider SecretProvider) *gatekeeperClientBuilder {
-	b.SecretProvider = SecretProvider
+func (b *gatekeeperClientBuilder) WithSecret(serverSecret string) *gatekeeperClientBuilder {
+	b.serverSecret = serverSecret
 	return b
 }
 
@@ -78,8 +78,8 @@ func (b *gatekeeperClientBuilder) Build() *gatekeeperClient {
 	if b.hostGetter == nil {
 		panic("gatekeeperClient requires a hostGetter to be set")
 	}
-	if b.SecretProvider == nil {
-		panic("gatekeeperClient requires a SecretProvider to be set")
+	if b.serverSecret == "" {
+		panic("gatekeeperClient requires a serverSecret to be set")
 	}
 
 	if b.httpClient == nil {
@@ -87,9 +87,9 @@ func (b *gatekeeperClientBuilder) Build() *gatekeeperClient {
 	}
 
 	return &gatekeeperClient{
-		httpClient:     b.httpClient,
-		hostGetter:     b.hostGetter,
-		SecretProvider: b.SecretProvider,
+		httpClient:   b.httpClient,
+		hostGetter:   b.hostGetter,
+		serverSecret: b.serverSecret,
 	}
 }
 
@@ -101,7 +101,7 @@ func (client *gatekeeperClient) UserInGroup(userID, groupID string) (Permissions
 	host.Path += fmt.Sprintf("access/%s/%s", groupID, userID)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
-	req.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, client.SecretProvider.SecretProvide())
+	req.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, client.serverSecret)
 
 	res, err := client.httpClient.Do(req)
 	if err != nil {
@@ -131,7 +131,7 @@ func (client *gatekeeperClient) UsersInGroup(groupID string) (UsersPermissions, 
 	host.Path += fmt.Sprintf("access/%s", groupID)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
-	req.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, client.SecretProvider.SecretProvide())
+	req.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, client.serverSecret)
 
 	res, err := client.httpClient.Do(req)
 	if err != nil {
@@ -166,7 +166,7 @@ func (client *gatekeeperClient) SetPermissions(userID, groupID string, permissio
 	} else {
 		req, _ := http.NewRequest("POST", host.String(), bytes.NewBuffer(jsonPerms))
 		req.Header.Set("content-type", "application/json")
-		req.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, client.SecretProvider.SecretProvide())
+		req.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, client.serverSecret)
 
 		res, err := client.httpClient.Do(req)
 		if err != nil {

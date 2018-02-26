@@ -42,11 +42,11 @@ func NewSeagullMock() *SeagullMock {
 	return &SeagullMock{}
 }
 
-func (mock *SeagullMock) GetPrivatePair(userID, hashName, token string) *PrivatePair {
+func (mock *SeagullMock) GetPrivatePair(userID string, hashName string) *PrivatePair {
 	return &PrivatePair{ID: "mock.id.123", Value: "mock value"}
 }
 
-func (mock *SeagullMock) GetCollection(userID, collectionName, token string, v interface{}) error {
+func (mock *SeagullMock) GetCollection(userID string, collectionName string, v interface{}) error {
 	json.Unmarshal([]byte(`{"Something":"anit no thing", "patient": {"birthday": "2016-01-01"}}`), &v)
 	return nil
 }

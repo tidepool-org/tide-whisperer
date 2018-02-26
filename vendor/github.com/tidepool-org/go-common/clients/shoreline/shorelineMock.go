@@ -1,24 +1,11 @@
 package shoreline
 
-import (
-	"log"
-)
-
 type ShorelineMockClient struct {
 	ServerSecret string
 }
 
 func NewMock(secret string) *ShorelineMockClient {
 	return &ShorelineMockClient{ServerSecret: secret}
-}
-
-func (client *ShorelineMockClient) Start() error {
-	log.Println("Started mock shoreline client")
-	return nil
-}
-
-func (client *ShorelineMockClient) Close() {
-	log.Println("Close mock shoreline client")
 }
 
 func (client *ShorelineMockClient) Login(username, password string) (*UserData, string, error) {
@@ -37,11 +24,11 @@ func (client *ShorelineMockClient) CheckTokenForScopes(requiredScopes, token str
 	return &TokenData{UserID: "987.654.321", IsServer: true}
 }
 
-func (client *ShorelineMockClient) SecretProvide() string {
+func (client *ShorelineMockClient) GetSecret() string {
 	return client.ServerSecret
 }
 
-func (client *ShorelineMockClient) GetUser(userID, token string) (*UserData, error) {
+func (client *ShorelineMockClient) GetUser(userID string) (*UserData, error) {
 	if userID == "NotFound" {
 		return nil, nil
 	} else if userID == "WithoutPassword" {
@@ -51,6 +38,6 @@ func (client *ShorelineMockClient) GetUser(userID, token string) (*UserData, err
 	}
 }
 
-func (client *ShorelineMockClient) UpdateUser(userID string, userUpdate UserUpdate, token string) error {
+func (client *ShorelineMockClient) UpdateUser(userID string, userUpdate UserUpdate) error {
 	return nil
 }

@@ -3,12 +3,11 @@ package tokens
 import (
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/tidepool-org/go-common/clients/shoreline"
 )
 
-//TODO remove
+//TODO: retire token
 const TidepoolSessionTokenName = "X-Tidepool-Session-Token"
 
 const TidepoolLegacyServiceSecretHeaderKey = "X-Tidepool-Legacy-Service-Secret"
@@ -16,46 +15,24 @@ const AuthorizationHeaderKey = "Authorization"
 const TidepoolInternalScope = "tidepool:internal"
 const TidepoolPublicScope = "tidepool:public"
 
-func GetHeaderToken(request *http.Request) string {
-	if secret := GetServerSecret(request); secret != "" {
-		return secret
+func GetServerSecret(request *http.Request) string {
+	if request == nil {
+		log.Fatal("No request was given")
 	}
-	if bearer := GetBearerToken(request); bearer != "" {
-		return bearer
-	}
-	return ""
+	return request.Header.Get(TidepoolLegacyServiceSecretHeaderKey)
 }
 
 func GetBearerToken(request *http.Request) string {
-	if request != nil {
-		auth := request.Header.Get(AuthorizationHeaderKey)
-		if len(auth) > 7 &&
-			strings.EqualFold(auth[0:7], "BEARER ") {
-			return strings.Split(auth, " ")[1]
-		}
+	if request == nil {
+		log.Fatal("No request was given")
 	}
-	return ""
-}
-
-func GetServerSecret(request *http.Request) string {
-	if request != nil {
-		return request.Header.Get(TidepoolLegacyServiceSecretHeaderKey)
-	}
-	return ""
-}
-
-func IsBearerToken(request *http.Request) bool {
-	return GetBearerToken(request) != ""
-}
-
-func IsServerSecret(request *http.Request) bool {
-	return GetServerSecret(request) != ""
+	return request.Header.Get(AuthorizationHeaderKey)
 }
 
 func CheckToken(response http.ResponseWriter, request *http.Request, requiredScopes string, client shoreline.Client) *shoreline.TokenData {
 
-	if IsServerSecret(request) {
-		if GetServerSecret(request) == client.SecretProvide() {
+	if serverSecret := GetServerSecret(request); serverSecret != "" {
+		if serverSecret == client.GetSecret() {
 			return &shoreline.TokenData{
 				UserID:   TidepoolLegacyServiceSecretHeaderKey,
 				IsServer: true,
@@ -68,8 +45,8 @@ func CheckToken(response http.ResponseWriter, request *http.Request, requiredSco
 		return nil
 	}
 
-	if IsBearerToken(request) {
-		tokenData := client.CheckTokenForScopes(requiredScopes, GetBearerToken(request))
+	if bearerToken := GetBearerToken(request); bearerToken != "" {
+		tokenData := client.CheckTokenForScopes(requiredScopes, bearerToken)
 		if tokenData != nil {
 			return tokenData
 		}

@@ -20,7 +20,7 @@ func TestMock(t *testing.T) {
 
 	client := NewMock()
 
-	client.PostServer(EVENT_NAME, TOKEN, p)
+	client.PostServer(EVENT_NAME, p)
 
 	client.PostThisUser(EVENT_NAME, TOKEN, p)
 
@@ -45,7 +45,7 @@ func TestMock_Fails(t *testing.T) {
 
 	client := NewMock()
 
-	client.PostServer("", TOKEN, p)
+	client.PostServer("", p)
 
 	client.PostThisUser(EVENT_NAME, "", p)
 

@@ -7,47 +7,34 @@ import (
 
 const testToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJS.iIjoiYXV0aDB8ODIxNjU0NDYz.sCOkfBAzP73Mrkk2pY1-s"
 
-func TestGetHeaderTokenForBearer(t *testing.T) {
-	request := &http.Request{Header: http.Header{}}
-	request.Header.Set(AuthorizationHeaderKey, "Bearer "+testToken)
+func TestGetBearerToken(t *testing.T) {
+	const bearerHeaderValue = "Bearer " + testToken
 
-	if IsBearerToken(request) == false {
-		t.Log("expected be a bearer token")
+	request := &http.Request{Header: http.Header{}}
+	request.Header.Set(AuthorizationHeaderKey, bearerHeaderValue)
+
+	bearerToken := GetBearerToken(request)
+	if bearerToken == "" {
+		t.Logf("expected '%s' found '%s'", bearerHeaderValue, bearerToken)
 		t.Fail()
 	}
-
-	bearerToken := GetHeaderToken(request)
-	if bearerToken != testToken {
-		t.Logf("expected '%s' found '%s'", testToken, bearerToken)
+	if bearerToken != bearerHeaderValue {
+		t.Logf("expected '%s' found '%s'", bearerHeaderValue, bearerToken)
 		t.Fail()
 	}
 }
 
-func TestGetHeaderTokenForNoToken(t *testing.T) {
+func TestGetServerSecret(t *testing.T) {
 	request := &http.Request{Header: http.Header{}}
-	bearerToken := GetHeaderToken(request)
-	if IsBearerToken(request) == true {
-		t.Log("expected NOT be a bearer token")
+	request.Header.Set(TidepoolLegacyServiceSecretHeaderKey, testToken)
+
+	serverToken := GetServerSecret(request)
+	if serverToken == "" {
+		t.Logf("expected '%s' found '%s'", testToken, serverToken)
 		t.Fail()
 	}
-	if bearerToken != "" {
-		t.Logf("expected '%s' found '%s'", "", bearerToken)
-		t.Fail()
-	}
-}
-
-func TestGetHeaderTokenBearerIsDefault(t *testing.T) {
-	request := &http.Request{Header: http.Header{}}
-	request.Header.Set(AuthorizationHeaderKey, "Bearer "+testToken)
-
-	if IsBearerToken(request) == false {
-		t.Log("expected to be a bearer token")
-		t.Fail()
-	}
-
-	bearerToken := GetHeaderToken(request)
-	if bearerToken != testToken {
-		t.Logf("expected '%s' found '%s'", testToken, bearerToken)
+	if serverToken != testToken {
+		t.Logf("expected '%s' found '%s'", testToken, serverToken)
 		t.Fail()
 	}
 }

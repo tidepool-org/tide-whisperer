@@ -21,15 +21,14 @@ import (
 
 //Generic client interface that we will implement and mock
 type Client interface {
-	Start() error
-	Close()
 	Login(username, password string) (*UserData, string, error)
 	Signup(username, password, email string) (*UserData, error)
 	CheckToken(token string) *TokenData
 	CheckTokenForScopes(requiredScopes, token string) *TokenData
-	SecretProvide() string
-	GetUser(userID, token string) (*UserData, error)
-	UpdateUser(userID string, userUpdate UserUpdate, token string) error
+	GetSecret() string
+	//server to server calls
+	UpdateUser(userID string, userUpdate UserUpdate) error
+	GetUser(userID string) (*UserData, error)
 }
 
 // UserApiClient manages the local data for a client. A client is intended to be shared among multiple
@@ -162,30 +161,6 @@ func (b *ShorelineClientBuilder) Build() *ShorelineClient {
 
 		closed: make(chan chan bool),
 	}
-}
-
-// Start starts the client and makes it ready for us.  This must be done before using any of the functionality
-// that requires a server token
-func (client *ShorelineClient) Start() error {
-	go func() {
-		for {
-			select {
-			case twoWay := <-client.closed:
-				twoWay <- true
-				return
-			}
-		}
-	}()
-	return nil
-}
-
-func (client *ShorelineClient) Close() {
-	twoWay := make(chan bool)
-	client.closed <- twoWay
-	<-twoWay
-
-	client.mut.Lock()
-	defer client.mut.Unlock()
 }
 
 func extractUserData(r io.Reader) (*UserData, error) {
@@ -333,21 +308,13 @@ func (client *ShorelineClient) CheckTokenForScopes(requiredScopes, token string)
 	}
 }
 
-func (client *ShorelineClient) SecretProvide() string {
+func (client *ShorelineClient) GetSecret() string {
 	return client.config.Secret
-}
-
-func (client *ShorelineClient) addAuthHeader(request *http.Request, token string) {
-	if token == client.config.Secret {
-		request.Header.Add("X-Tidepool-Legacy-Service-Secret", token)
-	} else {
-		request.Header.Add("Authorization", "bearer "+token)
-	}
 }
 
 // Get user details for the given user
 // In this case the userID could be the actual ID or an email address
-func (client *ShorelineClient) GetUser(userID, token string) (*UserData, error) {
+func (client *ShorelineClient) GetUser(userID string) (*UserData, error) {
 	host := client.getHost()
 	if host == nil {
 		return nil, errors.New("No known user-api hosts.")
@@ -356,7 +323,7 @@ func (client *ShorelineClient) GetUser(userID, token string) (*UserData, error) 
 	host.Path += fmt.Sprintf("user/%s", userID)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
-	client.addAuthHeader(req, token)
+	req.Header.Add("X-Tidepool-Legacy-Service-Secret", client.config.Secret)
 
 	res, err := client.httpClient.Do(req)
 	if err != nil {
@@ -381,7 +348,7 @@ func (client *ShorelineClient) GetUser(userID, token string) (*UserData, error) 
 
 // Get user details for the given user
 // In this case the userID could be the actual ID or an email address
-func (client *ShorelineClient) UpdateUser(userID string, userUpdate UserUpdate, token string) error {
+func (client *ShorelineClient) UpdateUser(userID string, userUpdate UserUpdate) error {
 	host := client.getHost()
 	if host == nil {
 		return errors.New("No known user-api hosts.")
@@ -400,7 +367,7 @@ func (client *ShorelineClient) UpdateUser(userID string, userUpdate UserUpdate, 
 	} else {
 
 		req, _ := http.NewRequest("PUT", host.String(), bytes.NewBuffer(jsonUser))
-		client.addAuthHeader(req, token)
+		req.Header.Add("X-Tidepool-Legacy-Service-Secret", client.config.Secret)
 
 		res, err := client.httpClient.Do(req)
 		if err != nil {
@@ -422,7 +389,6 @@ func (client *ShorelineClient) getHost() *url.URL {
 		cpy := new(url.URL)
 		*cpy = hostArr[0]
 		return cpy
-	} else {
-		return nil
 	}
+	return nil
 }

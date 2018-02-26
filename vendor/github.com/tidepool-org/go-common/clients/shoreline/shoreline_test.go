@@ -26,7 +26,7 @@ func TestStart(t *testing.T) {
 				t.Errorf("Bad secret value[%v]", sec)
 			}
 
-			res.Header().Set("x-tidepool-session-token", token)
+			res.Header().Set("X-Tidepool-Session-Token", token)
 		default:
 			t.Errorf("Unknown path[%s]", req.URL.Path)
 		}
@@ -40,30 +40,23 @@ func TestStart(t *testing.T) {
 		WithTokenRefreshInterval(10 * time.Millisecond).
 		Build()
 
-	err := shorelineClient.Start()
-
-	if err != nil {
-		t.Errorf("Failed start with error[%v]", err)
-	}
-	if tok := shorelineClient.SecretProvide(); tok != secret {
+	if tok := shorelineClient.GetSecret(); tok != secret {
 		t.Errorf("Unexpected secret[%s]", tok)
 	}
 
-	<-time.After(100 * time.Millisecond)
-	shorelineClient.Close()
 }
 
 func TestLogin(t *testing.T) {
 	srvr := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/serverlogin":
-			res.Header().Set("x-tidepool-session-token", token)
+			res.Header().Set("X-Tidepool-Session-Token", token)
 		case "/login":
 			if auth := req.Header.Get("Authorization"); auth != "Basic YmlsbHk6aG93ZHk=" {
 				t.Errorf("Bad Authorization Header[%v]", auth)
 			}
 
-			res.Header().Set("x-tidepool-session-token", token)
+			res.Header().Set("X-Tidepool-Session-Token", token)
 			fmt.Fprint(res, `{"userid": "1234abc", "username": "billy", "emails": ["billy@1234.abc"]}`)
 		default:
 			t.Errorf("Unknown path[%s]", req.URL.Path)
@@ -76,12 +69,6 @@ func TestLogin(t *testing.T) {
 		WithName("test").
 		WithSecret("howdy ho, neighbor joe").
 		Build()
-
-	err := shorelineClient.Start()
-	if err != nil {
-		t.Errorf("Failed start with error[%v]", err)
-	}
-	defer shorelineClient.Close()
 
 	ud, tok, err := shorelineClient.Login("billy", "howdy")
 	if err != nil {
@@ -99,7 +86,7 @@ func TestSignup(t *testing.T) {
 	srvr := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		switch req.URL.Path {
 		case "/serverlogin":
-			res.Header().Set("x-tidepool-session-token", token)
+			res.Header().Set("X-Tidepool-Session-Token", token)
 		case "/user":
 			res.WriteHeader(http.StatusCreated)
 			fmt.Fprint(res, `{"userid": "1234abc", "username": "new me", "emails": ["new.me@1234.abc"]}`)
@@ -114,12 +101,6 @@ func TestSignup(t *testing.T) {
 		WithName("test").
 		WithSecret("howdy ho, neighbor joe").
 		Build()
-
-	err := client.Start()
-	if err != nil {
-		t.Errorf("Failed start with error[%v]", err)
-	}
-	defer client.Close()
 
 	ud, err := client.Signup("new me", "howdy", "new.me@1234.abc")
 	if err != nil {

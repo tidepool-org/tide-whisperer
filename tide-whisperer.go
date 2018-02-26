@@ -104,7 +104,7 @@ func main() {
 	gatekeeperClient := clients.NewGatekeeperClientBuilder().
 		WithHostGetter(config.GatekeeperConfig.ToHostGetter(hakkenClient)).
 		WithHttpClient(httpClient).
-		WithSecretProvider(shorelineClient).
+		WithSecret(config.ShorelineConfig.Secret).
 		Build()
 
 	userCanViewData := func(tokenData *shoreline.TokenData, targetUserID string) bool {
@@ -167,10 +167,6 @@ func main() {
 		response.Write([]byte("]"))
 
 		serviceLog.Printf("mongo processing finished after %.5f seconds and returned %d records", time.Now().Sub(startTime).Seconds(), writeCount)
-	}
-
-	if err := shorelineClient.Start(); err != nil {
-		serviceLog.Fatal(err)
 	}
 
 	storage := store.NewMongoStoreClient(&config.Mongo)

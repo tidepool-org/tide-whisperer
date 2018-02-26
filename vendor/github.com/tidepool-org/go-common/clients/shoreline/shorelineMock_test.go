@@ -11,14 +11,6 @@ func TestMock(t *testing.T) {
 
 	client := NewMock(testSecret)
 
-	if err := client.Start(); err != nil {
-		t.Errorf("Failed start with error[%v]", err)
-	}
-
-	if secret := client.SecretProvide(); secret != testSecret {
-		t.Errorf("Unexpected token[%s]", secret)
-	}
-
 	if usr, token, err := client.Login("billy", "howdy"); err != nil {
 		t.Errorf("Failed start with error[%v]", err)
 	} else {
@@ -38,15 +30,19 @@ func TestMock(t *testing.T) {
 		t.Error("Should give us token data")
 	}
 
-	if usr, _ := client.GetUser("billy@howdy.org", testToken); usr == nil {
+	if usr, _ := client.GetUser("billy@howdy.org"); usr == nil {
 		t.Error("Should give us a mock user")
+	}
+
+	if secret := client.GetSecret(); secret != testSecret {
+		t.Error("Should give us the configured server secret")
 	}
 
 	username := "name"
 	password := "myN3wPw"
 	user := UserUpdate{Username: &username, Emails: &[]string{"an@email.org"}, Password: &password}
 
-	if err := client.UpdateUser("123", user, testToken); err != nil {
+	if err := client.UpdateUser("123", user); err != nil {
 		t.Error("Should return no error on success")
 	}
 

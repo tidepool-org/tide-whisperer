@@ -7,7 +7,7 @@ import (
 
 //The purpose of this test is to ensure you canreply on the mocks
 
-const USERID, GROUPID, TOKEN_MOCK = "123user", "456group", "this is a token"
+const USERID, GROUPID = "123user", "456group"
 
 func makeExpectedPermissons() Permissions {
 	return Permissions{USERID: Allowed}
@@ -62,7 +62,7 @@ func TestSeagullMock_GetCollection(t *testing.T) {
 	sc := NewSeagullMock()
 	var col struct{ Something string }
 
-	sc.GetCollection("123.456", "stuff", TOKEN_MOCK, &col)
+	sc.GetCollection("123.456", "stuff", &col)
 
 	if col.Something != "anit no thing" {
 		t.Error("Should have given mocked collection")
@@ -72,7 +72,7 @@ func TestSeagullMock_GetCollection(t *testing.T) {
 func TestSeagullMock_GetPrivatePair(t *testing.T) {
 	sc := NewSeagullMock()
 
-	if pp := sc.GetPrivatePair("123.456", "Stuff", TOKEN_MOCK); pp == nil {
+	if pp := sc.GetPrivatePair("123.456", "Stuff"); pp == nil {
 		t.Error("Should give us mocked private pair")
 	}
 

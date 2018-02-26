@@ -12,35 +12,25 @@ import (
 	"github.com/tidepool-org/go-common/tokens"
 )
 
-type SecretProvider interface {
-	SecretProvide() string
-}
-
-type SecretProviderFunc func() string
-
-func (t SecretProviderFunc) SecretProvide() string {
-	return t()
-}
-
 //Generic client interface that we will implement and mock
 type Client interface {
-	PostServer(eventName, token string, params map[string]string)
-	PostThisUser(eventName, token string, params map[string]string)
-	PostWithUser(userId, eventName, token string, params map[string]string)
+	PostServer(eventName string, params map[string]string)
+	PostThisUser(eventName string, token string, params map[string]string)
+	PostWithUser(userId string, eventName string, token string, params map[string]string)
 }
 
 type HighwaterClient struct {
-	hostGetter     disc.HostGetter
-	config         *HighwaterClientConfig
-	httpClient     *http.Client
-	SecretProvider SecretProvider
+	hostGetter   disc.HostGetter
+	config       *HighwaterClientConfig
+	httpClient   *http.Client
+	serverSecret string
 }
 
 type HighwaterClientBuilder struct {
-	hostGetter     disc.HostGetter
-	config         *HighwaterClientConfig
-	httpClient     *http.Client
-	SecretProvider SecretProvider
+	hostGetter   disc.HostGetter
+	config       *HighwaterClientConfig
+	httpClient   *http.Client
+	serverSecret string
 }
 
 type HighwaterClientConfig struct {
@@ -84,8 +74,8 @@ func (b *HighwaterClientBuilder) WithConfig(val *HighwaterClientConfig) *Highwat
 	return b.WithName(val.Name).WithSource(val.MetricsSource).WithVersion(val.MetricsVersion)
 }
 
-func (b *HighwaterClientBuilder) WithSecretProvider(SecretProvider SecretProvider) *HighwaterClientBuilder {
-	b.SecretProvider = SecretProvider
+func (b *HighwaterClientBuilder) WithSecret(serverSecret string) *HighwaterClientBuilder {
+	b.serverSecret = serverSecret
 	return b
 }
 
@@ -104,8 +94,8 @@ func (b *HighwaterClientBuilder) Build() *HighwaterClient {
 		panic("HighwaterClient requires a version to be set")
 	}
 
-	if b.SecretProvider == nil {
-		panic("HighwaterClient requires a SecretProvider to be set")
+	if b.serverSecret == "" {
+		panic("HighwaterClient requires a serverSecret")
 	}
 
 	if b.httpClient == nil {
@@ -113,10 +103,10 @@ func (b *HighwaterClientBuilder) Build() *HighwaterClient {
 	}
 
 	return &HighwaterClient{
-		hostGetter:     b.hostGetter,
-		httpClient:     b.httpClient,
-		config:         b.config,
-		SecretProvider: b.SecretProvider,
+		hostGetter:   b.hostGetter,
+		httpClient:   b.httpClient,
+		config:       b.config,
+		serverSecret: b.serverSecret,
 	}
 }
 
@@ -148,15 +138,7 @@ func (client *HighwaterClient) adjustEventParams(params map[string]string) []byt
 	return buf.Bytes()
 }
 
-func (client *HighwaterClient) addAuthHeader(request *http.Request, token string) {
-	if token == client.SecretProvider.SecretProvide() {
-		request.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, token)
-	} else {
-		request.Header.Add(tokens.AuthorizationHeaderKey, "bearer "+token)
-	}
-}
-
-func (client *HighwaterClient) PostServer(eventName, token string, params map[string]string) {
+func (client *HighwaterClient) PostServer(eventName string, params map[string]string) {
 
 	host := client.getHost()
 	if host == nil {
@@ -167,7 +149,7 @@ func (client *HighwaterClient) PostServer(eventName, token string, params map[st
 	host.Path += "/server/" + client.config.Name + "/" + client.adjustEventName(eventName)
 
 	req, _ := http.NewRequest("GET", host.String(), bytes.NewBuffer(client.adjustEventParams(params)))
-	client.addAuthHeader(req, token)
+	req.Header.Add(tokens.TidepoolLegacyServiceSecretHeaderKey, client.serverSecret)
 
 	res, err := client.httpClient.Do(req)
 	if err != nil {
@@ -190,7 +172,7 @@ func (client *HighwaterClient) PostThisUser(eventName, token string, params map[
 	host.Path += "/thisuser/" + client.adjustEventName(eventName)
 
 	req, _ := http.NewRequest("GET", host.String(), bytes.NewBuffer(client.adjustEventParams(params)))
-	client.addAuthHeader(req, token)
+	req.Header.Add(tokens.AuthorizationHeaderKey, token)
 
 	res, err := client.httpClient.Do(req)
 	if err != nil {
@@ -213,7 +195,7 @@ func (client *HighwaterClient) PostWithUser(userId, eventName, token string, par
 	host.Path += "/user/" + userId + "/" + client.adjustEventName(eventName)
 
 	req, _ := http.NewRequest("GET", host.String(), bytes.NewBuffer(client.adjustEventParams(params)))
-	client.addAuthHeader(req, token)
+	req.Header.Add(tokens.AuthorizationHeaderKey, token)
 	if _, err := client.httpClient.Do(req); err != nil {
 		log.Printf("Error PostWithUser: [%s]  err[%v] ", req.URL, err)
 	}

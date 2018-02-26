@@ -10,9 +10,9 @@ func NewMock() *HighwaterMockClient {
 	return &HighwaterMockClient{}
 }
 
-func (client *HighwaterMockClient) PostServer(eventName, token string, params map[string]string) {
-	if eventName == "" || token == "" {
-		log.Panicf("missing required eventName[%s] token[%s]", eventName, token)
+func (client *HighwaterMockClient) PostServer(eventName string, params map[string]string) {
+	if eventName == "" {
+		log.Panicf("missing required eventName[%s]", eventName)
 	}
 	return
 }
