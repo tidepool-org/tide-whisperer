@@ -21,12 +21,14 @@ import (
 	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/shoreline"
+	"github.com/tidepool-org/tide-whisperer/auth"
 	"github.com/tidepool-org/tide-whisperer/store"
 )
 
 type (
 	Config struct {
 		clients.Config
+		Auth                *auth.Config        `json:"auth"`
 		Service             disc.ServiceListing `json:"service"`
 		Mongo               mongo.Config        `json:"mongo"`
 		store.SchemaVersion `json:"schemaVersion"`
@@ -79,6 +81,11 @@ func main() {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	httpClient := &http.Client{Transport: tr}
+
+	authClient, err := auth.NewClient(config.Auth, httpClient)
+	if err != nil {
+		log.Fatal(DATA_API_PREFIX, err)
+	}
 
 	hakkenClient := hakken.NewHakkenBuilder().
 		WithConfig(&config.HakkenConfig).
@@ -207,8 +214,15 @@ func main() {
 			return
 		}
 
-		token := req.Header.Get("x-tidepool-session-token")
-		td := shorelineClient.CheckToken(token)
+		var td *shoreline.TokenData
+		if sessionToken := req.Header.Get("x-tidepool-session-token"); sessionToken != "" {
+			td = shorelineClient.CheckToken(sessionToken)
+		} else if restrictedTokens, found := req.URL.Query()["restricted_token"]; found && len(restrictedTokens) == 1 {
+			restrictedToken, restrictedTokenErr := authClient.GetRestrictedToken(req.Context(), restrictedTokens[0])
+			if restrictedTokenErr == nil && restrictedToken != nil && restrictedToken.Authenticates(req) {
+				td = &shoreline.TokenData{UserID: restrictedToken.UserID}
+			}
+		}
 
 		if td == nil || !(td.IsServer || td.UserID == queryParams.UserId || userCanViewData(td.UserID, queryParams.UserId)) {
 			jsonError(res, error_no_view_permisson, start)
