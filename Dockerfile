@@ -12,9 +12,10 @@ CMD ["./dist/tide-whisperer"]
 # Release
 FROM alpine:latest AS release
 
-RUN ["apk", "add", "--no-cache", "ca-certificates"]
-
-RUN ["adduser", "-D", "tidepool"]
+RUN apk --no-cache update && \
+    apk --no-cache upgrade && \
+    apk add --no-cache ca-certificates && \
+    adduser -D tidepool
 
 WORKDIR /home/tidepool
 
