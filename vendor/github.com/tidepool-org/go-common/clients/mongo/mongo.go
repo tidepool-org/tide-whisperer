@@ -12,7 +12,7 @@ import (
 
 	"github.com/tidepool-org/go-common/errors"
 	"github.com/tidepool-org/go-common/jepson"
-	"labix.org/v2/mgo"
+	mgo "gopkg.in/mgo.v2"
 )
 
 type Config struct {
