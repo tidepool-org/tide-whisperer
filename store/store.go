@@ -187,7 +187,7 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["source"] = bson.M{"$ne": "carelink"}
 	}
 
-	and := []bson.M{}
+	andQuery := []bson.M{}
 	if !p.Dexcom && p.DexcomDataSource != nil {
 		dexcomQuery := []bson.M{
 			{"type": bson.M{"$ne": "cbg"}},
@@ -199,7 +199,7 @@ func generateMongoQuery(p *Params) bson.M {
 		if latestDataTime, ok := p.DexcomDataSource["latestDataTime"].(time.Time); ok {
 			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}})
 		}
-		and = append(and, bson.M{"$or": dexcomQuery})
+		andQuery = append(andQuery, bson.M{"$or": dexcomQuery})
 	}
 
 	if !p.Medtronic && len(p.MedtronicUploadIds) > 0 {
@@ -208,11 +208,11 @@ func generateMongoQuery(p *Params) bson.M {
 			{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
 			{"uploadId": bson.M{"$nin": p.MedtronicUploadIds}},
 		}
-		and = append(and, bson.M{"$or": medtronicQuery})
+		andQuery = append(andQuery, bson.M{"$or": medtronicQuery})
 	}
 
-	if len(and) > 0 {
-		groupDataQuery["$and"] = and
+	if len(andQuery) > 0 {
+		groupDataQuery["$and"] = andQuery
 	}
 
 	return groupDataQuery
