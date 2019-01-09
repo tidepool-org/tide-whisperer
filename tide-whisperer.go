@@ -271,12 +271,10 @@ func main() {
 			}
 		}
 
-		started := time.Now()
-
 		iter := storage.GetDeviceData(queryParams)
 		defer iter.Close()
 
-		processResults(res, iter, started)
+		processResults(res, iter, start)
 	})))
 
 	done := make(chan bool)
