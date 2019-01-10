@@ -2,6 +2,8 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -78,6 +80,8 @@ func basicQuery() bson.M {
 	qParams := &Params{
 		UserId:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		Dexcom:        true,
+		Medtronic:     true,
 	}
 
 	return generateMongoQuery(qParams)
@@ -93,11 +97,15 @@ func allParamsQuery() bson.M {
 		Types:         []string{"smbg", "cbg"},
 		SubTypes:      []string{"stuff"},
 		Carelink:      true,
+		Dexcom:        false,
 		DexcomDataSource: bson.M{
 			"dataSetIds":       []string{"123", "456"},
 			"earliestDataTime": earliestDataTime,
 			"latestDataTime":   latestDataTime,
 		},
+		Medtronic:          false,
+		MedtronicDate:      "2017-01-01T00:00:00Z",
+		MedtronicUploadIds: []string{"555666777", "888999000"},
 	}
 
 	return generateMongoQuery(qParams)
@@ -105,10 +113,14 @@ func allParamsQuery() bson.M {
 
 func typeAndSubtypeQuery() bson.M {
 	qParams := &Params{
-		UserId:        "abc123",
-		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		Types:         []string{"smbg", "cbg"},
-		SubTypes:      []string{"stuff"},
+		UserId:             "abc123",
+		SchemaVersion:      &SchemaVersion{Maximum: 2, Minimum: 0},
+		Types:              []string{"smbg", "cbg"},
+		SubTypes:           []string{"stuff"},
+		Dexcom:             true,
+		Medtronic:          false,
+		MedtronicDate:      "2017-01-01T00:00:00Z",
+		MedtronicUploadIds: []string{"555666777", "888999000"},
 	}
 	return generateMongoQuery(qParams)
 }
@@ -147,11 +159,18 @@ func TestStore_generateMongoQuery_allparams(t *testing.T) {
 		"time": bson.M{
 			"$gte": "2015-10-07T15:00:00.000Z",
 			"$lte": "2015-10-11T15:00:00.000Z"},
-		"$or": []bson.M{
-			{"type": bson.M{"$ne": "cbg"}},
-			{"uploadId": bson.M{"$in": []string{"123", "456"}}},
-			{"time": bson.M{"$lt": "2015-10-07T15:00:00Z"}},
-			{"time": bson.M{"$gt": "2016-12-13T02:00:00Z"}},
+		"$and": []bson.M{
+			{"$or": []bson.M{
+				{"type": bson.M{"$ne": "cbg"}},
+				{"uploadId": bson.M{"$in": []string{"123", "456"}}},
+				{"time": bson.M{"$lt": "2015-10-07T15:00:00Z"}},
+				{"time": bson.M{"$gt": "2016-12-13T02:00:00Z"}},
+			}},
+			{"$or": []bson.M{
+				{"time": bson.M{"$lt": "2017-01-01T00:00:00Z"}},
+				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
+				{"uploadId": bson.M{"$nin": []string{"555666777", "888999000"}}},
+			}},
 		},
 	}
 
@@ -173,6 +192,13 @@ func TestStore_generateMongoQuery_noDates(t *testing.T) {
 		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
 		"source": bson.M{
 			"$ne": "carelink",
+		},
+		"$and": []bson.M{
+			{"$or": []bson.M{
+				{"time": bson.M{"$lt": "2017-01-01T00:00:00Z"}},
+				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
+				{"uploadId": bson.M{"$nin": []string{"555666777", "888999000"}}},
+			}},
 		},
 	}
 
@@ -244,6 +270,53 @@ func TestStore_cleanDateString(t *testing.T) {
 
 }
 
+func TestStore_GetParams_Empty(t *testing.T) {
+	query := url.Values{
+		":userID": []string{"1122334455"},
+	}
+	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
+
+	expectedParams := &Params{
+		UserId:        "1122334455",
+		SchemaVersion: schema,
+		Types:         []string{""},
+		SubTypes:      []string{""},
+	}
+
+	params, err := GetParams(query, schema)
+
+	if err != nil {
+		t.Error("should not have received error, but got one")
+	}
+	if !reflect.DeepEqual(params, expectedParams) {
+		t.Error(fmt.Sprintf("params %#v do not equal expected params %#v", params, expectedParams))
+	}
+}
+
+func TestStore_GetParams_Medtronic(t *testing.T) {
+	query := url.Values{
+		":userID":   []string{"1122334455"},
+		"medtronic": []string{"true"},
+	}
+	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
+
+	expectedParams := &Params{
+		UserId:        "1122334455",
+		SchemaVersion: schema,
+		Types:         []string{""},
+		SubTypes:      []string{""},
+		Medtronic:     true,
+	}
+
+	params, err := GetParams(query, schema)
+
+	if err != nil {
+		t.Error("should not have received error, but got one")
+	}
+	if !reflect.DeepEqual(params, expectedParams) {
+		t.Error(fmt.Sprintf("params %#v do not equal expected params %#v", params, expectedParams))
+	}
+}
 func TestStore_HasMedtronicDirectData_UserID_Missing(t *testing.T) {
 	store := before(t)
 
@@ -486,5 +559,308 @@ func TestStore_HasMedtronicDirectData_NotFound_Multiple(t *testing.T) {
 	}
 	if hasMedtronicDirectData {
 		t.Error("should not have Medtronic Direct data, but got some")
+	}
+}
+
+func TestStore_HasMedtronicLoopDataAfter_NotFound_UserID(t *testing.T) {
+	store := before(t, bson.M{
+		"_active":        true,
+		"_userId":        "0000000000",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Animas"}}},
+	}, bson.M{
+		"_active":        false,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 0,
+		"time":           "2018-02-03T04:05:06Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	})
+
+	hasMedtronicLoopDataAfter, err := store.HasMedtronicLoopDataAfter("1234567890", "2017-01-01T00:00:00Z")
+
+	if err != nil {
+		t.Error("failure querying HasMedtronicLoopDataAfter", err)
+	}
+	if hasMedtronicLoopDataAfter {
+		t.Error("should not have Medtronic Loop Data After, but got some")
+	}
+}
+
+func TestStore_HasMedtronicLoopDataAfter_NotFound_Time(t *testing.T) {
+	store := before(t, bson.M{
+		"_active":        true,
+		"_userId":        "0000000000",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2016-12-31T23:59:59Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Animas"}}},
+	}, bson.M{
+		"_active":        false,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 0,
+		"time":           "2018-02-03T04:05:06Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	})
+
+	hasMedtronicLoopDataAfter, err := store.HasMedtronicLoopDataAfter("1234567890", "2017-01-01T00:00:00Z")
+
+	if err != nil {
+		t.Error("failure querying HasMedtronicLoopDataAfter", err)
+	}
+	if hasMedtronicLoopDataAfter {
+		t.Error("should not have Medtronic Loop Data After, but got some")
+	}
+}
+
+func TestStore_HasMedtronicLoopDataAfter_Found(t *testing.T) {
+	store := before(t, bson.M{
+		"_active":        true,
+		"_userId":        "0000000000",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2016-12-31T23:59:59Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Animas"}}},
+	}, bson.M{
+		"_active":        false,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 0,
+		"time":           "2018-02-03T04:05:06Z",
+		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	})
+
+	hasMedtronicLoopDataAfter, err := store.HasMedtronicLoopDataAfter("1234567890", "2017-01-01T00:00:00Z")
+
+	if err != nil {
+		t.Error("failure querying HasMedtronicLoopDataAfter", err)
+	}
+	if !hasMedtronicLoopDataAfter {
+		t.Error("should have Medtronic Loop Data After, but got none")
+	}
+}
+
+func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testing.T) {
+	store := before(t, bson.M{
+		"_active":        true,
+		"_userId":        "0000000000",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "upload",
+		"deviceModel":    "523",
+	}, bson.M{
+		"_active":        false,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "upload",
+		"deviceModel":    "523",
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 0,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "upload",
+		"deviceModel":    "523",
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "cgm",
+		"deviceModel":    "523",
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "upload",
+		"deviceModel":    "Another Model",
+	})
+
+	loopableMedtronicDirectUploadIdsAfter, err := store.GetLoopableMedtronicDirectUploadIdsAfter("1234567890", "2017-01-01T00:00:00Z")
+
+	if err != nil {
+		t.Error("failure querying GetLoopableMedtronicDirectUploadIdsAfter", err)
+	}
+	if !reflect.DeepEqual(loopableMedtronicDirectUploadIdsAfter, []string{}) {
+		t.Error("should not have Loopable Medtronic Direct Upload Ids After, but got some")
+	}
+}
+
+func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing.T) {
+	store := before(t, bson.M{
+		"_active":        true,
+		"_userId":        "0000000000",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "upload",
+		"deviceModel":    "723",
+	}, bson.M{
+		"_active":        false,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "upload",
+		"deviceModel":    "523",
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 0,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "upload",
+		"deviceModel":    "554",
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "cgm",
+		"deviceModel":    "523",
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "upload",
+		"deviceModel":    "Another Model",
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2016-12-31T23:59:59Z",
+		"type":           "upload",
+		"deviceModel":    "523",
+	})
+
+	loopableMedtronicDirectUploadIdsAfter, err := store.GetLoopableMedtronicDirectUploadIdsAfter("1234567890", "2017-01-01T00:00:00Z")
+
+	if err != nil {
+		t.Error("failure querying GetLoopableMedtronicDirectUploadIdsAfter", err)
+	}
+	if !reflect.DeepEqual(loopableMedtronicDirectUploadIdsAfter, []string{}) {
+		t.Error("should not have Loopable Medtronic Direct Upload Ids After, but got some")
+	}
+}
+
+func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
+	store := before(t, bson.M{
+		"_active":        true,
+		"_userId":        "0000000000",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "upload",
+		"deviceModel":    "723",
+	}, bson.M{
+		"_active":        false,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "upload",
+		"deviceModel":    "523",
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 0,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "upload",
+		"deviceModel":    "554",
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "upload",
+		"deviceModel":    "554",
+		"uploadId":       "11223344",
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "cgm",
+		"deviceModel":    "523",
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "upload",
+		"deviceModel":    "523K",
+		"uploadId":       "55667788",
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2018-02-03T04:05:06Z",
+		"type":           "upload",
+		"deviceModel":    "Another Model",
+	}, bson.M{
+		"_active":        true,
+		"_userId":        "1234567890",
+		"_schemaVersion": 1,
+		"time":           "2016-12-31T23:59:59Z",
+		"type":           "upload",
+		"deviceModel":    "523",
+	})
+
+	loopableMedtronicDirectUploadIdsAfter, err := store.GetLoopableMedtronicDirectUploadIdsAfter("1234567890", "2017-01-01T00:00:00Z")
+
+	if err != nil {
+		t.Error("failure querying GetLoopableMedtronicDirectUploadIdsAfter", err)
+	}
+	if !reflect.DeepEqual(loopableMedtronicDirectUploadIdsAfter, []string{"11223344", "55667788"}) {
+		t.Error("should not have Loopable Medtronic Direct Upload Ids After, but got some")
 	}
 }

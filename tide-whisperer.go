@@ -21,6 +21,7 @@ import (
 	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/shoreline"
+
 	"github.com/tidepool-org/tide-whisperer/auth"
 	"github.com/tidepool-org/tide-whisperer/store"
 )
@@ -59,7 +60,10 @@ var (
 	storage store.Storage
 )
 
-const DATA_API_PREFIX = "api/data"
+const (
+	DATA_API_PREFIX           = "api/data"
+	MedtronicLoopBoundaryDate = "2017-09-01"
+)
 
 //set the intenal message that we will use for logging
 func (d detailedError) setInternalMessage(internal error) detailedError {
@@ -247,13 +251,30 @@ func main() {
 				queryParams.DexcomDataSource = dexcomDataSource
 			}
 		}
-
-		started := time.Now()
+		if _, ok := req.URL.Query()["medtronic"]; !ok {
+			if hasMedtronicLoopData, medtronicErr := storage.HasMedtronicLoopDataAfter(queryParams.UserId, MedtronicLoopBoundaryDate); medtronicErr != nil {
+				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Medtronic Loop data: %s", medtronicErr))
+				jsonError(res, error_running_query, start)
+				return
+			} else if !hasMedtronicLoopData {
+				queryParams.Medtronic = true
+			}
+		}
+		if !queryParams.Medtronic {
+			if medtronicUploadIds, medtronicErr := storage.GetLoopableMedtronicDirectUploadIdsAfter(queryParams.UserId, MedtronicLoopBoundaryDate); medtronicErr != nil {
+				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Loopable Medtronic Direct upload ids: %s", medtronicErr))
+				jsonError(res, error_running_query, start)
+				return
+			} else {
+				queryParams.MedtronicDate = MedtronicLoopBoundaryDate
+				queryParams.MedtronicUploadIds = medtronicUploadIds
+			}
+		}
 
 		iter := storage.GetDeviceData(queryParams)
 		defer iter.Close()
 
-		processResults(res, iter, started)
+		processResults(res, iter, start)
 	})))
 
 	done := make(chan bool)
