@@ -340,10 +340,17 @@ func (d MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID string
 		"deviceModel":    bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
 	}
 
-	uploadIds := []string{}
-	err := mgoDataCollection(session).Find(query).Distinct("uploadId", &uploadIds)
+	objects := []struct {
+		UploadID string `bson:"uploadId"`
+	}{}
+	err := mgoDataCollection(session).Find(query).Select(bson.M{"_id": 0, "uploadId": 1}).All(&objects)
 	if err != nil {
 		return nil, err
+	}
+
+	uploadIds := make([]string, len(objects))
+	for index, object := range objects {
+		uploadIds[index] = object.UploadID
 	}
 
 	return uploadIds, nil
