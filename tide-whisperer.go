@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -63,6 +65,7 @@ var (
 const (
 	DATA_API_PREFIX           = "api/data"
 	MedtronicLoopBoundaryDate = "2017-09-01"
+	SlowQueryDuration         = 0.1 // seconds
 )
 
 //set the intenal message that we will use for logging
@@ -136,45 +139,13 @@ func main() {
 
 		err.Id = uuid.NewV4().String()
 
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s][%s] failed after [%.5f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s][%s] failed after [%.3f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
 
 		jsonErr, _ := json.Marshal(err)
 
 		res.Header().Add("content-type", "application/json")
 		res.WriteHeader(err.Status)
 		res.Write(jsonErr)
-	}
-
-	processResults := func(response http.ResponseWriter, iterator store.StorageIterator, startTime time.Time) {
-		var writeCount int
-
-		log.Printf("%s mongo processing started after %.5f seconds", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds())
-
-		response.Header().Add("Content-Type", "application/json")
-		response.Write([]byte("["))
-
-		var results map[string]interface{}
-		for iterator.Next(&results) {
-			if len(results) > 0 {
-				if bytes, err := json.Marshal(results); err != nil {
-					log.Printf("%s failed to marshal mongo result with error: %s", DATA_API_PREFIX, err)
-				} else {
-					if writeCount > 0 {
-						response.Write([]byte(","))
-					}
-					response.Write([]byte("\n"))
-					response.Write(bytes)
-					writeCount += 1
-				}
-			}
-		}
-
-		if writeCount > 0 {
-			response.Write([]byte("\n"))
-		}
-		response.Write([]byte("]"))
-
-		log.Printf("%s mongo processing finished after %.5f seconds and returned %d records", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds(), writeCount)
 	}
 
 	if err := shorelineClient.Start(); err != nil {
@@ -228,53 +199,101 @@ func main() {
 			}
 		}
 
-		if td == nil || !(td.IsServer || td.UserID == queryParams.UserId || userCanViewData(td.UserID, queryParams.UserId)) {
+		userID := queryParams.UserId
+		if td == nil || !(td.IsServer || td.UserID == userID || userCanViewData(td.UserID, userID)) {
 			jsonError(res, error_no_view_permisson, start)
 			return
 		}
 
+		requestID := NewRequestID()
+		queryStart := time.Now()
 		if _, ok := req.URL.Query()["carelink"]; !ok {
 			if hasMedtronicDirectData, medtronicErr := storage.HasMedtronicDirectData(queryParams.UserId); medtronicErr != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Medtronic Direct data: %s", medtronicErr))
+				log.Printf("%s request %s user %s HasMedtronicDirectData returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
 				jsonError(res, error_running_query, start)
 				return
 			} else if !hasMedtronicDirectData {
 				queryParams.Carelink = true
 			}
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
+				log.Printf("%s request %s user %s HasMedtronicDirectData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			}
+			queryStart = time.Now()
 		}
 		if !queryParams.Dexcom {
 			if dexcomDataSource, dexcomErr := storage.GetDexcomDataSource(queryParams.UserId); dexcomErr != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Dexcom data source: %s", dexcomErr))
+				log.Printf("%s request %s user %s GetDexcomDataSource returned error: %s", DATA_API_PREFIX, requestID, userID, dexcomErr)
 				jsonError(res, error_running_query, start)
 				return
 			} else {
 				queryParams.DexcomDataSource = dexcomDataSource
 			}
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
+				log.Printf("%s request %s user %s GetDexcomDataSource took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			}
+			queryStart = time.Now()
 		}
 		if _, ok := req.URL.Query()["medtronic"]; !ok {
 			if hasMedtronicLoopData, medtronicErr := storage.HasMedtronicLoopDataAfter(queryParams.UserId, MedtronicLoopBoundaryDate); medtronicErr != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Medtronic Loop data: %s", medtronicErr))
+				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
 				jsonError(res, error_running_query, start)
 				return
 			} else if !hasMedtronicLoopData {
 				queryParams.Medtronic = true
 			}
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
+				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			}
+			queryStart = time.Now()
 		}
 		if !queryParams.Medtronic {
 			if medtronicUploadIds, medtronicErr := storage.GetLoopableMedtronicDirectUploadIdsAfter(queryParams.UserId, MedtronicLoopBoundaryDate); medtronicErr != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Loopable Medtronic Direct upload ids: %s", medtronicErr))
+				log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
 				jsonError(res, error_running_query, start)
 				return
 			} else {
 				queryParams.MedtronicDate = MedtronicLoopBoundaryDate
 				queryParams.MedtronicUploadIds = medtronicUploadIds
 			}
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
+				log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			}
+			queryStart = time.Now()
 		}
 
 		iter := storage.GetDeviceData(queryParams)
 		defer iter.Close()
 
-		processResults(res, iter, start)
+		var writeCount int
+
+		res.Header().Add("Content-Type", "application/json")
+		res.Write([]byte("["))
+
+		var results map[string]interface{}
+		for iter.Next(&results) {
+			if len(results) > 0 {
+				if bytes, err := json.Marshal(results); err != nil {
+					log.Printf("%s request %s user %s Marshal returned error: %s", DATA_API_PREFIX, requestID, userID, err)
+				} else {
+					if writeCount > 0 {
+						res.Write([]byte(","))
+					}
+					res.Write([]byte("\n"))
+					res.Write(bytes)
+					writeCount += 1
+				}
+			}
+		}
+
+		if writeCount > 0 {
+			res.Write([]byte("\n"))
+		}
+		res.Write([]byte("]"))
+
+		if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
+			log.Printf("%s request %s user %s GetDeviceData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+		}
+		log.Printf("%s request %s user %s took %.3fs returned %d records", DATA_API_PREFIX, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
 	})))
 
 	done := make(chan bool)
@@ -310,4 +329,10 @@ func main() {
 	}()
 
 	<-done
+}
+
+func NewRequestID() string {
+	bytes := make([]byte, 8)
+	_, _ = rand.Read(bytes) // In case of failure, do not fail request, just use default bytes (zero)
+	return hex.EncodeToString(bytes)
 }
