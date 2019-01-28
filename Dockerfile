@@ -7,7 +7,7 @@ COPY . .
 
 RUN apk --no-cache update && \
     apk --no-cache upgrade && \
-    apk add build-base git cyrus-sasl-dev
+    apk add build-base git
 
 RUN  dos2unix build.sh && ./build.sh
 
@@ -16,7 +16,7 @@ CMD ["./dist/tide-whisperer"]
 # Release
 FROM alpine:latest AS release
 
-RUN ["apk", "add", "--no-cache", "ca-certificates", "libsasl"]
+RUN ["apk", "add", "--no-cache", "ca-certificates"]
 
 RUN ["adduser", "-D", "tidepool"]
 
