@@ -98,14 +98,18 @@ func main() {
 		WithConfig(&config.HakkenConfig).
 		Build()
 
-	if err := hakkenClient.Start(); err != nil {
-		log.Fatal(DATA_API_PREFIX, err)
-	}
-	defer func() {
-		if err := hakkenClient.Close(); err != nil {
-			log.Panic(DATA_API_PREFIX, "Error closing hakkenClient, panicing to get stacks: ", err)
+	if !config.HakkenConfig.SkipHakken {
+		if err := hakkenClient.Start(); err != nil {
+			log.Fatal(DATA_API_PREFIX, err)
 		}
-	}()
+		defer func() {
+			if err := hakkenClient.Close(); err != nil {
+				log.Panic(DATA_API_PREFIX, "Error closing hakkenClient, panicing to get stacks: ", err)
+			}
+		}()
+	} else {
+		log.Print("skipping hakken service")
+	}
 
 	shorelineClient := shoreline.NewShorelineClientBuilder().
 		WithHostGetter(config.ShorelineConfig.ToHostGetter(hakkenClient)).
