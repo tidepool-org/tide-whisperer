@@ -84,6 +84,12 @@ func main() {
 		log.Fatal(DATA_API_PREFIX, " Problem loading config: ", err)
 	}
 
+	// server secret may be passed via a separate env variable to accomodate easy secrets injection via Kubernetes
+	serverSecret, found := os.LookupEnv("SERVER_SECRET")
+	if found {
+		config.ShorelineConfig.Secret = serverSecret
+	}
+
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
