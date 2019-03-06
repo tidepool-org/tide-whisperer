@@ -89,6 +89,10 @@ func main() {
 	if found {
 		config.ShorelineConfig.Secret = serverSecret
 	}
+	authSecret, found := os.LookupEnv("AUTH_SECRET")
+	if found {
+		config.Auth.ServiceSecret = authSecret
+	}
 
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
