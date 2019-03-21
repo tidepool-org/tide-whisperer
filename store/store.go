@@ -43,8 +43,11 @@ type (
 
 	Params struct {
 		UserId   string
+		UploadId string
 		Types    []string
 		SubTypes []string
+		Limit    int
+		Sort     []string
 		Date
 		*SchemaVersion
 		Carelink           bool
@@ -89,6 +92,23 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		return nil, err
 	}
 
+	sortStr := q.Get("sort")
+	if sortStr == "" {
+		sortStr = "$natural"
+	}
+	sort := strings.Split(sortStr, ",")
+
+	var limit int
+	if values, ok := q["limit"]; ok {
+		if len(values) < 1 {
+			return nil, errors.New("limit parameter not valid")
+		}
+		limit, err = strconv.Atoi(values[len(values)-1])
+		if err != nil {
+			return nil, errors.New("limit parameter not numeric")
+		}
+	}
+
 	carelink := false
 	if values, ok := q["carelink"]; ok {
 		if len(values) < 1 {
@@ -123,12 +143,15 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 	}
 
 	p := &Params{
-		UserId: q.Get(":userID"),
+		UserId:   q.Get(":userID"),
+		UploadId: q.Get("uploadId"),
 		//the query params for type and subtype can contain multiple values seperated
 		//by a comma e.g. "type=smbg,cbg" so split them out into an array of values
 		Types:         strings.Split(q.Get("type"), ","),
 		SubTypes:      strings.Split(q.Get("subType"), ","),
 		Date:          Date{startStr, endStr},
+		Limit:         limit,
+		Sort:          sort,
 		SchemaVersion: schema,
 		Carelink:      carelink,
 		Dexcom:        dexcom,
@@ -173,6 +196,10 @@ func generateMongoQuery(p *Params) bson.M {
 
 	if len(p.SubTypes) > 0 && p.SubTypes[0] != "" {
 		groupDataQuery["subType"] = bson.M{"$in": p.SubTypes}
+	}
+
+	if p.UploadId != "" {
+		groupDataQuery["uploadId"] = p.UploadId
 	}
 
 	if p.Date.Start != "" && p.Date.End != "" {
@@ -305,10 +332,10 @@ func (d MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string) 
 	defer session.Close()
 
 	query := bson.M{
-		"_active":                            true,
-		"_userId":                            userID,
-		"_schemaVersion":                     bson.M{"$gt": 0},
-		"time":                               bson.M{"$gte": date},
+		"_active":        true,
+		"_userId":        userID,
+		"_schemaVersion": bson.M{"$gt": 0},
+		"time":           bson.M{"$gte": date},
 		"origin.payload.device.manufacturer": "Medtronic",
 	}
 
@@ -367,6 +394,8 @@ func (d MongoStoreClient) GetDeviceData(p *Params) StorageIterator {
 
 	iter := mgoDataCollection(session).
 		Find(generateMongoQuery(p)).
+		Sort(p.Sort...).
+		Limit(p.Limit).
 		Select(removeFieldsForReturn).
 		Iter()
 
