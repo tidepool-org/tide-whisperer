@@ -281,6 +281,7 @@ func TestStore_GetParams_Empty(t *testing.T) {
 		SchemaVersion: schema,
 		Types:         []string{""},
 		SubTypes:      []string{""},
+		Sort:          []string{"$natural"},
 	}
 
 	params, err := GetParams(query, schema)
@@ -306,6 +307,7 @@ func TestStore_GetParams_Medtronic(t *testing.T) {
 		Types:         []string{""},
 		SubTypes:      []string{""},
 		Medtronic:     true,
+		Sort:          []string{"$natural"},
 	}
 
 	params, err := GetParams(query, schema)
