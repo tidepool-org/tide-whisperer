@@ -93,7 +93,7 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 	}
 
 	sortStr := q.Get("sort")
-	if sortStr == "" {
+	if len(sortStr) < 1 || sortStr == "" {
 		sortStr = "$natural"
 	}
 	sort := strings.Split(sortStr, ",")
@@ -198,10 +198,6 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["subType"] = bson.M{"$in": p.SubTypes}
 	}
 
-	if p.UploadId != "" {
-		groupDataQuery["uploadId"] = p.UploadId
-	}
-
 	if p.Date.Start != "" && p.Date.End != "" {
 		groupDataQuery["time"] = bson.M{"$gte": p.Date.Start, "$lte": p.Date.End}
 	} else if p.Date.Start != "" {
@@ -215,6 +211,13 @@ func generateMongoQuery(p *Params) bson.M {
 	}
 
 	andQuery := []bson.M{}
+	if p.UploadId != "" {
+		uploadIDQuery := []bson.M{
+			{"uploadId": p.UploadId},
+		}
+		andQuery = append(andQuery, bson.M{"$or": uploadIDQuery})
+	}
+
 	if !p.Dexcom && p.DexcomDataSource != nil {
 		dexcomQuery := []bson.M{
 			{"type": bson.M{"$ne": "cbg"}},
