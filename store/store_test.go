@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"reflect"
@@ -103,9 +104,12 @@ func allParamsQuery() bson.M {
 			"earliestDataTime": earliestDataTime,
 			"latestDataTime":   latestDataTime,
 		},
+		Limit:              1,
 		Medtronic:          false,
 		MedtronicDate:      "2017-01-01T00:00:00Z",
 		MedtronicUploadIds: []string{"555666777", "888999000"},
+		Sort:               []string{"-time"},
+		UploadId:           "xyz123",
 	}
 
 	return generateMongoQuery(qParams)
@@ -121,6 +125,33 @@ func typeAndSubtypeQuery() bson.M {
 		Medtronic:          false,
 		MedtronicDate:      "2017-01-01T00:00:00Z",
 		MedtronicUploadIds: []string{"555666777", "888999000"},
+	}
+	return generateMongoQuery(qParams)
+}
+
+func uploadIdQuery() bson.M {
+	qParams := &Params{
+		UserId:        "abc123",
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		UploadId:      "xyz123",
+	}
+	return generateMongoQuery(qParams)
+}
+
+func limitQuery() bson.M {
+	qParams := &Params{
+		UserId:        "abc123",
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		Limit:         1,
+	}
+	return generateMongoQuery(qParams)
+}
+
+func sortQuery() bson.M {
+	qParams := &Params{
+		UserId:        "abc123",
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		Sort:          []string{"-time"},
 	}
 	return generateMongoQuery(qParams)
 }
@@ -161,6 +192,9 @@ func TestStore_generateMongoQuery_allparams(t *testing.T) {
 			"$lte": "2015-10-11T15:00:00.000Z"},
 		"$and": []bson.M{
 			{"$or": []bson.M{
+				{"uploadId": "xyz123"},
+			}},
+			{"$or": []bson.M{
 				{"type": bson.M{"$ne": "cbg"}},
 				{"uploadId": bson.M{"$in": []string{"123", "456"}}},
 				{"time": bson.M{"$lt": "2015-10-07T15:00:00Z"}},
@@ -171,6 +205,30 @@ func TestStore_generateMongoQuery_allparams(t *testing.T) {
 				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
 				{"uploadId": bson.M{"$nin": []string{"555666777", "888999000"}}},
 			}},
+		},
+	}
+
+	eq := reflect.DeepEqual(query, expectedQuery)
+	if !eq {
+		t.Error(getErrString(query, expectedQuery))
+	}
+}
+
+func TestStore_generateMongoQuery_uploadId(t *testing.T) {
+
+	query := uploadIdQuery()
+
+	expectedQuery := bson.M{
+		"_userId":        "abc123",
+		"_active":        true,
+		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
+		"$and": []bson.M{
+			{"$or": []bson.M{
+				{"uploadId": "xyz123"},
+			}},
+		},
+		"source": bson.M{
+			"$ne": "carelink",
 		},
 	}
 
@@ -319,6 +377,171 @@ func TestStore_GetParams_Medtronic(t *testing.T) {
 		t.Error(fmt.Sprintf("params %#v do not equal expected params %#v", params, expectedParams))
 	}
 }
+
+func TestStore_GetParams_UploadId(t *testing.T) {
+	query := url.Values{
+		":userID":  []string{"1122334455"},
+		"uploadId": []string{"xyz123"},
+	}
+	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
+
+	expectedParams := &Params{
+		UserId:        "1122334455",
+		SchemaVersion: schema,
+		Types:         []string{""},
+		SubTypes:      []string{""},
+		Sort:          []string{"$natural"},
+		UploadId:      "xyz123",
+	}
+
+	params, err := GetParams(query, schema)
+
+	if err != nil {
+		t.Error("should not have received error, but got one")
+	}
+	if !reflect.DeepEqual(params, expectedParams) {
+		t.Error(fmt.Sprintf("params %#v do not equal expected params %#v", params, expectedParams))
+	}
+}
+
+func TestStore_GetParams_Default_Sort(t *testing.T) {
+	query := url.Values{
+		":userID": []string{"1122334455"},
+	}
+	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
+
+	expectedParams := &Params{
+		UserId:        "1122334455",
+		SchemaVersion: schema,
+		Types:         []string{""},
+		SubTypes:      []string{""},
+		Sort:          []string{"$natural"},
+	}
+
+	params, err := GetParams(query, schema)
+
+	if err != nil {
+		t.Error("should not have received error, but got one")
+	}
+	if !reflect.DeepEqual(params, expectedParams) {
+		t.Error(fmt.Sprintf("params %#v do not equal expected params %#v", params, expectedParams))
+	}
+}
+
+func TestStore_GetParams_Empty_Sort(t *testing.T) {
+	query := url.Values{
+		":userID": []string{"1122334455"},
+		"sort":    []string{""},
+	}
+	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
+
+	expectedParams := &Params{
+		UserId:        "1122334455",
+		SchemaVersion: schema,
+		Types:         []string{""},
+		SubTypes:      []string{""},
+		Sort:          []string{"$natural"},
+	}
+
+	params, err := GetParams(query, schema)
+
+	if err != nil {
+		t.Error("should not have received error, but got one")
+	}
+	if !reflect.DeepEqual(params, expectedParams) {
+		t.Error(fmt.Sprintf("params %#v do not equal expected params %#v", params, expectedParams))
+	}
+}
+
+func TestStore_GetParams_Custom_Sort(t *testing.T) {
+	query := url.Values{
+		":userID": []string{"1122334455"},
+		"sort":    []string{"-time,uploadId"},
+	}
+	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
+
+	expectedParams := &Params{
+		UserId:        "1122334455",
+		SchemaVersion: schema,
+		Types:         []string{""},
+		SubTypes:      []string{""},
+		Sort:          []string{"-time", "uploadId"},
+	}
+
+	params, err := GetParams(query, schema)
+
+	if err != nil {
+		t.Error("should not have received error, but got one")
+	}
+	if !reflect.DeepEqual(params, expectedParams) {
+		t.Error(fmt.Sprintf("params %#v do not equal expected params %#v", params, expectedParams))
+	}
+}
+
+func TestStore_GetParams_Limit(t *testing.T) {
+	query := url.Values{
+		":userID": []string{"1122334455"},
+		"limit":   []string{"10"},
+	}
+	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
+
+	expectedParams := &Params{
+		UserId:        "1122334455",
+		SchemaVersion: schema,
+		Types:         []string{""},
+		SubTypes:      []string{""},
+		Sort:          []string{"$natural"},
+		Limit:         10,
+	}
+
+	params, err := GetParams(query, schema)
+
+	if err != nil {
+		t.Error("should not have received error, but got one")
+	}
+	if !reflect.DeepEqual(params, expectedParams) {
+		t.Error(fmt.Sprintf("params %#v do not equal expected params %#v", params, expectedParams))
+	}
+}
+
+func TestStore_GetParams_Limit_Value_Missing_Error(t *testing.T) {
+	query := url.Values{
+		":userID": []string{"1122334455"},
+		"limit":   nil,
+	}
+	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
+
+	expectedError := errors.New("limit parameter not valid")
+
+	_, err := GetParams(query, schema)
+
+	if err == nil {
+		t.Error("should have received error, but got nil")
+	}
+	if err.Error() != expectedError.Error() {
+		t.Error(fmt.Sprintf("error %s does not equal expected error %s", err, expectedError))
+	}
+}
+
+func TestStore_GetParams_Limit_Not_Numeric_Error(t *testing.T) {
+	query := url.Values{
+		":userID": []string{"1122334455"},
+		"limit":   []string{"yep"},
+	}
+	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
+
+	expectedError := errors.New("limit parameter not numeric")
+
+	_, err := GetParams(query, schema)
+
+	if err == nil {
+		t.Error("should have received error, but got nil")
+	}
+	if err.Error() != expectedError.Error() {
+		t.Error(fmt.Sprintf("error %s does not equal expected error %s", err, expectedError))
+	}
+}
+
 func TestStore_HasMedtronicDirectData_UserID_Missing(t *testing.T) {
 	store := before(t)
 
