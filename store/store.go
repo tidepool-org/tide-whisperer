@@ -210,6 +210,8 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["source"] = bson.M{"$ne": "carelink"}
 	}
 
+	// If we have an explicit upload ID to filter by, we don't need or want to apply any further
+	// data source-based filtering
 	if p.UploadId != "" {
 		groupDataQuery["uploadId"] = p.UploadId
 	} else {
