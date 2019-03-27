@@ -210,39 +210,36 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["source"] = bson.M{"$ne": "carelink"}
 	}
 
-	andQuery := []bson.M{}
 	if p.UploadId != "" {
-		uploadIDQuery := []bson.M{
-			{"uploadId": p.UploadId},
+		groupDataQuery["uploadId"] = p.UploadId
+	} else {
+		andQuery := []bson.M{}
+		if !p.Dexcom && p.DexcomDataSource != nil {
+			dexcomQuery := []bson.M{
+				{"type": bson.M{"$ne": "cbg"}},
+				{"uploadId": bson.M{"$in": p.DexcomDataSource["dataSetIds"]}},
+			}
+			if earliestDataTime, ok := p.DexcomDataSource["earliestDataTime"].(time.Time); ok {
+				dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}})
+			}
+			if latestDataTime, ok := p.DexcomDataSource["latestDataTime"].(time.Time); ok {
+				dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}})
+			}
+			andQuery = append(andQuery, bson.M{"$or": dexcomQuery})
 		}
-		andQuery = append(andQuery, bson.M{"$or": uploadIDQuery})
-	}
 
-	if !p.Dexcom && p.DexcomDataSource != nil {
-		dexcomQuery := []bson.M{
-			{"type": bson.M{"$ne": "cbg"}},
-			{"uploadId": bson.M{"$in": p.DexcomDataSource["dataSetIds"]}},
+		if !p.Medtronic && len(p.MedtronicUploadIds) > 0 {
+			medtronicQuery := []bson.M{
+				{"time": bson.M{"$lt": p.MedtronicDate}},
+				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
+				{"uploadId": bson.M{"$nin": p.MedtronicUploadIds}},
+			}
+			andQuery = append(andQuery, bson.M{"$or": medtronicQuery})
 		}
-		if earliestDataTime, ok := p.DexcomDataSource["earliestDataTime"].(time.Time); ok {
-			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}})
-		}
-		if latestDataTime, ok := p.DexcomDataSource["latestDataTime"].(time.Time); ok {
-			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}})
-		}
-		andQuery = append(andQuery, bson.M{"$or": dexcomQuery})
-	}
 
-	if !p.Medtronic && len(p.MedtronicUploadIds) > 0 {
-		medtronicQuery := []bson.M{
-			{"time": bson.M{"$lt": p.MedtronicDate}},
-			{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
-			{"uploadId": bson.M{"$nin": p.MedtronicUploadIds}},
+		if len(andQuery) > 0 {
+			groupDataQuery["$and"] = andQuery
 		}
-		andQuery = append(andQuery, bson.M{"$or": medtronicQuery})
-	}
-
-	if len(andQuery) > 0 {
-		groupDataQuery["$and"] = andQuery
 	}
 
 	return groupDataQuery

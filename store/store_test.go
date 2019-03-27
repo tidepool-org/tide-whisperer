@@ -88,10 +88,11 @@ func basicQuery() bson.M {
 	return generateMongoQuery(qParams)
 }
 
-func allParamsQuery() bson.M {
+func allParams() *Params {
 	earliestDataTime, _ := time.Parse(time.RFC3339, "2015-10-07T15:00:00Z")
 	latestDataTime, _ := time.Parse(time.RFC3339, "2016-12-13T02:00:00Z")
-	qParams := &Params{
+
+	return &Params{
 		UserId:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		Date:          Date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
@@ -109,8 +110,16 @@ func allParamsQuery() bson.M {
 		MedtronicDate:      "2017-01-01T00:00:00Z",
 		MedtronicUploadIds: []string{"555666777", "888999000"},
 		Sort:               []string{"-time"},
-		UploadId:           "xyz123",
 	}
+}
+
+func allParamsQuery() bson.M {
+	return generateMongoQuery(allParams())
+}
+
+func allParamsIncludingUploadIdQuery() bson.M {
+	qParams := allParams()
+	qParams.UploadId = "xyz123"
 
 	return generateMongoQuery(qParams)
 }
@@ -177,7 +186,7 @@ func TestStore_generateMongoQuery_basic(t *testing.T) {
 
 }
 
-func TestStore_generateMongoQuery_allparams(t *testing.T) {
+func TestStore_generateMongoQuery_allParams(t *testing.T) {
 
 	query := allParamsQuery()
 
@@ -191,9 +200,6 @@ func TestStore_generateMongoQuery_allparams(t *testing.T) {
 			"$gte": "2015-10-07T15:00:00.000Z",
 			"$lte": "2015-10-11T15:00:00.000Z"},
 		"$and": []bson.M{
-			{"$or": []bson.M{
-				{"uploadId": "xyz123"},
-			}},
 			{"$or": []bson.M{
 				{"type": bson.M{"$ne": "cbg"}},
 				{"uploadId": bson.M{"$in": []string{"123", "456"}}},
@@ -214,6 +220,28 @@ func TestStore_generateMongoQuery_allparams(t *testing.T) {
 	}
 }
 
+func TestStore_generateMongoQuery_allparamsWithUploadId(t *testing.T) {
+
+	query := allParamsIncludingUploadIdQuery()
+
+	expectedQuery := bson.M{
+		"_userId":        "abc123",
+		"_active":        true,
+		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
+		"type":           bson.M{"$in": strings.Split("smbg,cbg", ",")},
+		"subType":        bson.M{"$in": strings.Split("stuff", ",")},
+		"uploadId":       "xyz123",
+		"time": bson.M{
+			"$gte": "2015-10-07T15:00:00.000Z",
+			"$lte": "2015-10-11T15:00:00.000Z"},
+	}
+
+	eq := reflect.DeepEqual(query, expectedQuery)
+	if !eq {
+		t.Error(getErrString(query, expectedQuery))
+	}
+}
+
 func TestStore_generateMongoQuery_uploadId(t *testing.T) {
 
 	query := uploadIdQuery()
@@ -222,11 +250,7 @@ func TestStore_generateMongoQuery_uploadId(t *testing.T) {
 		"_userId":        "abc123",
 		"_active":        true,
 		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
-		"$and": []bson.M{
-			{"$or": []bson.M{
-				{"uploadId": "xyz123"},
-			}},
-		},
+		"uploadId":       "xyz123",
 		"source": bson.M{
 			"$ne": "carelink",
 		},
