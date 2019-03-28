@@ -84,6 +84,16 @@ func main() {
 		log.Fatal(DATA_API_PREFIX, " Problem loading config: ", err)
 	}
 
+	// server secret may be passed via a separate env variable to accomodate easy secrets injection via Kubernetes
+	serverSecret, found := os.LookupEnv("SERVER_SECRET")
+	if found {
+		config.ShorelineConfig.Secret = serverSecret
+	}
+	authSecret, found := os.LookupEnv("AUTH_SECRET")
+	if found {
+		config.Auth.ServiceSecret = authSecret
+	}
+
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -98,14 +108,18 @@ func main() {
 		WithConfig(&config.HakkenConfig).
 		Build()
 
-	if err := hakkenClient.Start(); err != nil {
-		log.Fatal(DATA_API_PREFIX, err)
-	}
-	defer func() {
-		if err := hakkenClient.Close(); err != nil {
-			log.Panic(DATA_API_PREFIX, "Error closing hakkenClient, panicing to get stacks: ", err)
+	if !config.HakkenConfig.SkipHakken {
+		if err := hakkenClient.Start(); err != nil {
+			log.Fatal(DATA_API_PREFIX, err)
 		}
-	}()
+		defer func() {
+			if err := hakkenClient.Close(); err != nil {
+				log.Panic(DATA_API_PREFIX, "Error closing hakkenClient, panicing to get stacks: ", err)
+			}
+		}()
+	} else {
+		log.Print("skipping hakken service")
+	}
 
 	shorelineClient := shoreline.NewShorelineClientBuilder().
 		WithHostGetter(config.ShorelineConfig.ToHostGetter(hakkenClient)).
