@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/url"
 	"strconv"
@@ -97,6 +98,11 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		sortStr = "-time"
 	}
 	sort := strings.Split(sortStr, ",")
+	for _, s := range sort {
+		if s == "$natural" {
+			return nil, fmt.Errorf("sort param %s is prohibited", s)
+		}
+	}
 
 	var limit int
 	if values, ok := q["limit"]; ok {

@@ -528,6 +528,25 @@ func TestStore_GetParams_Limit(t *testing.T) {
 	}
 }
 
+func TestStore_GetParams_Sort_Natural_Prohibited_Error(t *testing.T) {
+	query := url.Values{
+		":userID": []string{"1122334455"},
+		"sort":    []string{"-time,$natural"},
+	}
+	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
+
+	expectedError := errors.New("sort param $natural is prohibited")
+
+	_, err := GetParams(query, schema)
+
+	if err == nil {
+		t.Error("should have received error, but got nil")
+	}
+	if err.Error() != expectedError.Error() {
+		t.Error(fmt.Sprintf("error %s does not equal expected error %s", err, expectedError))
+	}
+}
+
 func TestStore_GetParams_Limit_Value_Missing_Error(t *testing.T) {
 	query := url.Values{
 		":userID": []string{"1122334455"},
