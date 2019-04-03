@@ -94,7 +94,7 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 
 	sortStr := q.Get("sort")
 	if len(sortStr) < 1 || sortStr == "" {
-		sortStr = "$natural"
+		sortStr = "-time"
 	}
 	sort := strings.Split(sortStr, ",")
 
