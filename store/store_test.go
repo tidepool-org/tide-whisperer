@@ -363,7 +363,7 @@ func TestStore_GetParams_Empty(t *testing.T) {
 		SchemaVersion: schema,
 		Types:         []string{""},
 		SubTypes:      []string{""},
-		Sort:          []string{"$natural"},
+		Sort:          []string{"-time"},
 	}
 
 	params, err := GetParams(query, schema)
@@ -389,7 +389,7 @@ func TestStore_GetParams_Medtronic(t *testing.T) {
 		Types:         []string{""},
 		SubTypes:      []string{""},
 		Medtronic:     true,
-		Sort:          []string{"$natural"},
+		Sort:          []string{"-time"},
 	}
 
 	params, err := GetParams(query, schema)
@@ -414,7 +414,7 @@ func TestStore_GetParams_UploadId(t *testing.T) {
 		SchemaVersion: schema,
 		Types:         []string{""},
 		SubTypes:      []string{""},
-		Sort:          []string{"$natural"},
+		Sort:          []string{"-time"},
 		UploadId:      "xyz123",
 	}
 
@@ -439,7 +439,7 @@ func TestStore_GetParams_Default_Sort(t *testing.T) {
 		SchemaVersion: schema,
 		Types:         []string{""},
 		SubTypes:      []string{""},
-		Sort:          []string{"$natural"},
+		Sort:          []string{"-time"},
 	}
 
 	params, err := GetParams(query, schema)
@@ -464,7 +464,7 @@ func TestStore_GetParams_Empty_Sort(t *testing.T) {
 		SchemaVersion: schema,
 		Types:         []string{""},
 		SubTypes:      []string{""},
-		Sort:          []string{"$natural"},
+		Sort:          []string{"-time"},
 	}
 
 	params, err := GetParams(query, schema)
@@ -514,7 +514,7 @@ func TestStore_GetParams_Limit(t *testing.T) {
 		SchemaVersion: schema,
 		Types:         []string{""},
 		SubTypes:      []string{""},
-		Sort:          []string{"$natural"},
+		Sort:          []string{"-time"},
 		Limit:         10,
 	}
 
@@ -525,6 +525,25 @@ func TestStore_GetParams_Limit(t *testing.T) {
 	}
 	if !reflect.DeepEqual(params, expectedParams) {
 		t.Error(fmt.Sprintf("params %#v do not equal expected params %#v", params, expectedParams))
+	}
+}
+
+func TestStore_GetParams_Sort_Natural_Prohibited_Error(t *testing.T) {
+	query := url.Values{
+		":userID": []string{"1122334455"},
+		"sort":    []string{"-time,$natural"},
+	}
+	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
+
+	expectedError := errors.New("sort param $natural is prohibited")
+
+	_, err := GetParams(query, schema)
+
+	if err == nil {
+		t.Error("should have received error, but got nil")
+	}
+	if err.Error() != expectedError.Error() {
+		t.Error(fmt.Sprintf("error %s does not equal expected error %s", err, expectedError))
 	}
 }
 
