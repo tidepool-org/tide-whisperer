@@ -324,6 +324,7 @@ func (client *ShorelineClient) CheckToken(token string) *TokenData {
 		log.Println("Error checking token", err)
 		return nil
 	}
+	defer res.Body.Close()
 
 	switch res.StatusCode {
 	case 200:
@@ -409,6 +410,7 @@ func (client *ShorelineClient) UpdateUser(userID string, userUpdate UserUpdate, 
 		if err != nil {
 			return errors.Wrap(err, "Failure to get a user")
 		}
+		defer res.Body.Close()
 
 		switch res.StatusCode {
 		case http.StatusOK:
