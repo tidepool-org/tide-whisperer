@@ -182,23 +182,26 @@ func main() {
 
 	// The /data/userId endpoint retrieves device/health data for a user based on a set of parameters
 	// userid: the ID of the user you want to retrieve data for
+	// uploadId (optional) : Search for Tidepool data by uploadId. Only objects with a uploadId field matching the specified uploadId param will be returned.
+	// deviceId (optional) : Search for Tidepool data by deviceId. Only objects with a deviceId field matching the specified uploadId param will be returned.
 	// type (optional) : The Tidepool data type to search for. Only objects with a type field matching the specified type param will be returned.
 	//					can be /userid?type=smbg or a comma seperated list e.g /userid?type=smgb,cbg . If is a comma seperated
 	//					list, then objects matching any of the sub types will be returned
 	// subType (optional) : The Tidepool data subtype to search for. Only objects with a subtype field matching the specified subtype param will be returned.
 	//					can be /userid?subtype=physicalactivity or a comma seperated list e.g /userid?subtypetype=physicalactivity,steps . If is a comma seperated
 	//					list, then objects matching any of the types will be returned
-	// startDate (optional) : Only objects with 'time' field equal to or greater than start date will be returned .
-	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
-	// endDate (optional) : Only objects with 'time' field less than to or equal to start date will be returned .
-	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
+	// startDate (optional) : Only objects with 'time' field equal to or greater than start date will be returned.
+	//					Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
+	// endDate (optional) : Only objects with 'time' field less than to or equal to start date will be returned.
+	//					Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
+	// latest (optional) : Returns only the most recent results for each `type` matching the results filtered by the other query parameters
 	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 
 		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion)
 
 		if err != nil {
-			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing date: %s", err))
+			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing query params: %s", err))
 			jsonError(res, error_invalid_parameters, start)
 			return
 		}
@@ -285,6 +288,13 @@ func main() {
 
 		var results map[string]interface{}
 		for iter.Next(&results) {
+			if queryParams.Latest {
+				// If we're using the `latest` parameter, then we ran an `$aggregate` query to get only the latest data.
+				// Since we use Mongo 3.2, we can't use the $replaceRoot function, so we need to manaully extract the
+				// latest subdocument here. When we move to MongoDB 3.4+ and can use $replaceRoot, we can get rid of this
+				// conditional block. We'd also need to fix the corresponding code in `store.go`
+				results = results["latest_doc"].(map[string]interface{})
+			}
 			if len(results) > 0 {
 				if bytes, err := json.Marshal(results); err != nil {
 					log.Printf("%s request %s user %s Marshal returned error: %s", DATA_API_PREFIX, requestID, userID, err)
