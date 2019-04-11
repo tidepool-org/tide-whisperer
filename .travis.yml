@@ -3,7 +3,7 @@ sudo: false
 language: go
 
 go:
-  - 1.9.2
+  - 1.11.4
 
 addons:
   apt:
