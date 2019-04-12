@@ -43,19 +43,19 @@ type (
 
 	Params struct {
 		UserId   string
-		UploadId string
 		Types    []string
 		SubTypes []string
-		Limit    int
-		Sort     []string
 		Date
 		*SchemaVersion
 		Carelink           bool
 		Dexcom             bool
 		DexcomDataSource   bson.M
+		DeviceId           string
+		Latest             bool
 		Medtronic          bool
 		MedtronicDate      string
 		MedtronicUploadIds []string
+		UploadId           string
 	}
 
 	Date struct {
@@ -92,23 +92,6 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		return nil, err
 	}
 
-	sortStr := q.Get("sort")
-	if len(sortStr) < 1 || sortStr == "" {
-		sortStr = "$natural"
-	}
-	sort := strings.Split(sortStr, ",")
-
-	var limit int
-	if values, ok := q["limit"]; ok {
-		if len(values) < 1 {
-			return nil, errors.New("limit parameter not valid")
-		}
-		limit, err = strconv.Atoi(values[len(values)-1])
-		if err != nil {
-			return nil, errors.New("limit parameter not numeric")
-		}
-	}
-
 	carelink := false
 	if values, ok := q["carelink"]; ok {
 		if len(values) < 1 {
@@ -131,6 +114,17 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		}
 	}
 
+	latest := false
+	if values, ok := q["latest"]; ok {
+		if len(values) < 1 {
+			return nil, errors.New("latest parameter not valid")
+		}
+		latest, err = strconv.ParseBool(values[len(values)-1])
+		if err != nil {
+			return nil, errors.New("latest parameter not valid")
+		}
+	}
+
 	medtronic := false
 	if values, ok := q["medtronic"]; ok {
 		if len(values) < 1 {
@@ -144,17 +138,17 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 
 	p := &Params{
 		UserId:   q.Get(":userID"),
+		DeviceId: q.Get("deviceId"),
 		UploadId: q.Get("uploadId"),
 		//the query params for type and subtype can contain multiple values seperated
 		//by a comma e.g. "type=smbg,cbg" so split them out into an array of values
 		Types:         strings.Split(q.Get("type"), ","),
 		SubTypes:      strings.Split(q.Get("subType"), ","),
 		Date:          Date{startStr, endStr},
-		Limit:         limit,
-		Sort:          sort,
 		SchemaVersion: schema,
 		Carelink:      carelink,
 		Dexcom:        dexcom,
+		Latest:        latest,
 		Medtronic:     medtronic,
 	}
 
@@ -208,6 +202,10 @@ func generateMongoQuery(p *Params) bson.M {
 
 	if !p.Carelink {
 		groupDataQuery["source"] = bson.M{"$ne": "carelink"}
+	}
+
+	if p.DeviceId != "" {
+		groupDataQuery["deviceId"] = p.DeviceId
 	}
 
 	// If we have an explicit upload ID to filter by, we don't need or want to apply any further
@@ -334,10 +332,10 @@ func (d MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string) 
 	defer session.Close()
 
 	query := bson.M{
-		"_active":        true,
-		"_userId":        userID,
-		"_schemaVersion": bson.M{"$gt": 0},
-		"time":           bson.M{"$gte": date},
+		"_active":                            true,
+		"_userId":                            userID,
+		"_schemaVersion":                     bson.M{"$gt": 0},
+		"time":                               bson.M{"$gte": date},
 		"origin.payload.device.manufacturer": "Medtronic",
 	}
 
@@ -394,12 +392,61 @@ func (d MongoStoreClient) GetDeviceData(p *Params) StorageIterator {
 	// closes session when the iterator is closed. See ClosingSessionIterator below.
 	session := d.session.Copy()
 
-	iter := mgoDataCollection(session).
-		Find(generateMongoQuery(p)).
-		Sort(p.Sort...).
-		Limit(p.Limit).
-		Select(removeFieldsForReturn).
-		Iter()
+	var iter *mgo.Iter
+
+	if p.Latest {
+		// Create an $aggregate query to return the latest of each `type` requested
+		// that matches the query parameters
+		pipeline := []bson.M{
+			{
+				"$match": generateMongoQuery(p),
+			},
+			{
+				"$sort": bson.M{
+					"type": 1,
+					"time": -1,
+				},
+			},
+			{
+				"$group": bson.M{
+					"_id": bson.M{
+						"type": "$type",
+					},
+					"groupId": bson.M{
+						"$first": "$_id",
+					},
+				},
+			},
+			{
+				"$lookup": bson.M{
+					"from":         "deviceData",
+					"localField":   "groupId",
+					"foreignField": "_id",
+					"as":           "latest_doc",
+				},
+			},
+			{
+				"$unwind": "$latest_doc",
+			},
+			/*
+				// TODO: we can only use this code once we upgrade to MongoDB 3.4+
+				// We would also need to update the corresponding code in `tide-whisperer.go`
+				// (search for "latest_doc")
+				{
+					"$replaceRoot": bson.M{
+						"newRoot": "$latest_doc"
+					},
+				},
+			*/
+		}
+		pipe := mgoDataCollection(session).Pipe(pipeline)
+		iter = pipe.Iter()
+	} else {
+		iter = mgoDataCollection(session).
+			Find(generateMongoQuery(p)).
+			Select(removeFieldsForReturn).
+			Iter()
+	}
 
 	return &ClosingSessionIterator{session, iter}
 }
