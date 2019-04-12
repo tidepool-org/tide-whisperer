@@ -50,9 +50,12 @@ type (
 		Carelink           bool
 		Dexcom             bool
 		DexcomDataSource   bson.M
+		DeviceId           string
+		Latest             bool
 		Medtronic          bool
 		MedtronicDate      string
 		MedtronicUploadIds []string
+		UploadId           string
 	}
 
 	Date struct {
@@ -111,6 +114,17 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		}
 	}
 
+	latest := false
+	if values, ok := q["latest"]; ok {
+		if len(values) < 1 {
+			return nil, errors.New("latest parameter not valid")
+		}
+		latest, err = strconv.ParseBool(values[len(values)-1])
+		if err != nil {
+			return nil, errors.New("latest parameter not valid")
+		}
+	}
+
 	medtronic := false
 	if values, ok := q["medtronic"]; ok {
 		if len(values) < 1 {
@@ -123,7 +137,9 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 	}
 
 	p := &Params{
-		UserId: q.Get(":userID"),
+		UserId:   q.Get(":userID"),
+		DeviceId: q.Get("deviceId"),
+		UploadId: q.Get("uploadId"),
 		//the query params for type and subtype can contain multiple values seperated
 		//by a comma e.g. "type=smbg,cbg" so split them out into an array of values
 		Types:         strings.Split(q.Get("type"), ","),
@@ -132,6 +148,7 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		SchemaVersion: schema,
 		Carelink:      carelink,
 		Dexcom:        dexcom,
+		Latest:        latest,
 		Medtronic:     medtronic,
 	}
 
@@ -187,32 +204,42 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["source"] = bson.M{"$ne": "carelink"}
 	}
 
-	andQuery := []bson.M{}
-	if !p.Dexcom && p.DexcomDataSource != nil {
-		dexcomQuery := []bson.M{
-			{"type": bson.M{"$ne": "cbg"}},
-			{"uploadId": bson.M{"$in": p.DexcomDataSource["dataSetIds"]}},
-		}
-		if earliestDataTime, ok := p.DexcomDataSource["earliestDataTime"].(time.Time); ok {
-			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}})
-		}
-		if latestDataTime, ok := p.DexcomDataSource["latestDataTime"].(time.Time); ok {
-			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}})
-		}
-		andQuery = append(andQuery, bson.M{"$or": dexcomQuery})
+	if p.DeviceId != "" {
+		groupDataQuery["deviceId"] = p.DeviceId
 	}
 
-	if !p.Medtronic && len(p.MedtronicUploadIds) > 0 {
-		medtronicQuery := []bson.M{
-			{"time": bson.M{"$lt": p.MedtronicDate}},
-			{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
-			{"uploadId": bson.M{"$nin": p.MedtronicUploadIds}},
+	// If we have an explicit upload ID to filter by, we don't need or want to apply any further
+	// data source-based filtering
+	if p.UploadId != "" {
+		groupDataQuery["uploadId"] = p.UploadId
+	} else {
+		andQuery := []bson.M{}
+		if !p.Dexcom && p.DexcomDataSource != nil {
+			dexcomQuery := []bson.M{
+				{"type": bson.M{"$ne": "cbg"}},
+				{"uploadId": bson.M{"$in": p.DexcomDataSource["dataSetIds"]}},
+			}
+			if earliestDataTime, ok := p.DexcomDataSource["earliestDataTime"].(time.Time); ok {
+				dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}})
+			}
+			if latestDataTime, ok := p.DexcomDataSource["latestDataTime"].(time.Time); ok {
+				dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}})
+			}
+			andQuery = append(andQuery, bson.M{"$or": dexcomQuery})
 		}
-		andQuery = append(andQuery, bson.M{"$or": medtronicQuery})
-	}
 
-	if len(andQuery) > 0 {
-		groupDataQuery["$and"] = andQuery
+		if !p.Medtronic && len(p.MedtronicUploadIds) > 0 {
+			medtronicQuery := []bson.M{
+				{"time": bson.M{"$lt": p.MedtronicDate}},
+				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
+				{"uploadId": bson.M{"$nin": p.MedtronicUploadIds}},
+			}
+			andQuery = append(andQuery, bson.M{"$or": medtronicQuery})
+		}
+
+		if len(andQuery) > 0 {
+			groupDataQuery["$and"] = andQuery
+		}
 	}
 
 	return groupDataQuery
@@ -365,10 +392,61 @@ func (d MongoStoreClient) GetDeviceData(p *Params) StorageIterator {
 	// closes session when the iterator is closed. See ClosingSessionIterator below.
 	session := d.session.Copy()
 
-	iter := mgoDataCollection(session).
-		Find(generateMongoQuery(p)).
-		Select(removeFieldsForReturn).
-		Iter()
+	var iter *mgo.Iter
+
+	if p.Latest {
+		// Create an $aggregate query to return the latest of each `type` requested
+		// that matches the query parameters
+		pipeline := []bson.M{
+			{
+				"$match": generateMongoQuery(p),
+			},
+			{
+				"$sort": bson.M{
+					"type": 1,
+					"time": -1,
+				},
+			},
+			{
+				"$group": bson.M{
+					"_id": bson.M{
+						"type": "$type",
+					},
+					"groupId": bson.M{
+						"$first": "$_id",
+					},
+				},
+			},
+			{
+				"$lookup": bson.M{
+					"from":         "deviceData",
+					"localField":   "groupId",
+					"foreignField": "_id",
+					"as":           "latest_doc",
+				},
+			},
+			{
+				"$unwind": "$latest_doc",
+			},
+			/*
+				// TODO: we can only use this code once we upgrade to MongoDB 3.4+
+				// We would also need to update the corresponding code in `tide-whisperer.go`
+				// (search for "latest_doc")
+				{
+					"$replaceRoot": bson.M{
+						"newRoot": "$latest_doc"
+					},
+				},
+			*/
+		}
+		pipe := mgoDataCollection(session).Pipe(pipeline)
+		iter = pipe.Iter()
+	} else {
+		iter = mgoDataCollection(session).
+			Find(generateMongoQuery(p)).
+			Select(removeFieldsForReturn).
+			Iter()
+	}
 
 	return &ClosingSessionIterator{session, iter}
 }

@@ -22,6 +22,7 @@ type HakkenClientConfig struct {
 	HeartbeatInterval jepson.Duration `json:"heartbeatInterval"` // Time elapsed between heartbeats and watch polls
 	PollInterval      jepson.Duration `json:"pollInterval"`      // Time elapsed between coordinator gossip polls
 	ResyncInterval    jepson.Duration `json:"resyncInterval"`    // Time elapsed between checks for new coordinators at Host
+	SkipHakken        bool            `json:"skipHakken"`        // True is Hakken service is not used
 }
 
 type HakkenClientBuilder struct {

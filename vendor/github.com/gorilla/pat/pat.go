@@ -31,9 +31,19 @@ func (r *Router) Add(meth, pat string, h http.Handler) *mux.Route {
 	return r.NewRoute().PathPrefix(pat).Handler(h).Methods(meth)
 }
 
+// Options registers a pattern with a handler for OPTIONS requests.
+func (r *Router) Options(pat string, h http.HandlerFunc) *mux.Route {
+	return r.Add("OPTIONS", pat, h)
+}
+
 // Delete registers a pattern with a handler for DELETE requests.
 func (r *Router) Delete(pat string, h http.HandlerFunc) *mux.Route {
 	return r.Add("DELETE", pat, h)
+}
+
+// Head registers a pattern with a handler for HEAD requests.
+func (r *Router) Head(pat string, h http.HandlerFunc) *mux.Route {
+	return r.Add("HEAD", pat, h)
 }
 
 // Get registers a pattern with a handler for GET requests.
@@ -49,6 +59,11 @@ func (r *Router) Post(pat string, h http.HandlerFunc) *mux.Route {
 // Put registers a pattern with a handler for PUT requests.
 func (r *Router) Put(pat string, h http.HandlerFunc) *mux.Route {
 	return r.Add("PUT", pat, h)
+}
+
+// Patch registers a pattern with a handler for PATCH requests.
+func (r *Router) Patch(pat string, h http.HandlerFunc) *mux.Route {
+	return r.Add("PATCH", pat, h)
 }
 
 // ServeHTTP dispatches the handler registered in the matched route.
@@ -71,7 +86,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		handler = r.NotFoundHandler
 	}
-	defer context.Clear(req)
+	if !r.KeepContext {
+		defer context.Clear(req)
+	}
 	handler.ServeHTTP(w, req)
 }
 
