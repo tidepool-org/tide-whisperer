@@ -196,8 +196,10 @@ func (d MongoStoreClient) Close() {
 }
 
 func (d MongoStoreClient) Ping() error {
+	session := d.session.Copy()
+	defer session.Close()
 	// do we have a store session
-	return d.session.Ping()
+	return session.Ping()
 }
 
 func (d MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
