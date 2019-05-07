@@ -29,9 +29,24 @@ func Connect(config *Config) (*mgo.Session, error) {
 	if config.Timeout != nil {
 		dur = time.Duration(*config.Timeout)
 	}
+
+	dialInfo, err := mgo.ParseURL(config.ConnectionString) 
+	if err != nil {
+		return nil, err
+	}
+	dialInfo.Timeout = dur
+
+	if dialInfo.DialServer != nil {
+		// TODO Ignore server cert for now.  We should install proper CA to verify cert.
+		dialInfo.DialServer = func(addr *mgo.ServerAddr) (net.Conn, error) {
+			return tls.Dial("tcp", addr.String(), &tls.Config{InsecureSkipVerify: true})
+		}
+	}
+	
 	log.Printf("Initializing with config[%+v], dur[%v]", config, dur)
-	return DialWithTimeout(config.ConnectionString, dur)
+	return mgo.DialWithInfo(dialInfo)
 }
+
 
 /*
  All following code originally C&Pd from mgo.  It has been adjusted to allow
