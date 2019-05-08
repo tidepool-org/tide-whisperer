@@ -56,8 +56,7 @@
   version = "v1.2.0"
 
 [[projects]]
-  branch = "mgodriver"
-  digest = "1:00109e2676f15ab74cd02d20911851f7c74564871c0a0753b8b12c874bc6ab55"
+  digest = "1:d913a60fe8d4fd2a440696721c1d60ffba10c40b80bb3d380d57237c5a293999"
   name = "github.com/tidepool-org/go-common"
   packages = [
     ".",
@@ -72,7 +71,8 @@
     "jepson",
   ]
   pruneopts = "UT"
-  revision = "98e8aeba86a1ccfc954900290819c0e9b483abd4"
+  revision = "b509b0e7d1a5f36e7e8556b3dac17155e6050375"
+  version = "v0.2.0"
 
 [solve-meta]
   analyzer-name = "dep"
