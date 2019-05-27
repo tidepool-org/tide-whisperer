@@ -27,7 +27,7 @@ before_install:
   - chmod +x $GOPATH/bin/dep
 
 install:
-  - dep ensure
+  - ./build.sh
 
 deploy:
   # Control deployment by setting a value for `on`. Setting the `branch`
@@ -57,6 +57,5 @@ services:
   - docker
 
 script:
-  - ./build.sh
   - ./test.sh
   - ./artifact.sh

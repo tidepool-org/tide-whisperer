@@ -13,3 +13,5 @@ $GOPATH/bin/dep ensure
 ```
 
 This command is also run in the Travis configuration so the dependencies folder is built and present for the project build.
+
+The `build.sh` will run this command before actually building.

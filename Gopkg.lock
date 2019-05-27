@@ -56,7 +56,7 @@
   version = "v1.2.0"
 
 [[projects]]
-  branch = "merge/tidepool"
+  branch = "master"
   digest = "1:a72c9d98cb9ac6ce839cac5f40fa39b2ac096d7c3bcd201ed63f21ff5b4d776f"
   name = "github.com/tidepool-org/go-common"
   packages = [
@@ -72,7 +72,7 @@
     "jepson",
   ]
   pruneopts = "UT"
-  revision = "5195218bce7076dd18e13fc4f5e83a2dc994d163"
+  revision = "a100338f629465cc8ee9598e57db6187c0eaf7a9"
   source = "github.com/mdblp/go-common"
 
 [solve-meta]

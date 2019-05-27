@@ -4,6 +4,12 @@ Data access API for tidepool
 
 ## Unreleased 
 
+### Added
+
+- Integration from Tidepool latest changes
+
+  Need to provide a new configuration item _auth_ in _TIDEPOOL_TIDE_WHISPERER_ENV_  (see [.vscode/launch.json.template](.vscode/launch.json.template) or [env.sh](env.sh) for example)
+
 ### Changed
 - Update to MongoDb 3.6 drivers in order to use replica set connections. 
 
