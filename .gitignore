@@ -1,4 +1,5 @@
 deploy/
 dist/
+vendor/
 
 artifact_go.sh

@@ -5,6 +5,11 @@ language: go
 go:
   - 1.11.4
 
+go_import_path: github.com/tidepool-org/tide-whisperer
+
+env:
+  - DEP_VERSION="0.5.3"
+
 before_install:
   - sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5;
   - echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu trusty/mongodb-org/3.6 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-3.6.list;
@@ -16,6 +21,13 @@ before_install:
   - rsync -az ${TRAVIS_BUILD_DIR}/ $HOME/gopath/src/github.com/tidepool-org/tide-whisperer/
   - export TRAVIS_BUILD_DIR=$HOME/gopath/src/github.com/tidepool-org/tide-whisperer
   - cd $HOME/gopath/src/github.com/tidepool-org/tide-whisperer
+  # Download the "dep" binary to bin folder in $GOPATH
+  - curl -L -s https://github.com/golang/dep/releases/download/v${DEP_VERSION}/dep-linux-amd64 -o $GOPATH/bin/dep
+  # Make the binary executable
+  - chmod +x $GOPATH/bin/dep
+
+install:
+  - dep ensure
 
 deploy:
   # Control deployment by setting a value for `on`. Setting the `branch`
