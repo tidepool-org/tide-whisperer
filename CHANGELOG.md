@@ -2,6 +2,11 @@
 
 Data access API for tidepool
 
+## Unreleased 
+
+### Changed
+- Update to MongoDb 3.6 drivers in order to use replica set connections. 
+
 ## dblp.0.1.2 - 2019-04-17
 
 ### Changed

@@ -13,7 +13,7 @@ func NewMock() *HighwaterMockClient {
 func (client *HighwaterMockClient) PostServer(eventName, token string, params map[string]string) {
 
 	if eventName == "" || token == "" {
-		log.Panicf("missing required eventName[%s] token[%s] params[%v]", eventName, token)
+		log.Panicf("missing required eventName[%s] token[%s] params[%v]", eventName, token, params)
 	}
 
 	return

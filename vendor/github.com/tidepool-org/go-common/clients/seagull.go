@@ -90,7 +90,7 @@ func (client *seagullClient) GetPrivatePair(userID, hashName, token string) *Pri
 	defer res.Body.Close()
 
 	if res.StatusCode != 200 {
-		log.Printf("Unknown response code[%s] from service[%s]", res.StatusCode, req.URL)
+		log.Printf("Unknown response code[%v] from service[%v]", res.StatusCode, req.URL)
 		return nil
 	}
 
