@@ -2,4 +2,5 @@ deploy/
 dist/
 vendor/
 
+tide-whisperer
 artifact_go.sh

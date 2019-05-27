@@ -32,12 +32,12 @@
   version = "v1.1.1"
 
 [[projects]]
-  digest = "1:d5f97fc268267ec1b61c3453058c738246fc3e746f14b1ae25161513b7367b0c"
+  digest = "1:3af6be4fee7c08f81f13d36f04ffb63ad4b6b5aaba12cce96095c7c2863d4912"
   name = "github.com/gorilla/mux"
   packages = ["."]
   pruneopts = "UT"
-  revision = "c5c6c98bc25355028a63748a498942a6398ccd22"
-  version = "v1.7.1"
+  revision = "ed099d42384823742bba0bf9a72b53b55c9e2e38"
+  version = "v1.7.2"
 
 [[projects]]
   digest = "1:5db69d6e33a314a84f3d9498b13f498d76341da75e1ed6c374d7b36c0d8c76b7"
@@ -56,8 +56,8 @@
   version = "v1.2.0"
 
 [[projects]]
-  branch = "master"
-  digest = "1:00e53e7a2614a1ef7c2e0b8afe42c17471cbeb62d8186313dca64de1653e25f0"
+  branch = "merge/tidepool"
+  digest = "1:a72c9d98cb9ac6ce839cac5f40fa39b2ac096d7c3bcd201ed63f21ff5b4d776f"
   name = "github.com/tidepool-org/go-common"
   packages = [
     ".",
@@ -72,7 +72,7 @@
     "jepson",
   ]
   pruneopts = "UT"
-  revision = "e336b9e03d13813a5e3b16c7391bcfac0819379f"
+  revision = "5195218bce7076dd18e13fc4f5e83a2dc994d163"
   source = "github.com/mdblp/go-common"
 
 [solve-meta]
