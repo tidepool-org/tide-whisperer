@@ -13,6 +13,8 @@ RUN apk --no-cache update && \
     curl -L -s https://github.com/golang/dep/releases/download/v${DEP_VERSION}/dep-linux-amd64 -o $GOPATH/bin/dep && \
     chmod +x $GOPATH/bin/dep
 
+RUN go get -u github.com/golang/dep/cmd/dep
+
 RUN  dos2unix build.sh && ./build.sh
 
 CMD ["./dist/tide-whisperer"]
