@@ -15,7 +15,7 @@ import (
 	"github.com/tidepool-org/go-common/clients/mongo"
 )
 
-var testingConfig = &mongo.Config{ConnectionString: "mongodb://localhost/data_test"}
+var testingConfig = &mongo.Config{ConnectionString: "mongodb://127.0.0.1/data_test"}
 
 func before(t *testing.T, docs ...interface{}) *MongoStoreClient {
 

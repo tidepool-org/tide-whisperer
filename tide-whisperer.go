@@ -53,8 +53,8 @@ type (
 var (
 	error_status_check = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
 
-	error_no_view_permisson  = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
-	error_no_permissons      = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissons for user"}
+	error_no_view_permission  = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
+	error_no_permissions      = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissions for user"}
 	error_running_query      = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
 	error_loading_events     = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
 	error_invalid_parameters = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
@@ -94,6 +94,8 @@ func main() {
 		config.Auth.ServiceSecret = authSecret
 	}
 
+	config.Mongo.FromEnv()
+
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -121,6 +123,7 @@ func main() {
 		log.Print("skipping hakken service")
 	}
 
+	log.Printf("config %V", config)
 	shorelineClient := shoreline.NewShorelineClientBuilder().
 		WithHostGetter(config.ShorelineConfig.ToHostGetter(hakkenClient)).
 		WithHttpClient(httpClient).
@@ -218,7 +221,8 @@ func main() {
 
 		userID := queryParams.UserId
 		if td == nil || !(td.IsServer || td.UserID == userID || userCanViewData(td.UserID, userID)) {
-			jsonError(res, error_no_view_permisson, start)
+			log.Printf("userid %v", userID)
+			jsonError(res, error_no_view_permission, start)
 			return
 		}
 
