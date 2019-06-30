@@ -123,7 +123,6 @@ func main() {
 		log.Print("skipping hakken service")
 	}
 
-	log.Printf("config %V", config)
 	shorelineClient := shoreline.NewShorelineClientBuilder().
 		WithHostGetter(config.ShorelineConfig.ToHostGetter(hakkenClient)).
 		WithHttpClient(httpClient).
@@ -172,6 +171,16 @@ func main() {
 	storage := store.NewMongoStoreClient(&config.Mongo)
 
 	router := pat.New()
+
+	router.Add("GET", "/swagger", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(501)
+                return
+        }))
+
+	router.Add("GET", "/v1", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(501)
+                return
+        }))
 
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
