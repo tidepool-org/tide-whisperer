@@ -182,6 +182,11 @@ func main() {
                 return
         }))
 
+	router.Add("GET", "/v2", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(501)
+                return
+        }))
+
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 		if err := storage.Ping(); err != nil {
