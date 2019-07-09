@@ -172,6 +172,13 @@ func main() {
 
 	router := pat.New()
 
+	/*
+	 Gloo performs autodiscovery by trying certain paths,
+	 including /swagger, /v1, and v2.  Unfortunately, tide-whisperer
+	 interprets those paths as userids.  To avoid misleading
+	 error messages, we catch these calls and return an error
+	 code.
+	*/
 	router.Add("GET", "/swagger", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(501)
                 return
