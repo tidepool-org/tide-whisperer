@@ -14,6 +14,7 @@ import (
 type Config struct {
 	ConnectionString string           `json:"connectionString"`
 	Timeout          *jepson.Duration `json:"timeout"`
+	Scheme           string           `json:"scheme"`
 	User             string           `json:"user"`
 	Password         string           `json:"password"`
 	Database         string           `json:"database"`
@@ -23,12 +24,13 @@ type Config struct {
 }
 
 func(config *Config) FromEnv() {
-	config.Hosts, _ = os.LookupEnv("MONGO_HOSTS")
-	config.User, _ = os.LookupEnv("MONGO_USER")
-	config.Password, _ = os.LookupEnv("MONGO_PASSWORD")
-	config.Database, _ = os.LookupEnv("MONGO_DATABASE")
-	config.OptParams, _ = os.LookupEnv("MONGO_OPT_PARAMS")
-	ssl, found := os.LookupEnv("MONGO_SSL")
+	config.Scheme, _ = os.LookupEnv("TIDEPOOL_STORE_SCHEME")
+	config.Hosts, _ = os.LookupEnv("TIDEPOOL_STORE_ADDRESSES")
+	config.User, _ = os.LookupEnv("TIDEPOOL_STORE_USERNAME")
+	config.Password, _ = os.LookupEnv("TIDEPOOL_STORE_PASSWORD")
+	config.Database, _ = os.LookupEnv("TIDEPOOL_STORE_DATABASE")
+	config.OptParams, _ = os.LookupEnv("TIDEPOOL_STORE_OPT_PARAMS")
+	ssl, found := os.LookupEnv("TIDEPOOL_STORE_TLS")
 	config.Ssl = found && ssl == "true"
 }
 
@@ -39,7 +41,14 @@ func (config *Config) ToConnectionString() (string, error) {
 	if config.Database == "" {
 		return "", errors.New("Must specify a database in Mongo config")
 	}
-	cs := "mongodb://"
+
+	var cs string
+	if config.Scheme != "" {
+	  cs = config.Scheme + "://"
+	} else {
+	  cs = "mongodb://"
+        }
+
 	if config.User != "" {
 		cs += config.User
 		if config.Password != "" {
