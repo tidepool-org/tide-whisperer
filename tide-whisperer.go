@@ -74,6 +74,15 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 	return d
 }
 
+func inArray(needle string, arr []string) bool {
+	for _, n := range arr {
+		if needle == n {
+			return true
+		}
+	}
+	return false
+}
+
 func main() {
 	var config Config
 
@@ -281,6 +290,18 @@ func main() {
 		iter := storage.GetDeviceData(queryParams)
 		defer iter.Close()
 
+		var parametersHistory map[string]interface{}
+		var parametersHistoryErr error
+		if inArray("pumpSettings", queryParams.Types) || (len(queryParams.Types) == 1 && queryParams.Types[0] == "") {
+			log.Printf("Calling GetDiabeloopParametersHistory")
+			defaultLevelFilter := make([]int, 1)
+			defaultLevelFilter = append(defaultLevelFilter, 1)
+			if parametersHistory, parametersHistoryErr = storage.GetDiabeloopParametersHistory(queryParams.UserId, defaultLevelFilter); parametersHistoryErr != nil {
+				log.Printf("%s request %s user %s GetDiabeloopParametersHistory returned error: %s", DATA_API_PREFIX, requestID, userID, parametersHistoryErr)
+				jsonError(res, error_running_query, start)
+				return
+			}
+		}
 		var writeCount int
 
 		res.Header().Add("Content-Type", "application/json")
@@ -296,6 +317,11 @@ func main() {
 				results = results["latest_doc"].(map[string]interface{})
 			}
 			if len(results) > 0 {
+				if results["type"].(string) == "pumpSettings" && parametersHistory != nil {
+					payload := results["payload"].(map[string]interface{})
+					payload["history"] = parametersHistory["history"]
+					results["payload"] = payload
+				}
 				if bytes, err := json.Marshal(results); err != nil {
 					log.Printf("%s request %s user %s Marshal returned error: %s", DATA_API_PREFIX, requestID, userID, err)
 				} else {

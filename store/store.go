@@ -15,8 +15,10 @@ import (
 )
 
 const (
-	data_collection       = "deviceData"
-	DATA_STORE_API_PREFIX = "api/data/store"
+	data_collection               = "deviceData"
+	DATA_STORE_API_PREFIX         = "api/data/store"
+	portal_db                     = "portal"
+	parameters_history_collection = "patient_parameters_history"
 )
 
 type (
@@ -170,6 +172,9 @@ func NewMongoStoreClient(config *mongo.Config) *MongoStoreClient {
 
 func mgoDataCollection(cpy *mgo.Session) *mgo.Collection {
 	return cpy.DB("").C(data_collection)
+}
+func mgoParametersHistoryCollection(cpy *mgo.Session) *mgo.Collection {
+	return cpy.DB(portal_db).C(parameters_history_collection)
 }
 
 // generateMongoQuery takes in a number of parameters and constructs a mongo query
@@ -451,6 +456,87 @@ func (d MongoStoreClient) GetDeviceData(p *Params) StorageIterator {
 	}
 
 	return &ClosingSessionIterator{session, iter}
+}
+
+func (d MongoStoreClient) GetDiabeloopParametersHistory(userID string, levels []int) (bson.M, error) {
+	if userID == "" {
+		return nil, errors.New("user id is missing")
+	}
+	if levels == nil {
+		levels = make([]int, 1)
+		levels[0] = 1
+	}
+
+	var bsonLevels = make([]interface{}, len(levels))
+	for i, d := range levels {
+		bsonLevels[i] = d
+	}
+
+	session := d.session.Copy()
+	defer session.Close()
+
+	query := []bson.M{
+		// Filtering on userid
+		{
+			"$match": bson.M{"userid": userID},
+		},
+		// unnesting history array (keeping index for future grouping)
+		{
+			"$unwind": bson.M{"path": "$history", "includeArrayIndex": "historyIdx"},
+		},
+		// unnesting history.parameters array
+		{
+			"$unwind": "$history.parameters",
+		},
+		// filtering level parameters
+		{
+			"$match": bson.M{
+				"history.parameters.level": bson.M{"$in": bsonLevels},
+			},
+		},
+		// removing unnecessary fields
+		{
+			"$project": bson.M{
+				"userid":     1,
+				"historyIdx": 1,
+				"_id":        0,
+				"parameters": bson.M{
+					"changeType": "$history.parameters.changeType", "name": "$history.parameters.name",
+					"value": "$history.parameters.value", "unit": "$history.parameters.unit",
+					"level": "$history.parameters.level", "effectiveDate": "$history.parameters.effectiveDate",
+				},
+			},
+		},
+		// grouping by change
+		{
+			"$group": bson.M{
+				"_id":        bson.M{"historyIdx": "$historyIdx", "userid": "$userid"},
+				"parameters": bson.M{"$addToSet": "$parameters"},
+				"changeDate": bson.M{"$max": "$parameters.effectiveDate"},
+			},
+		},
+		// grouping all changes in one array
+		{
+			"$group": bson.M{
+				"_id":     bson.M{"userid": "$userid"},
+				"history": bson.M{"$addToSet": bson.M{"parameters": "$parameters", "changeDate": "$changeDate"}},
+			},
+		},
+		// removing unnecessary fields
+		{
+			"$project": bson.M{"_id": 0},
+		},
+	}
+
+	dataSources := []bson.M{}
+	err := mgoParametersHistoryCollection(session).Pipe(query).All(&dataSources)
+	if err != nil {
+		return nil, err
+	} else if len(dataSources) == 0 {
+		return nil, nil
+	}
+
+	return dataSources[0], nil
 }
 
 func (i *ClosingSessionIterator) Next(result interface{}) bool {
