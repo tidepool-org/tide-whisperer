@@ -2,10 +2,12 @@
 
 Data access API for tidepool
 
-## Unreleased 
-
+## 0.3.0
 ### Added
+- [PT-511] Access diabeloop system parameters history from tide-whisperer
 
+## 0.2.0 
+### Added
 - Integration from Tidepool latest changes
 
   Need to provide a new configuration item _auth_ in _TIDEPOOL_TIDE_WHISPERER_ENV_  (see [.vscode/launch.json.template](.vscode/launch.json.template) or [env.sh](env.sh) for example)
