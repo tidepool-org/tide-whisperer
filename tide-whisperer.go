@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -21,12 +23,15 @@ import (
 	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/shoreline"
+
+	"github.com/tidepool-org/tide-whisperer/auth"
 	"github.com/tidepool-org/tide-whisperer/store"
 )
 
 type (
 	Config struct {
 		clients.Config
+		Auth                *auth.Config        `json:"auth"`
 		Service             disc.ServiceListing `json:"service"`
 		Mongo               mongo.Config        `json:"mongo"`
 		store.SchemaVersion `json:"schemaVersion"`
@@ -57,12 +62,25 @@ var (
 	storage store.Storage
 )
 
-const DATA_API_PREFIX = "api/data"
+const (
+	DATA_API_PREFIX           = "api/data"
+	MedtronicLoopBoundaryDate = "2017-09-01"
+	SlowQueryDuration         = 0.1 // seconds
+)
 
 //set the intenal message that we will use for logging
 func (d detailedError) setInternalMessage(internal error) detailedError {
 	d.InternalMessage = internal.Error()
 	return d
+}
+
+func inArray(needle string, arr []string) bool {
+	for _, n := range arr {
+		if needle == n {
+			return true
+		}
+	}
+	return false
 }
 
 func main() {
@@ -75,23 +93,42 @@ func main() {
 		log.Fatal(DATA_API_PREFIX, " Problem loading config: ", err)
 	}
 
+	// server secret may be passed via a separate env variable to accomodate easy secrets injection via Kubernetes
+	serverSecret, found := os.LookupEnv("SERVER_SECRET")
+	if found {
+		config.ShorelineConfig.Secret = serverSecret
+	}
+	authSecret, found := os.LookupEnv("AUTH_SECRET")
+	if found {
+		config.Auth.ServiceSecret = authSecret
+	}
+
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 	httpClient := &http.Client{Transport: tr}
 
+	authClient, err := auth.NewClient(config.Auth, httpClient)
+	if err != nil {
+		log.Fatal(DATA_API_PREFIX, err)
+	}
+
 	hakkenClient := hakken.NewHakkenBuilder().
 		WithConfig(&config.HakkenConfig).
 		Build()
 
-	if err := hakkenClient.Start(); err != nil {
-		log.Fatal(DATA_API_PREFIX, err)
-	}
-	defer func() {
-		if err := hakkenClient.Close(); err != nil {
-			log.Panic(DATA_API_PREFIX, "Error closing hakkenClient, panicing to get stacks: ", err)
+	if !config.HakkenConfig.SkipHakken {
+		if err := hakkenClient.Start(); err != nil {
+			log.Fatal(DATA_API_PREFIX, err)
 		}
-	}()
+		defer func() {
+			if err := hakkenClient.Close(); err != nil {
+				log.Panic(DATA_API_PREFIX, "Error closing hakkenClient, panicing to get stacks: ", err)
+			}
+		}()
+	} else {
+		log.Print("skipping hakken service")
+	}
 
 	shorelineClient := shoreline.NewShorelineClientBuilder().
 		WithHostGetter(config.ShorelineConfig.ToHostGetter(hakkenClient)).
@@ -125,45 +162,13 @@ func main() {
 
 		err.Id = uuid.NewV4().String()
 
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s][%s] failed after [%.5f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s][%s] failed after [%.3f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
 
 		jsonErr, _ := json.Marshal(err)
 
 		res.Header().Add("content-type", "application/json")
 		res.WriteHeader(err.Status)
 		res.Write(jsonErr)
-	}
-
-	processResults := func(response http.ResponseWriter, iterator store.StorageIterator, startTime time.Time) {
-		var writeCount int
-
-		log.Printf("%s mongo processing started after %.5f seconds", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds())
-
-		response.Header().Add("Content-Type", "application/json")
-		response.Write([]byte("["))
-
-		var results map[string]interface{}
-		for iterator.Next(&results) {
-			if len(results) > 0 {
-				if bytes, err := json.Marshal(results); err != nil {
-					log.Printf("%s failed to marshal mongo result with error: %s", DATA_API_PREFIX, err)
-				} else {
-					if writeCount > 0 {
-						response.Write([]byte(","))
-					}
-					response.Write([]byte("\n"))
-					response.Write(bytes)
-					writeCount += 1
-				}
-			}
-		}
-
-		if writeCount > 0 {
-			response.Write([]byte("\n"))
-		}
-		response.Write([]byte("]"))
-
-		log.Printf("%s mongo processing finished after %.5f seconds and returned %d records", DATA_API_PREFIX, time.Now().Sub(startTime).Seconds(), writeCount)
 	}
 
 	if err := shorelineClient.Start(); err != nil {
@@ -186,60 +191,159 @@ func main() {
 
 	// The /data/userId endpoint retrieves device/health data for a user based on a set of parameters
 	// userid: the ID of the user you want to retrieve data for
+	// uploadId (optional) : Search for Tidepool data by uploadId. Only objects with a uploadId field matching the specified uploadId param will be returned.
+	// deviceId (optional) : Search for Tidepool data by deviceId. Only objects with a deviceId field matching the specified uploadId param will be returned.
 	// type (optional) : The Tidepool data type to search for. Only objects with a type field matching the specified type param will be returned.
 	//					can be /userid?type=smbg or a comma seperated list e.g /userid?type=smgb,cbg . If is a comma seperated
 	//					list, then objects matching any of the sub types will be returned
 	// subType (optional) : The Tidepool data subtype to search for. Only objects with a subtype field matching the specified subtype param will be returned.
 	//					can be /userid?subtype=physicalactivity or a comma seperated list e.g /userid?subtypetype=physicalactivity,steps . If is a comma seperated
 	//					list, then objects matching any of the types will be returned
-	// startDate (optional) : Only objects with 'time' field equal to or greater than start date will be returned .
-	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
-	// endDate (optional) : Only objects with 'time' field less than to or equal to start date will be returned .
-	//						  Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
+	// startDate (optional) : Only objects with 'time' field equal to or greater than start date will be returned.
+	//					Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
+	// endDate (optional) : Only objects with 'time' field less than to or equal to start date will be returned.
+	//					Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
+	// latest (optional) : Returns only the most recent results for each `type` matching the results filtered by the other query parameters
 	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 
 		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion)
 
 		if err != nil {
-			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing date: %s", err))
+			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing query params: %s", err))
 			jsonError(res, error_invalid_parameters, start)
 			return
 		}
 
-		token := req.Header.Get("x-tidepool-session-token")
-		td := shorelineClient.CheckToken(token)
+		var td *shoreline.TokenData
+		if sessionToken := req.Header.Get("x-tidepool-session-token"); sessionToken != "" {
+			td = shorelineClient.CheckToken(sessionToken)
+		} else if restrictedTokens, found := req.URL.Query()["restricted_token"]; found && len(restrictedTokens) == 1 {
+			restrictedToken, restrictedTokenErr := authClient.GetRestrictedToken(req.Context(), restrictedTokens[0])
+			if restrictedTokenErr == nil && restrictedToken != nil && restrictedToken.Authenticates(req) {
+				td = &shoreline.TokenData{UserID: restrictedToken.UserID}
+			}
+		}
 
-		if td == nil || !(td.IsServer || td.UserID == queryParams.UserId || userCanViewData(td.UserID, queryParams.UserId)) {
+		userID := queryParams.UserId
+		if td == nil || !(td.IsServer || td.UserID == userID || userCanViewData(td.UserID, userID)) {
 			jsonError(res, error_no_view_permisson, start)
 			return
 		}
 
+		requestID := NewRequestID()
+		queryStart := time.Now()
 		if _, ok := req.URL.Query()["carelink"]; !ok {
 			if hasMedtronicDirectData, medtronicErr := storage.HasMedtronicDirectData(queryParams.UserId); medtronicErr != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Medtronic Direct data: %s", medtronicErr))
+				log.Printf("%s request %s user %s HasMedtronicDirectData returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
 				jsonError(res, error_running_query, start)
 				return
 			} else if !hasMedtronicDirectData {
 				queryParams.Carelink = true
 			}
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
+				log.Printf("%s request %s user %s HasMedtronicDirectData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			}
+			queryStart = time.Now()
 		}
 		if !queryParams.Dexcom {
 			if dexcomDataSource, dexcomErr := storage.GetDexcomDataSource(queryParams.UserId); dexcomErr != nil {
-				log.Println(DATA_API_PREFIX, fmt.Sprintf("Error while querying for Dexcom data source: %s", dexcomErr))
+				log.Printf("%s request %s user %s GetDexcomDataSource returned error: %s", DATA_API_PREFIX, requestID, userID, dexcomErr)
 				jsonError(res, error_running_query, start)
 				return
 			} else {
 				queryParams.DexcomDataSource = dexcomDataSource
 			}
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
+				log.Printf("%s request %s user %s GetDexcomDataSource took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			}
+			queryStart = time.Now()
 		}
-
-		started := time.Now()
+		if _, ok := req.URL.Query()["medtronic"]; !ok {
+			if hasMedtronicLoopData, medtronicErr := storage.HasMedtronicLoopDataAfter(queryParams.UserId, MedtronicLoopBoundaryDate); medtronicErr != nil {
+				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
+				jsonError(res, error_running_query, start)
+				return
+			} else if !hasMedtronicLoopData {
+				queryParams.Medtronic = true
+			}
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
+				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			}
+			queryStart = time.Now()
+		}
+		if !queryParams.Medtronic {
+			if medtronicUploadIds, medtronicErr := storage.GetLoopableMedtronicDirectUploadIdsAfter(queryParams.UserId, MedtronicLoopBoundaryDate); medtronicErr != nil {
+				log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
+				jsonError(res, error_running_query, start)
+				return
+			} else {
+				queryParams.MedtronicDate = MedtronicLoopBoundaryDate
+				queryParams.MedtronicUploadIds = medtronicUploadIds
+			}
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
+				log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			}
+			queryStart = time.Now()
+		}
 
 		iter := storage.GetDeviceData(queryParams)
 		defer iter.Close()
 
-		processResults(res, iter, started)
+		var parametersHistory map[string]interface{}
+		var parametersHistoryErr error
+		if inArray("pumpSettings", queryParams.Types) || (len(queryParams.Types) == 1 && queryParams.Types[0] == "") {
+			log.Printf("Calling GetDiabeloopParametersHistory")
+			defaultLevelFilter := make([]int, 1)
+			defaultLevelFilter = append(defaultLevelFilter, 1)
+			if parametersHistory, parametersHistoryErr = storage.GetDiabeloopParametersHistory(queryParams.UserId, defaultLevelFilter); parametersHistoryErr != nil {
+				log.Printf("%s request %s user %s GetDiabeloopParametersHistory returned error: %s", DATA_API_PREFIX, requestID, userID, parametersHistoryErr)
+				jsonError(res, error_running_query, start)
+				return
+			}
+		}
+		var writeCount int
+
+		res.Header().Add("Content-Type", "application/json")
+		res.Write([]byte("["))
+
+		var results map[string]interface{}
+		for iter.Next(&results) {
+			if queryParams.Latest {
+				// If we're using the `latest` parameter, then we ran an `$aggregate` query to get only the latest data.
+				// Since we use Mongo 3.2, we can't use the $replaceRoot function, so we need to manaully extract the
+				// latest subdocument here. When we move to MongoDB 3.4+ and can use $replaceRoot, we can get rid of this
+				// conditional block. We'd also need to fix the corresponding code in `store.go`
+				results = results["latest_doc"].(map[string]interface{})
+			}
+			if len(results) > 0 {
+				if results["type"].(string) == "pumpSettings" && parametersHistory != nil {
+					payload := results["payload"].(map[string]interface{})
+					payload["history"] = parametersHistory["history"]
+					results["payload"] = payload
+				}
+				if bytes, err := json.Marshal(results); err != nil {
+					log.Printf("%s request %s user %s Marshal returned error: %s", DATA_API_PREFIX, requestID, userID, err)
+				} else {
+					if writeCount > 0 {
+						res.Write([]byte(","))
+					}
+					res.Write([]byte("\n"))
+					res.Write(bytes)
+					writeCount += 1
+				}
+			}
+		}
+
+		if writeCount > 0 {
+			res.Write([]byte("\n"))
+		}
+		res.Write([]byte("]"))
+
+		if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
+			log.Printf("%s request %s user %s GetDeviceData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+		}
+		log.Printf("%s request %s user %s took %.3fs returned %d records", DATA_API_PREFIX, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
 	})))
 
 	done := make(chan bool)
@@ -275,4 +379,10 @@ func main() {
 	}()
 
 	<-done
+}
+
+func NewRequestID() string {
+	bytes := make([]byte, 8)
+	_, _ = rand.Read(bytes) // In case of failure, do not fail request, just use default bytes (zero)
+	return hex.EncodeToString(bytes)
 }

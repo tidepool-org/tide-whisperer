@@ -1,9 +1,6 @@
 [[constraint]]
-  # Required: the root import path of the project being constrained.
   name = "github.com/tidepool-org/go-common"
   source = "github.com/mdblp/go-common"
-  # Recommended: the version constraint to enforce for the project.
-  # Note that only one of "branch", "version" or "revision" can be specified.
   branch = "master"
 
 [prune]
