@@ -1,6 +1,9 @@
 # Tide-whisperer
 
 Data access API for tidepool
+## 0.3.1
+### Added
+- [PT-607] DBLHU users should access to Level 1 and Level 2 parameters in the parameters history.
 
 ## 0.3.0
 ### Added

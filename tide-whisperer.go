@@ -296,6 +296,16 @@ func main() {
 			log.Printf("Calling GetDiabeloopParametersHistory")
 			defaultLevelFilter := make([]int, 1)
 			defaultLevelFilter = append(defaultLevelFilter, 1)
+
+			var device string
+			var deviceErr error
+			if device, deviceErr = storage.GetDeviceModel(queryParams.UserId); deviceErr != nil {
+				log.Printf("Error in GetDeviceModel for user %s. Error: %s", queryParams.UserId, deviceErr)
+			}
+			if device == "DBLHU" {
+				defaultLevelFilter = append(defaultLevelFilter, 3)
+			}
+
 			if parametersHistory, parametersHistoryErr = storage.GetDiabeloopParametersHistory(queryParams.UserId, defaultLevelFilter); parametersHistoryErr != nil {
 				log.Printf("%s request %s user %s GetDiabeloopParametersHistory returned error: %s", DATA_API_PREFIX, requestID, userID, parametersHistoryErr)
 				jsonError(res, error_running_query, start)

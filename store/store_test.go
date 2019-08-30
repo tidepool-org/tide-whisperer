@@ -1196,3 +1196,40 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 		t.Error("Not enough results when requesting latest data")
 	}
 }
+func TestStore_GetDeviceModel(t *testing.T) {
+	store := before(t,
+		bson.M{
+			"_active":        true,
+			"_userId":        "dblg1_1",
+			"_schemaVersion": 1,
+			"time":           "2019-01-19T00:42:51.902Z",
+			"type":           "pumpSettings",
+			"payload": bson.M{
+				"device": bson.M{
+					"name": "DBLHU",
+				},
+			},
+		},
+		bson.M{
+			"_active":        true,
+			"_userId":        "dblg1_1",
+			"_schemaVersion": 1,
+			"time":           "2019-03-19T00:42:51.902Z",
+			"type":           "pumpSettings",
+			"payload": bson.M{
+				"device": bson.M{
+					"name": "DBLG1",
+				},
+			},
+		})
+	var res string
+	var err error
+	if res, err = store.GetDeviceModel("dblg1_1"); err != nil {
+		t.Error("Unexpected Error during device model request")
+	}
+	// Retreiving latest (time field desc) payload.device.name not null value
+	if res != "DBLG1" {
+		t.Error("Unexpected device model calue")
+	}
+
+}
