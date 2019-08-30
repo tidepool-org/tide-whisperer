@@ -538,6 +538,36 @@ func (d MongoStoreClient) GetDiabeloopParametersHistory(userID string, levels []
 
 	return dataSources[0], nil
 }
+func (d MongoStoreClient) GetDeviceModel(userID string) (string, error) {
+
+	if userID == "" {
+		return "", errors.New("user id is missing")
+	}
+
+	var payLoadDeviceNameQuery = make([]interface{}, 2)
+	payLoadDeviceNameQuery[0] = bson.M{"payload.device.name": bson.M{"$exists": true}}
+	payLoadDeviceNameQuery[1] = bson.M{"payload.device.name": bson.M{"$ne": nil}}
+
+	query := bson.M{
+		"_userId": userID,
+		// "type":    "upload",
+		// "_state":  "closed",
+		"_active": true,
+		"$and":    payLoadDeviceNameQuery,
+	}
+
+	session := d.session.Copy()
+	defer session.Close()
+
+	var res map[string]interface{}
+	err := mgoDataCollection(session).Find(query).Sort("-time").Select(bson.M{"payload.device.name": 1}).One(&res)
+	if err != nil {
+		return "", err
+	}
+
+	device := res["payload"].(map[string]interface{})["device"].(map[string]interface{})
+	return device["name"].(string), err
+}
 
 func (i *ClosingSessionIterator) Next(result interface{}) bool {
 	if i.Iter != nil {
