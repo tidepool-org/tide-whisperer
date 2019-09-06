@@ -8,8 +8,8 @@ COPY --chown=tidepool . .
 RUN ./build.sh
 CMD ["./dist/tide-whisperer"]
 
-# Release
-FROM alpine:latest AS release
+# Production
+FROM alpine:latest AS production
 WORKDIR /home/tidepool
 RUN apk --no-cache update && \
     apk --no-cache upgrade && \
