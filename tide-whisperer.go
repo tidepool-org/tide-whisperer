@@ -303,6 +303,7 @@ func main() {
 				log.Printf("Error in GetDeviceModel for user %s. Error: %s", queryParams.UserId, deviceErr)
 			}
 			if device == "DBLHU" {
+				defaultLevelFilter = append(defaultLevelFilter, 2)
 				defaultLevelFilter = append(defaultLevelFilter, 3)
 			}
 
