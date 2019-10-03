@@ -1,0 +1,27 @@
+# github.com/daaku/go.httpgzip v0.0.0-20180202095102-86d27ccd810b
+github.com/daaku/go.httpgzip
+# github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8
+github.com/globalsign/mgo
+github.com/globalsign/mgo/bson
+github.com/globalsign/mgo/internal/json
+github.com/globalsign/mgo/internal/sasl
+github.com/globalsign/mgo/internal/scram
+# github.com/gorilla/context v1.1.1
+github.com/gorilla/context
+# github.com/gorilla/mux v1.7.3
+github.com/gorilla/mux
+# github.com/gorilla/pat v1.0.1
+github.com/gorilla/pat
+# github.com/satori/go.uuid v1.2.0
+github.com/satori/go.uuid
+# github.com/tidepool-org/go-common v0.5.0
+github.com/tidepool-org/go-common
+github.com/tidepool-org/go-common/clients
+github.com/tidepool-org/go-common/clients/disc
+github.com/tidepool-org/go-common/clients/hakken
+github.com/tidepool-org/go-common/clients/highwater
+github.com/tidepool-org/go-common/clients/mongo
+github.com/tidepool-org/go-common/clients/shoreline
+github.com/tidepool-org/go-common/clients/status
+github.com/tidepool-org/go-common/errors
+github.com/tidepool-org/go-common/jepson

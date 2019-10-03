@@ -3,7 +3,10 @@ sudo: false
 language: go
 
 go:
-  - 1.11.4
+  - 1.12.7
+
+env:
+  - GO111MODULE=on
 
 before_install:
   sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5;
