@@ -3,10 +3,10 @@ package clients
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"net/url"
+	"path"
 
 	"github.com/tidepool-org/go-common/clients/disc"
 	"github.com/tidepool-org/go-common/clients/status"
@@ -97,7 +97,7 @@ func (client *gatekeeperClient) UserInGroup(userID, groupID string) (Permissions
 	if host == nil {
 		return nil, errors.New("No known gatekeeper hosts")
 	}
-	host.Path += fmt.Sprintf("access/%s/%s", groupID, userID)
+	host.Path = path.Join(host.Path, "access", groupID, userID)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
 	req.Header.Add("x-tidepool-session-token", client.tokenProvider.TokenProvide())
@@ -127,7 +127,7 @@ func (client *gatekeeperClient) UsersInGroup(groupID string) (UsersPermissions, 
 	if host == nil {
 		return nil, errors.New("No known gatekeeper hosts")
 	}
-	host.Path += fmt.Sprintf("access/%s", groupID)
+	host.Path = path.Join(host.Path, "access", groupID)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
 	req.Header.Add("x-tidepool-session-token", client.tokenProvider.TokenProvide())
@@ -157,7 +157,7 @@ func (client *gatekeeperClient) SetPermissions(userID, groupID string, permissio
 	if host == nil {
 		return nil, errors.New("No known gatekeeper hosts")
 	}
-	host.Path += fmt.Sprintf("access/%s/%s", groupID, userID)
+	host.Path = path.Join(host.Path, "access", groupID, userID)
 
 	if jsonPerms, err := json.Marshal(permissions); err != nil {
 		log.Println(err)

@@ -6,12 +6,13 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 
 	"github.com/tidepool-org/go-common/clients/disc"
 )
 
-//Generic client interface that we will implement and mock
+// Client interface that we will implement and mock
 type Client interface {
 	PostServer(eventName, token string, params map[string]string)
 	PostThisUser(eventName, token string, params map[string]string)
@@ -134,7 +135,7 @@ func (client *HighwaterClient) PostServer(eventName, token string, params map[st
 		return
 	}
 
-	host.Path += "/server/" + client.config.Name + "/" + client.adjustEventName(eventName)
+	host.Path = path.Join(host.Path, "server", client.config.Name, client.adjustEventName(eventName))
 
 	req, _ := http.NewRequest("GET", host.String(), bytes.NewBuffer(client.adjustEventParams(params)))
 	req.Header.Add("x-tidepool-session-token", token)
@@ -157,7 +158,7 @@ func (client *HighwaterClient) PostThisUser(eventName, token string, params map[
 		return
 	}
 
-	host.Path += "/thisuser/" + client.adjustEventName(eventName)
+	host.Path = path.Join(host.Path, "thisuser", client.adjustEventName(eventName))
 
 	req, _ := http.NewRequest("GET", host.String(), bytes.NewBuffer(client.adjustEventParams(params)))
 	req.Header.Add("x-tidepool-session-token", token)
@@ -180,7 +181,7 @@ func (client *HighwaterClient) PostWithUser(userId, eventName, token string, par
 		return
 	}
 
-	host.Path += "/user/" + userId + "/" + client.adjustEventName(eventName)
+	host.Path = path.Join(host.Path, "user", userId, client.adjustEventName(eventName))
 
 	req, _ := http.NewRequest("GET", host.String(), bytes.NewBuffer(client.adjustEventParams(params)))
 	req.Header.Add("x-tidepool-session-token", token)
