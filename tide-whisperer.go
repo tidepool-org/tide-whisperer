@@ -14,8 +14,8 @@ import (
 	"time"
 
 	httpgzip "github.com/daaku/go.httpgzip"
+	"github.com/google/uuid"
 	"github.com/gorilla/pat"
-	uuid "github.com/satori/go.uuid"
 
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
@@ -53,8 +53,8 @@ type (
 var (
 	error_status_check = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
 
-	error_no_view_permission  = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
-	error_no_permissions      = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissions for user"}
+	error_no_view_permission = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
+	error_no_permissions     = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissions for user"}
 	error_running_query      = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
 	error_loading_events     = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
 	error_invalid_parameters = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
@@ -153,7 +153,7 @@ func main() {
 	//log error detail and write as application/json
 	jsonError := func(res http.ResponseWriter, err detailedError, startedAt time.Time) {
 
-		err.Id = uuid.NewV4().String()
+		err.Id = uuid.New().String()
 
 		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s][%s] failed after [%.3f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
 
@@ -181,18 +181,18 @@ func main() {
 	*/
 	router.Add("GET", "/swagger", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(501)
-                return
-        }))
+		return
+	}))
 
 	router.Add("GET", "/v1", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(501)
-                return
-        }))
+		return
+	}))
 
 	router.Add("GET", "/v2", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(501)
-                return
-        }))
+		return
+	}))
 
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
