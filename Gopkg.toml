@@ -1,8 +1,0 @@
-[[constraint]]
-  name = "github.com/tidepool-org/go-common"
-  source = "github.com/mdblp/go-common"
-  branch = "master"
-
-[prune]
-  go-tests = true
-  unused-packages = true

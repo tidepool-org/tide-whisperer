@@ -1,6 +1,10 @@
 # Tide-whisperer
 
 Data access API for tidepool
+# Unreleased 
+### Added 
+- [PT-734] Display the application version number on the status endpoint (/status).
+
 # 0.3.2 
 ### Fixed 
 - [PT-649] Get Level 2 and 3 parameters for parameter history

@@ -23,6 +23,7 @@ import (
 	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/shoreline"
+	"github.com/tidepool-org/go-common/clients/status"
 
 	"github.com/tidepool-org/tide-whisperer/auth"
 	"github.com/tidepool-org/tide-whisperer/store"
@@ -157,13 +158,13 @@ func main() {
 		return !(perms["root"] == nil && perms["view"] == nil)
 	}
 
+	logError := func(err *detailedError, startedAt time.Time) {
+		err.Id = uuid.NewV4().String()
+		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s][%s] failed after [%.3f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
+	}
 	//log error detail and write as application/json
 	jsonError := func(res http.ResponseWriter, err detailedError, startedAt time.Time) {
-
-		err.Id = uuid.NewV4().String()
-
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s][%s] failed after [%.3f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
-
+		logError(&err, startedAt)
 		jsonErr, _ := json.Marshal(err)
 
 		res.Header().Add("content-type", "application/json")
@@ -181,11 +182,21 @@ func main() {
 
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
+		var s status.ApiStatus
 		if err := storage.Ping(); err != nil {
-			jsonError(res, error_status_check.setInternalMessage(err), start)
-			return
+			errorLog := error_status_check.setInternalMessage(err)
+			logError(&errorLog, start)
+			s = status.NewApiStatus(errorLog.Status, err.Error())
+		} else {
+			s = status.NewApiStatus(http.StatusOK, "OK")
 		}
-		res.Write([]byte("OK\n"))
+		if jsonDetails, err := json.Marshal(s); err != nil {
+			jsonError(res, error_loading_events.setInternalMessage(err), start)
+		} else {
+			res.Header().Add("content-type", "application/json")
+			res.WriteHeader(s.Status.Code)
+			res.Write(jsonDetails)
+		}
 		return
 	}))
 
