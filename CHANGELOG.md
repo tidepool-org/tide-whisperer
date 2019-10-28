@@ -1,7 +1,7 @@
 # Tide-whisperer
 
 Data access API for tidepool
-# Unreleased 
+# 0.4.0 - 2019-10-28 
 ### Added 
 - [PT-734] Display the application version number on the status endpoint (/status).
 
