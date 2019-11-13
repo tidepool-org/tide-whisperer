@@ -3,14 +3,20 @@ sudo: false
 language: go
 
 go:
-  - 1.9.2
+  - 1.12.7
+
+env:
+  - GO111MODULE=on
+
+before_install:
+  sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5;
+  echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu trusty/mongodb-org/3.6 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-3.6.list;
+  sudo apt-get update;
+  sudo apt-get install --allow-unauthenticated -y mongodb-org=3.6.12 mongodb-org-server=3.6.12 mongodb-org-shell=3.6.12 mongodb-org-mongos=3.6.12 mongodb-org-tools=3.6.12;
+  sudo service mongod start;
+  npm install -g snyk
 
 addons:
-  apt:
-    sources:
-      - mongodb-3.2-trusty
-    packages:
-      - mongodb-org-server
   artifacts:
     s3_region: us-west-2
     paths:
@@ -20,9 +26,10 @@ addons:
 
 services:
   - docker
-  - mongodb
 
 script:
   - ./build.sh
   - ./test.sh
+  - snyk test --dev --org=tidepool
+  - snyk monitor --org=tidepool
   - ./artifact.sh

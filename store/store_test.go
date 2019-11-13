@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"labix.org/v2/mgo"
-	"labix.org/v2/mgo/bson"
+	"github.com/globalsign/mgo"
+	"github.com/globalsign/mgo/bson"
 
 	"github.com/tidepool-org/go-common/clients/mongo"
 )
 
-var testingConfig = &mongo.Config{ConnectionString: "mongodb://localhost/data_test"}
+var testingConfig = &mongo.Config{ConnectionString: "mongodb://127.0.0.1/data_test"}
 
 func before(t *testing.T, docs ...interface{}) *MongoStoreClient {
 

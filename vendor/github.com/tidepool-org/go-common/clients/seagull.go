@@ -2,10 +2,10 @@ package clients
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"net/url"
+	"path"
 
 	"github.com/tidepool-org/go-common/clients/disc"
 	"github.com/tidepool-org/go-common/clients/status"
@@ -76,7 +76,7 @@ func (client *seagullClient) GetPrivatePair(userID, hashName, token string) *Pri
 	if host == nil {
 		return nil
 	}
-	host.Path += fmt.Sprintf("%s/private/%s", userID, hashName)
+	host.Path = path.Join(host.Path, userID, "private", hashName)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
 	req.Header.Add("x-tidepool-session-token", token)
@@ -90,7 +90,7 @@ func (client *seagullClient) GetPrivatePair(userID, hashName, token string) *Pri
 	defer res.Body.Close()
 
 	if res.StatusCode != 200 {
-		log.Printf("Unknown response code[%s] from service[%s]", res.StatusCode, req.URL)
+		log.Printf("Unknown response code[%v] from service[%v]", res.StatusCode, req.URL)
 		return nil
 	}
 
@@ -107,7 +107,7 @@ func (client *seagullClient) GetCollection(userID, collectionName, token string,
 	if host == nil {
 		return nil
 	}
-	host.Path += fmt.Sprintf("%s/%s", userID, collectionName)
+	host.Path = path.Join(host.Path, userID, collectionName)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
 	req.Header.Add("x-tidepool-session-token", token)
