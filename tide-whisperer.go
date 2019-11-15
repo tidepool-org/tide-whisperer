@@ -258,7 +258,8 @@ func main() {
 				queryParams.Carelink = true
 			}
 			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
-				log.Printf("%s request %s user %s HasMedtronicDirectData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+				// XXX replace with metrics
+				//log.Printf("%s request %s user %s HasMedtronicDirectData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
 		}
@@ -298,7 +299,8 @@ func main() {
 				queryParams.MedtronicUploadIds = medtronicUploadIds
 			}
 			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
-				log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+				// XXX replace with metrics
+				//log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
 		}
@@ -340,7 +342,8 @@ func main() {
 		res.Write([]byte("]"))
 
 		if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
-			log.Printf("%s request %s user %s GetDeviceData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			// XXX use metrics
+			//log.Printf("%s request %s user %s GetDeviceData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 		}
 		log.Printf("%s request %s user %s took %.3fs returned %d records", DATA_API_PREFIX, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
 	})))
