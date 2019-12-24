@@ -169,6 +169,10 @@ func main() {
 	}
 
 	storage := store.NewMongoStoreClient(&config.Mongo)
+	err = storage.EnsureIndexes()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	router := pat.New()
 
@@ -317,7 +321,7 @@ func main() {
 		for iter.Next(&results) {
 			if queryParams.Latest {
 				// If we're using the `latest` parameter, then we ran an `$aggregate` query to get only the latest data.
-				// Since we use Mongo 3.2, we can't use the $replaceRoot function, so we need to manaully extract the
+				// Since we use Mongo 3.2, we can't use the $replaceRoot function, so we need to manually extract the
 				// latest subdocument here. When we move to MongoDB 3.4+ and can use $replaceRoot, we can get rid of this
 				// conditional block. We'd also need to fix the corresponding code in `store.go`
 				results = results["latest_doc"].(map[string]interface{})

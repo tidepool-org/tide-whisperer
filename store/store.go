@@ -168,6 +168,66 @@ func NewMongoStoreClient(config *mongo.Config) *MongoStoreClient {
 	}
 }
 
+func (s *MongoStoreClient) EnsureIndexes() error {
+	return s.EnsureAllIndexes([]mgo.Index{
+		{
+			Key:        []string{"_userId", "deviceModel"},
+			Background: true,
+			Name:       "GetLoopableMedtronicDirectUploadIdsAfter",
+			PartialFilter: bson.M{
+				"_active": true,
+				"type":    "upload",
+				"deviceModel": bson.M{
+					"$exists": true,
+				},
+				"time": bson.M{
+					"$gte": "2017-09-01",
+				},
+				"_schemaVersion": bson.M{
+					"$gt": 0,
+				},
+			},
+		},
+		{
+			Key:        []string{"_userId", "origin.payload.device.manufacturer"},
+			Background: true,
+			Name:       "HasMedtronicLoopDataAfter",
+			PartialFilter: bson.M{
+				"_active":                            true,
+				"origin.payload.device.manufacturer": "Medtronic",
+				"time": bson.M{
+					"$gte": "2017-09-01",
+				},
+				"_schemaVersion": bson.M{
+					"$gt": 0,
+				},
+			},
+		},
+		{
+			Key:        []string{"_userId", "-time", "type"},
+			Background: true,
+			Name:       "UserIdTimeWeighted",
+			PartialFilter: bson.M{
+				"_schemaVersion": bson.M{
+					"$gt": 0,
+				},
+				"_active": true,
+			},
+		},
+	})
+}
+
+func (s *MongoStoreClient) EnsureAllIndexes(indexes []mgo.Index) error {
+	session := s.session.Copy()
+	defer session.Close()
+	for _, index := range indexes {
+		if err := mgoDataCollection(session).EnsureIndex(index); err != nil {
+			log.Fatal(DATA_STORE_API_PREFIX, err)
+		}
+	}
+	return nil
+}
+
 func mgoDataCollection(cpy *mgo.Session) *mgo.Collection {
 	return cpy.DB("").C(data_collection)
 }
