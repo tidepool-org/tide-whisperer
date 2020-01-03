@@ -309,16 +309,26 @@ func main() {
 			queryStart = time.Now()
 		}
 
-		iter := storage.GetDeviceData(queryParams)
-		defer iter.Close()
+		iter, err := storage.GetDeviceData(queryParams)
+		if err != nil {
+			log.Printf("%s request %s user %s Mongo Query returned error: %s", DATA_API_PREFIX, requestID, userID, err)
+		}
+
+		defer iter.Close(req.Context())
 
 		var writeCount int
 
 		res.Header().Add("Content-Type", "application/json")
+
 		res.Write([]byte("["))
 
-		var results map[string]interface{}
-		for iter.Next(&results) {
+		for iter.Next(req.Context()) {
+			var results map[string]interface{}
+			err := iter.Decode(&results)
+			if err != nil {
+				log.Printf("%s request %s user %s Mongo Decode returned error: %s", DATA_API_PREFIX, requestID, userID, err)
+			}
+
 			if queryParams.Latest {
 				// If we're using the `latest` parameter, then we ran an `$aggregate` query to get only the latest data.
 				// Since we use Mongo 3.2, we can't use the $replaceRoot function, so we need to manually extract the
@@ -335,7 +345,7 @@ func main() {
 					}
 					res.Write([]byte("\n"))
 					res.Write(bytes)
-					writeCount += 1
+					writeCount++
 				}
 			}
 		}

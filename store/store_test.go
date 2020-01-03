@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -9,31 +10,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/globalsign/mgo"
-	"github.com/globalsign/mgo/bson"
+	"go.mongodb.org/mongo-driver/bson"
 
-	"github.com/tidepool-org/go-common/clients/mongo"
+	tpMongo "github.com/tidepool-org/go-common/clients/mongo"
 )
 
-var testingConfig = &mongo.Config{ConnectionString: "mongodb://127.0.0.1/data_test"}
+var testingConfig = &tpMongo.Config{ConnectionString: "mongodb://127.0.0.1/data_test", Database: "data_test"}
 
 func before(t *testing.T, docs ...interface{}) *MongoStoreClient {
 
 	store := NewMongoStoreClient(testingConfig)
 
 	//INIT THE TEST - we use a clean copy of the collection before we start
-	cpy := store.session.Copy()
-	defer cpy.Close()
-
 	//just drop and don't worry about any errors
-	mgoDataCollection(cpy).DropCollection()
-
-	if err := mgoDataCollection(cpy).Create(&mgo.CollectionInfo{}); err != nil {
-		t.Error("We couldn't created the deviceData collection for these tests ", err)
-	}
+	dataCollection(store).Drop(context.TODO())
 
 	if len(docs) > 0 {
-		if err := mgoDataCollection(cpy).Insert(docs...); err != nil {
+		if _, err := dataCollection(store).InsertMany(store.context, docs); err != nil {
 			t.Error("Unable to insert documents", err)
 		}
 	}
@@ -151,7 +144,7 @@ func testDataForLatestTests() map[string]bson.M {
 		"upload1": bson.M{
 			"_active":        true,
 			"_userId":        "abc123",
-			"_schemaVersion": 1,
+			"_schemaVersion": int32(1),
 			"time":           "2019-03-15T01:24:28.000Z",
 			"type":           "upload",
 			"deviceId":       "dev123",
@@ -160,7 +153,7 @@ func testDataForLatestTests() map[string]bson.M {
 		"cbg1": bson.M{
 			"_active":        true,
 			"_userId":        "abc123",
-			"_schemaVersion": 1,
+			"_schemaVersion": int32(1),
 			"time":           "2019-03-15T00:42:51.902Z",
 			"type":           "cbg",
 			"units":          "mmol/L",
@@ -171,7 +164,7 @@ func testDataForLatestTests() map[string]bson.M {
 		"upload2": bson.M{
 			"_active":        true,
 			"_userId":        "abc123",
-			"_schemaVersion": 1,
+			"_schemaVersion": int32(1),
 			"time":           "2019-03-14T01:24:28.000Z",
 			"type":           "upload",
 			"deviceId":       "dev456",
@@ -180,7 +173,7 @@ func testDataForLatestTests() map[string]bson.M {
 		"cbg2": bson.M{
 			"_active":        true,
 			"_userId":        "abc123",
-			"_schemaVersion": 1,
+			"_schemaVersion": int32(1),
 			"time":           "2019-03-14T00:42:51.902Z",
 			"type":           "cbg",
 			"units":          "mmol/L",
@@ -191,7 +184,7 @@ func testDataForLatestTests() map[string]bson.M {
 		"upload3": bson.M{
 			"_active":        true,
 			"_userId":        "xyz123",
-			"_schemaVersion": 1,
+			"_schemaVersion": int32(1),
 			"time":           "2019-03-19T01:24:28.000Z",
 			"type":           "upload",
 			"deviceId":       "dev789",
@@ -200,7 +193,7 @@ func testDataForLatestTests() map[string]bson.M {
 		"cbg3": bson.M{
 			"_active":        true,
 			"_userId":        "xyz123",
-			"_schemaVersion": 1,
+			"_schemaVersion": int32(1),
 			"time":           "2019-03-19T00:42:51.902Z",
 			"type":           "cbg",
 			"units":          "mmol/L",
@@ -1048,11 +1041,19 @@ func TestStore_LatestNoFilter(t *testing.T) {
 		Latest:        true,
 	}
 
-	var result bson.M
-	iter := store.GetDeviceData(qParams)
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Error("Error querying Mongo")
+	}
+
 	resultCount := 0
 	processedResultCount := 0
-	for iter.Next(&result) {
+	for iter.Next(store.context) {
+		var result bson.M
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
 		// For `latest`, we need to look inside the returned results at the `latest_doc` field
 		result = result["latest_doc"].(bson.M)
 		switch dataType := result["type"]; dataType {
@@ -1090,11 +1091,19 @@ func TestStore_LatestTypeFilter(t *testing.T) {
 		Latest:        true,
 	}
 
-	var result bson.M
-	iter := store.GetDeviceData(qParams)
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Error("Error querying Mongo")
+	}
+
 	resultCount := 0
 	processedResultCount := 0
-	for iter.Next(&result) {
+	for iter.Next(store.context) {
+		var result bson.M
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
 		// For `latest`, we need to look inside the returned results at the `latest_doc` field
 		result = result["latest_doc"].(bson.M)
 		switch dataType := result["type"]; dataType {
@@ -1126,11 +1135,19 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 		Latest:        true,
 	}
 
-	var result bson.M
-	iter := store.GetDeviceData(qParams)
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Error("Error querying Mongo")
+	}
+
 	resultCount := 0
 	processedResultCount := 0
-	for iter.Next(&result) {
+	for iter.Next(store.context) {
+		var result bson.M
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
 		// For `latest`, we need to look inside the returned results at the `latest_doc` field
 		result = result["latest_doc"].(bson.M)
 		switch dataType := result["type"]; dataType {
@@ -1168,11 +1185,19 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 		Latest:        true,
 	}
 
-	var result bson.M
-	iter := store.GetDeviceData(qParams)
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Error("Error querying Mongo")
+	}
+
 	resultCount := 0
 	processedResultCount := 0
-	for iter.Next(&result) {
+	for iter.Next(store.context) {
+		var result bson.M
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
 		// For `latest`, we need to look inside the returned results at the `latest_doc` field
 		result = result["latest_doc"].(bson.M)
 		switch dataType := result["type"]; dataType {
