@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
@@ -169,9 +170,13 @@ func main() {
 	}
 
 	storage := store.NewMongoStoreClient(&config.Mongo)
-	err = storage.EnsureIndexes()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+
+	err = storage.WithContext(ctx).EnsureIndexes()
 	if err != nil {
 		log.Fatal(err)
+	} else {
+		cancel()
 	}
 
 	router := pat.New()
@@ -200,7 +205,7 @@ func main() {
 
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
-		if err := storage.Ping(); err != nil {
+		if err := storage.WithContext(req.Context()).Ping(); err != nil {
 			jsonError(res, error_status_check.setInternalMessage(err), start)
 			return
 		}
@@ -225,6 +230,8 @@ func main() {
 	// latest (optional) : Returns only the most recent results for each `type` matching the results filtered by the other query parameters
 	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
+
+		storageWithCtx := storage.WithContext(req.Context())
 
 		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion)
 
@@ -254,7 +261,7 @@ func main() {
 		requestID := NewRequestID()
 		queryStart := time.Now()
 		if _, ok := req.URL.Query()["carelink"]; !ok {
-			if hasMedtronicDirectData, medtronicErr := storage.HasMedtronicDirectData(queryParams.UserId); medtronicErr != nil {
+			if hasMedtronicDirectData, medtronicErr := storageWithCtx.HasMedtronicDirectData(queryParams.UserId); medtronicErr != nil {
 				log.Printf("%s request %s user %s HasMedtronicDirectData returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
 				jsonError(res, error_running_query, start)
 				return
@@ -268,7 +275,7 @@ func main() {
 			queryStart = time.Now()
 		}
 		if !queryParams.Dexcom {
-			if dexcomDataSource, dexcomErr := storage.GetDexcomDataSource(queryParams.UserId); dexcomErr != nil {
+			if dexcomDataSource, dexcomErr := storageWithCtx.GetDexcomDataSource(queryParams.UserId); dexcomErr != nil {
 				log.Printf("%s request %s user %s GetDexcomDataSource returned error: %s", DATA_API_PREFIX, requestID, userID, dexcomErr)
 				jsonError(res, error_running_query, start)
 				return
@@ -281,7 +288,7 @@ func main() {
 			queryStart = time.Now()
 		}
 		if _, ok := req.URL.Query()["medtronic"]; !ok {
-			if hasMedtronicLoopData, medtronicErr := storage.HasMedtronicLoopDataAfter(queryParams.UserId, MedtronicLoopBoundaryDate); medtronicErr != nil {
+			if hasMedtronicLoopData, medtronicErr := storageWithCtx.HasMedtronicLoopDataAfter(queryParams.UserId, MedtronicLoopBoundaryDate); medtronicErr != nil {
 				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
 				jsonError(res, error_running_query, start)
 				return
@@ -294,7 +301,7 @@ func main() {
 			queryStart = time.Now()
 		}
 		if !queryParams.Medtronic {
-			if medtronicUploadIds, medtronicErr := storage.GetLoopableMedtronicDirectUploadIdsAfter(queryParams.UserId, MedtronicLoopBoundaryDate); medtronicErr != nil {
+			if medtronicUploadIds, medtronicErr := storageWithCtx.GetLoopableMedtronicDirectUploadIdsAfter(queryParams.UserId, MedtronicLoopBoundaryDate); medtronicErr != nil {
 				log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
 				jsonError(res, error_running_query, start)
 				return
@@ -309,7 +316,7 @@ func main() {
 			queryStart = time.Now()
 		}
 
-		iter, err := storage.GetDeviceData(queryParams)
+		iter, err := storageWithCtx.GetDeviceData(queryParams)
 		if err != nil {
 			log.Printf("%s request %s user %s Mongo Query returned error: %s", DATA_API_PREFIX, requestID, userID, err)
 		}

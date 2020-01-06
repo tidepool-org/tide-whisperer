@@ -168,13 +168,23 @@ func NewMongoStoreClient(config *tpMongo.Config) *MongoStoreClient {
 		log.Fatal(DATA_STORE_API_PREFIX, err)
 	}
 
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
 	return &MongoStoreClient{
 		client: mongoClient,
-		// FIXME: Should not be `context.TODO()`
-		context: context.TODO(),
+		context: ctx,
 		database: config.Database,
 	}
+}
+
+func (c *MongoStoreClient) WithContext(ctx context.Context) *MongoStoreClient {
+	if ctx == nil {
+		panic("nil context")
+	}
+	c2 := new(MongoStoreClient)
+	*c2 = *c
+	c2.context = ctx
+	return c2
 }
 
 func (c *MongoStoreClient) EnsureIndexes() error {
