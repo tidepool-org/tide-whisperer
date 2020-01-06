@@ -224,11 +224,11 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 				SetName("UserIdTimeWeighted").
 				SetBackground(true).
 				SetPartialFilterExpression(
-					bson.M{
-						"_schemaVersion": bson.M{
+					bson.D{
+						{"_schemaVersion", bson.M{
 							"$gt": 0,
-						},
-						"_active": true,
+						}},
+						{"_active", true},
 					},
 				),
 		},
