@@ -168,11 +168,9 @@ func NewMongoStoreClient(config *tpMongo.Config) *MongoStoreClient {
 		log.Fatal(DATA_STORE_API_PREFIX, err)
 	}
 
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
-
 	return &MongoStoreClient{
 		client: mongoClient,
-		context: ctx,
+		context: context.Background(),
 		database: config.Database,
 	}
 }
