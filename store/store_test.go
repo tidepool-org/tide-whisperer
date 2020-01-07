@@ -71,7 +71,7 @@ func contains(s []string, e string) bool {
 
 func basicQuery() bson.M {
 	qParams := &Params{
-		UserId:        "abc123",
+		UserID:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		Dexcom:        true,
 		Medtronic:     true,
@@ -85,8 +85,8 @@ func allParams() *Params {
 	latestDataTime, _ := time.Parse(time.RFC3339, "2016-12-13T02:00:00Z")
 
 	return &Params{
-		UserId:        "abc123",
-		DeviceId:      "device123",
+		UserID:        "abc123",
+		DeviceID:      "device123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		Date:          Date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
 		Types:         []string{"smbg", "cbg"},
@@ -109,16 +109,16 @@ func allParamsQuery() bson.M {
 	return generateMongoQuery(allParams())
 }
 
-func allParamsIncludingUploadIdQuery() bson.M {
+func allParamsIncludingUploadIDQuery() bson.M {
 	qParams := allParams()
-	qParams.UploadId = "xyz123"
+	qParams.UploadID = "xyz123"
 
 	return generateMongoQuery(qParams)
 }
 
 func typeAndSubtypeQuery() bson.M {
 	qParams := &Params{
-		UserId:             "abc123",
+		UserID:             "abc123",
 		SchemaVersion:      &SchemaVersion{Maximum: 2, Minimum: 0},
 		Types:              []string{"smbg", "cbg"},
 		SubTypes:           []string{"stuff"},
@@ -130,11 +130,11 @@ func typeAndSubtypeQuery() bson.M {
 	return generateMongoQuery(qParams)
 }
 
-func uploadIdQuery() bson.M {
+func uploadIDQuery() bson.M {
 	qParams := &Params{
-		UserId:        "abc123",
+		UserID:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		UploadId:      "xyz123",
+		UploadID:      "xyz123",
 	}
 	return generateMongoQuery(qParams)
 }
@@ -277,7 +277,7 @@ func TestStore_generateMongoQuery_allParams(t *testing.T) {
 
 func TestStore_generateMongoQuery_allparamsWithUploadId(t *testing.T) {
 
-	query := allParamsIncludingUploadIdQuery()
+	query := allParamsIncludingUploadIDQuery()
 
 	expectedQuery := bson.M{
 		"_userId":        "abc123",
@@ -300,7 +300,7 @@ func TestStore_generateMongoQuery_allparamsWithUploadId(t *testing.T) {
 
 func TestStore_generateMongoQuery_uploadId(t *testing.T) {
 
-	query := uploadIdQuery()
+	query := uploadIDQuery()
 
 	expectedQuery := bson.M{
 		"_userId":        "abc123",
@@ -415,7 +415,7 @@ func TestStore_GetParams_Empty(t *testing.T) {
 	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
 
 	expectedParams := &Params{
-		UserId:        "1122334455",
+		UserID:        "1122334455",
 		SchemaVersion: schema,
 		Types:         []string{""},
 		SubTypes:      []string{""},
@@ -439,7 +439,7 @@ func TestStore_GetParams_Medtronic(t *testing.T) {
 	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
 
 	expectedParams := &Params{
-		UserId:        "1122334455",
+		UserID:        "1122334455",
 		SchemaVersion: schema,
 		Types:         []string{""},
 		SubTypes:      []string{""},
@@ -464,11 +464,11 @@ func TestStore_GetParams_UploadId(t *testing.T) {
 	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
 
 	expectedParams := &Params{
-		UserId:        "1122334455",
+		UserID:        "1122334455",
 		SchemaVersion: schema,
 		Types:         []string{""},
 		SubTypes:      []string{""},
-		UploadId:      "xyz123",
+		UploadID:      "xyz123",
 	}
 
 	params, err := GetParams(query, schema)
@@ -1036,7 +1036,7 @@ func TestStore_LatestNoFilter(t *testing.T) {
 	store := before(t, storeData...)
 
 	qParams := &Params{
-		UserId:        "abc123",
+		UserID:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		Latest:        true,
 	}
@@ -1085,7 +1085,7 @@ func TestStore_LatestTypeFilter(t *testing.T) {
 	store := before(t, storeData...)
 
 	qParams := &Params{
-		UserId:        "abc123",
+		UserID:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		Types:         []string{"cbg"},
 		Latest:        true,
@@ -1129,9 +1129,9 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 	store := before(t, storeData...)
 
 	qParams := &Params{
-		UserId:        "abc123",
+		UserID:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		UploadId:      "zzz4bb16e27c4973c2f37af81784a05d",
+		UploadID:      "zzz4bb16e27c4973c2f37af81784a05d",
 		Latest:        true,
 	}
 
@@ -1179,8 +1179,8 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 	store := before(t, storeData...)
 
 	qParams := &Params{
-		UserId:        "xyz123",
-		DeviceId:      "dev789",
+		UserID:        "xyz123",
+		DeviceID:      "dev789",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		Latest:        true,
 	}

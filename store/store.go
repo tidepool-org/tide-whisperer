@@ -48,7 +48,7 @@ type (
 
 	// Params struct
 	Params struct {
-		UserId   string
+		UserID   string
 		Types    []string
 		SubTypes []string
 		Date
@@ -56,12 +56,12 @@ type (
 		Carelink           bool
 		Dexcom             bool
 		DexcomDataSource   bson.M
-		DeviceId           string
+		DeviceID           string
 		Latest             bool
 		Medtronic          bool
 		MedtronicDate      string
 		MedtronicUploadIds []string
-		UploadId           string
+		UploadID           string
 	}
 
 	// Date struct
@@ -140,9 +140,9 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 	}
 
 	p := &Params{
-		UserId:   q.Get(":userID"),
-		DeviceId: q.Get("deviceId"),
-		UploadId: q.Get("uploadId"),
+		UserID:   q.Get(":userID"),
+		DeviceID: q.Get("deviceId"),
+		UploadID: q.Get("uploadId"),
 		//the query params for type and subtype can contain multiple values seperated
 		//by a comma e.g. "type=smbg,cbg" so split them out into an array of values
 		Types:         strings.Split(q.Get("type"), ","),
@@ -270,7 +270,7 @@ func dataCollection(msc *MongoStoreClient) *mongo.Collection {
 func generateMongoQuery(p *Params) bson.M {
 
 	groupDataQuery := bson.M{
-		"_userId":        p.UserId,
+		"_userId":        p.UserID,
 		"_active":        true,
 		"_schemaVersion": bson.M{"$gte": p.SchemaVersion.Minimum, "$lte": p.SchemaVersion.Maximum}}
 
@@ -295,14 +295,14 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["source"] = bson.M{"$ne": "carelink"}
 	}
 
-	if p.DeviceId != "" {
-		groupDataQuery["deviceId"] = p.DeviceId
+	if p.DeviceID != "" {
+		groupDataQuery["deviceId"] = p.DeviceID
 	}
 
 	// If we have an explicit upload ID to filter by, we don't need or want to apply any further
 	// data source-based filtering
-	if p.UploadId != "" {
-		groupDataQuery["uploadId"] = p.UploadId
+	if p.UploadID != "" {
+		groupDataQuery["uploadId"] = p.UploadID
 	} else {
 		andQuery := []bson.M{}
 		if !p.Dexcom && p.DexcomDataSource != nil {
@@ -335,15 +335,6 @@ func generateMongoQuery(p *Params) bson.M {
 
 	return groupDataQuery
 }
-
-// TODO: Remove this - shouldn't disconnect unless exiting.
-/*
-func (d MongoStoreClient) Close() {
-	log.Print(DATA_STORE_API_PREFIX, "Close the session")
-	d.client.Disconnect(d.context)
-	return
-}
-*/
 
 // Ping the MongoDB database
 func (c *MongoStoreClient) Ping() error {

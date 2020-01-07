@@ -30,6 +30,7 @@ import (
 )
 
 type (
+	// Config holds the configuration for the `tide-whisperer` service
 	Config struct {
 		clients.Config
 		Auth                *auth.Config        `json:"auth"`
@@ -42,7 +43,7 @@ type (
 	detailedError struct {
 		Status int `json:"status"`
 		//provided to user so that we can better track down issues
-		Id              string `json:"id"`
+		ID              string `json:"id"`
 		Code            string `json:"code"`
 		Message         string `json:"message"`
 		InternalMessage string `json:"-"` //used only for logging so we don't want to serialize it out
@@ -52,21 +53,20 @@ type (
 )
 
 var (
-	error_status_check = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
-
-	error_no_view_permission = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
-	error_no_permissions     = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissions for user"}
-	error_running_query      = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
-	error_loading_events     = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
-	error_invalid_parameters = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
+	errorStatusCheck       = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
+	errorNoViewPermission  = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
+	errorNoPermissions     = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissions for user"}
+	errorRunningQuery      = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
+	errorLoadingEvents     = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
+	errorInvalidParameters = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
 
 	storage store.Storage
 )
 
 const (
-	DATA_API_PREFIX           = "api/data"
-	MedtronicLoopBoundaryDate = "2017-09-01"
-	SlowQueryDuration         = 0.1 // seconds
+	dataAPIPrefix             = "api/data"
+	medtronicLoopBoundaryDate = "2017-09-01"
+	slowQueryDuration         = 0.1 // seconds
 )
 
 //set the intenal message that we will use for logging
@@ -82,7 +82,7 @@ func main() {
 		[]string{"TIDEPOOL_TIDE_WHISPERER_SERVICE", "TIDEPOOL_TIDE_WHISPERER_ENV"},
 		&config,
 	); err != nil {
-		log.Fatal(DATA_API_PREFIX, " Problem loading config: ", err)
+		log.Fatal(dataAPIPrefix, " Problem loading config: ", err)
 	}
 
 	// server secret may be passed via a separate env variable to accomodate easy secrets injection via Kubernetes
@@ -104,7 +104,7 @@ func main() {
 
 	authClient, err := auth.NewClient(config.Auth, httpClient)
 	if err != nil {
-		log.Fatal(DATA_API_PREFIX, err)
+		log.Fatal(dataAPIPrefix, err)
 	}
 
 	hakkenClient := hakken.NewHakkenBuilder().
@@ -113,11 +113,11 @@ func main() {
 
 	if !config.HakkenConfig.SkipHakken {
 		if err := hakkenClient.Start(); err != nil {
-			log.Fatal(DATA_API_PREFIX, err)
+			log.Fatal(dataAPIPrefix, err)
 		}
 		defer func() {
 			if err := hakkenClient.Close(); err != nil {
-				log.Panic(DATA_API_PREFIX, "Error closing hakkenClient, panicing to get stacks: ", err)
+				log.Panic(dataAPIPrefix, "Error closing hakkenClient, panicing to get stacks: ", err)
 			}
 		}()
 	} else {
@@ -143,7 +143,7 @@ func main() {
 
 		perms, err := gatekeeperClient.UserInGroup(authenticatedUserID, targetUserID)
 		if err != nil {
-			log.Println(DATA_API_PREFIX, "Error looking up user in group", err)
+			log.Println(dataAPIPrefix, "Error looking up user in group", err)
 			return false
 		}
 
@@ -154,9 +154,9 @@ func main() {
 	//log error detail and write as application/json
 	jsonError := func(res http.ResponseWriter, err detailedError, startedAt time.Time) {
 
-		err.Id = uuid.New().String()
+		err.ID = uuid.New().String()
 
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s][%s] failed after [%.3f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
+		log.Println(dataAPIPrefix, fmt.Sprintf("[%s][%s] failed after [%.3f]secs with error [%s][%s] ", err.ID, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
 
 		jsonErr, _ := json.Marshal(err)
 
@@ -206,7 +206,7 @@ func main() {
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 		if err := storage.WithContext(req.Context()).Ping(); err != nil {
-			jsonError(res, error_status_check.setInternalMessage(err), start)
+			jsonError(res, errorStatusCheck.setInternalMessage(err), start)
 			return
 		}
 		res.Write([]byte("OK\n"))
@@ -236,8 +236,8 @@ func main() {
 		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion)
 
 		if err != nil {
-			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing query params: %s", err))
-			jsonError(res, error_invalid_parameters, start)
+			log.Println(dataAPIPrefix, fmt.Sprintf("Error parsing query params: %s", err))
+			jsonError(res, errorInvalidParameters, start)
 			return
 		}
 
@@ -251,65 +251,69 @@ func main() {
 			}
 		}
 
-		userID := queryParams.UserId
+		userID := queryParams.UserID
 		if td == nil || !(td.IsServer || td.UserID == userID || userCanViewData(td.UserID, userID)) {
 			log.Printf("userid %v", userID)
-			jsonError(res, error_no_view_permission, start)
+			jsonError(res, errorNoViewPermission, start)
 			return
 		}
 
 		requestID := NewRequestID()
 		queryStart := time.Now()
 		if _, ok := req.URL.Query()["carelink"]; !ok {
-			if hasMedtronicDirectData, medtronicErr := storageWithCtx.HasMedtronicDirectData(queryParams.UserId); medtronicErr != nil {
-				log.Printf("%s request %s user %s HasMedtronicDirectData returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
-				jsonError(res, error_running_query, start)
+			if hasMedtronicDirectData, medtronicErr := storageWithCtx.HasMedtronicDirectData(queryParams.UserID); medtronicErr != nil {
+				log.Printf("%s request %s user %s HasMedtronicDirectData returned error: %s", dataAPIPrefix, requestID, userID, medtronicErr)
+				jsonError(res, errorRunningQuery, start)
 				return
 			} else if !hasMedtronicDirectData {
 				queryParams.Carelink = true
 			}
-			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
 				// XXX replace with metrics
 				//log.Printf("%s request %s user %s HasMedtronicDirectData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
 		}
 		if !queryParams.Dexcom {
-			if dexcomDataSource, dexcomErr := storageWithCtx.GetDexcomDataSource(queryParams.UserId); dexcomErr != nil {
-				log.Printf("%s request %s user %s GetDexcomDataSource returned error: %s", DATA_API_PREFIX, requestID, userID, dexcomErr)
-				jsonError(res, error_running_query, start)
+			dexcomDataSource, dexcomErr := storageWithCtx.GetDexcomDataSource(queryParams.UserID)
+			if dexcomErr != nil {
+				log.Printf("%s request %s user %s GetDexcomDataSource returned error: %s", dataAPIPrefix, requestID, userID, dexcomErr)
+				jsonError(res, errorRunningQuery, start)
 				return
-			} else {
-				queryParams.DexcomDataSource = dexcomDataSource
 			}
-			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
-				log.Printf("%s request %s user %s GetDexcomDataSource took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			queryParams.DexcomDataSource = dexcomDataSource
+
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
+				log.Printf("%s request %s user %s GetDexcomDataSource took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
 		}
 		if _, ok := req.URL.Query()["medtronic"]; !ok {
-			if hasMedtronicLoopData, medtronicErr := storageWithCtx.HasMedtronicLoopDataAfter(queryParams.UserId, MedtronicLoopBoundaryDate); medtronicErr != nil {
-				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
-				jsonError(res, error_running_query, start)
+			hasMedtronicLoopData, medtronicErr := storageWithCtx.HasMedtronicLoopDataAfter(queryParams.UserID, medtronicLoopBoundaryDate)
+			if medtronicErr != nil {
+				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter returned error: %s", dataAPIPrefix, requestID, userID, medtronicErr)
+				jsonError(res, errorRunningQuery, start)
 				return
-			} else if !hasMedtronicLoopData {
+			}
+			if !hasMedtronicLoopData {
 				queryParams.Medtronic = true
 			}
-			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
-				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
+				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
 		}
 		if !queryParams.Medtronic {
-			if medtronicUploadIds, medtronicErr := storageWithCtx.GetLoopableMedtronicDirectUploadIdsAfter(queryParams.UserId, MedtronicLoopBoundaryDate); medtronicErr != nil {
-				log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
-				jsonError(res, error_running_query, start)
+			medtronicUploadIds, medtronicErr := storageWithCtx.GetLoopableMedtronicDirectUploadIdsAfter(queryParams.UserID, medtronicLoopBoundaryDate)
+			if medtronicErr != nil {
+				log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter returned error: %s", dataAPIPrefix, requestID, userID, medtronicErr)
+				jsonError(res, errorRunningQuery, start)
 				return
-			} else {
-				queryParams.MedtronicDate = MedtronicLoopBoundaryDate
-				queryParams.MedtronicUploadIds = medtronicUploadIds
 			}
-			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
+			queryParams.MedtronicDate = medtronicLoopBoundaryDate
+			queryParams.MedtronicUploadIds = medtronicUploadIds
+
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
 				// XXX replace with metrics
 				//log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 			}
@@ -318,7 +322,7 @@ func main() {
 
 		iter, err := storageWithCtx.GetDeviceData(queryParams)
 		if err != nil {
-			log.Printf("%s request %s user %s Mongo Query returned error: %s", DATA_API_PREFIX, requestID, userID, err)
+			log.Printf("%s request %s user %s Mongo Query returned error: %s", dataAPIPrefix, requestID, userID, err)
 		}
 
 		defer iter.Close(req.Context())
@@ -333,7 +337,7 @@ func main() {
 			var results map[string]interface{}
 			err := iter.Decode(&results)
 			if err != nil {
-				log.Printf("%s request %s user %s Mongo Decode returned error: %s", DATA_API_PREFIX, requestID, userID, err)
+				log.Printf("%s request %s user %s Mongo Decode returned error: %s", dataAPIPrefix, requestID, userID, err)
 			}
 
 			if queryParams.Latest {
@@ -345,7 +349,7 @@ func main() {
 			}
 			if len(results) > 0 {
 				if bytes, err := json.Marshal(results); err != nil {
-					log.Printf("%s request %s user %s Marshal returned error: %s", DATA_API_PREFIX, requestID, userID, err)
+					log.Printf("%s request %s user %s Marshal returned error: %s", dataAPIPrefix, requestID, userID, err)
 				} else {
 					if writeCount > 0 {
 						res.Write([]byte(","))
@@ -362,11 +366,11 @@ func main() {
 		}
 		res.Write([]byte("]"))
 
-		if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
+		if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
 			// XXX use metrics
 			//log.Printf("%s request %s user %s GetDeviceData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 		}
-		log.Printf("%s request %s user %s took %.3fs returned %d records", DATA_API_PREFIX, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
+		log.Printf("%s request %s user %s took %.3fs returned %d records", dataAPIPrefix, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
 	})))
 
 	done := make(chan bool)
@@ -383,7 +387,7 @@ func main() {
 		start = func() error { return server.ListenAndServe() }
 	}
 	if err := start(); err != nil {
-		log.Fatal(DATA_API_PREFIX, err)
+		log.Fatal(dataAPIPrefix, err)
 	}
 	hakkenClient.Publish(&config.Service)
 
@@ -392,7 +396,7 @@ func main() {
 	go func() {
 		for {
 			sig := <-signals
-			log.Printf(DATA_API_PREFIX+" Got signal [%s]", sig)
+			log.Printf(dataAPIPrefix+" Got signal [%s]", sig)
 
 			if sig == syscall.SIGINT || sig == syscall.SIGTERM {
 				server.Close()
@@ -404,6 +408,7 @@ func main() {
 	<-done
 }
 
+// NewRequestID returns a new random hexadecimal ID
 func NewRequestID() string {
 	bytes := make([]byte, 8)
 	_, _ = rand.Read(bytes) // In case of failure, do not fail request, just use default bytes (zero)
