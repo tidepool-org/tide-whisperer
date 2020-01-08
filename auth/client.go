@@ -10,17 +10,20 @@ import (
 	"net/http"
 )
 
+// Config holds the configuration for the Auth Client
 type Config struct {
 	Address       string `json:"address"`
 	ServiceSecret string `json:"serviceSecret"`
 	UserAgent     string `json:"userAgent"`
 }
 
+// Client holds the state of the Auth Client
 type Client struct {
 	config     *Config
 	httpClient *http.Client
 }
 
+// NewClient creates a new Auth Client
 func NewClient(config *Config, httpClient *http.Client) (*Client, error) {
 	if config == nil {
 		return nil, errors.New("config is missing")
@@ -35,6 +38,7 @@ func NewClient(config *Config, httpClient *http.Client) (*Client, error) {
 	}, nil
 }
 
+// GetRestrictedToken fetches a restricted token from the `auth` service
 func (c *Client) GetRestrictedToken(ctx context.Context, id string) (*RestrictedToken, error) {
 	if ctx == nil {
 		return nil, errors.New("context is missing")
