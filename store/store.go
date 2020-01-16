@@ -248,6 +248,20 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 					},
 				),
 		},
+		{
+			Keys: bson.D{{Key: "deviceId", Value: 1}, {Key: "time", Value: -1}, {Key: "type", Value: 1}},
+			Options: options.Index().
+				SetName("DeviceId").
+				SetBackground(true).
+				SetPartialFilterExpression(
+					bson.D{
+						{Key: "_schemaVersion", Value: bson.M{
+							"$gt": 0,
+						}},
+						{Key: "_active", Value: true},
+					},
+				),
+		},
 	}
 
 	opts := options.CreateIndexes().SetMaxTime(10 * time.Second)
