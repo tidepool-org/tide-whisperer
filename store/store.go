@@ -18,7 +18,7 @@ import (
 
 const (
 	dataCollectionName = "deviceData"
-	dataStoreAPIPrefix = "api/data/store"
+	dataStoreAPIPrefix = "api/data/store "
 )
 
 type (
