@@ -64,7 +64,7 @@ var (
 )
 
 const (
-	dataAPIPrefix             = "api/data"
+	dataAPIPrefix             = "api/data "
 	medtronicLoopBoundaryDate = "2017-09-01"
 	slowQueryDuration         = 0.1 // seconds
 )
@@ -78,11 +78,15 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 func main() {
 	var config Config
 
+	log.SetOutput(os.Stdout)
+	log.SetPrefix(dataAPIPrefix)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	if err := common.LoadEnvironmentConfig(
 		[]string{"TIDEPOOL_TIDE_WHISPERER_SERVICE", "TIDEPOOL_TIDE_WHISPERER_ENV"},
 		&config,
 	); err != nil {
-		log.Fatal(dataAPIPrefix, " Problem loading config: ", err)
+		log.Fatal(dataAPIPrefix, "Problem loading config: ", err)
 	}
 
 	// server secret may be passed via a separate env variable to accomodate easy secrets injection via Kubernetes
