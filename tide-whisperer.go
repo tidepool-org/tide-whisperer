@@ -77,7 +77,6 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 func main() {
 	var config Config
 
-	log.SetOutput(os.Stdout)
 	log.SetPrefix(dataAPIPrefix)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
