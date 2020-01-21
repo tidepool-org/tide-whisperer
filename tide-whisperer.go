@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
@@ -89,7 +88,7 @@ func main() {
 		log.Fatal(dataAPIPrefix, "Problem loading config: ", err)
 	}
 
-	// server secret may be passed via a separate env variable to accomodate easy secrets injection via Kubernetes
+	// server secret may be passed via a separate env variable to accommodate easy secrets injection via Kubernetes
 	serverSecret, found := os.LookupEnv("SERVER_SECRET")
 	if found {
 		config.ShorelineConfig.Secret = serverSecret
@@ -174,14 +173,8 @@ func main() {
 	}
 
 	storage := store.NewMongoStoreClient(&config.Mongo)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-
-	err = storage.WithContext(ctx).EnsureIndexes()
-	if err != nil {
-		log.Fatal(err)
-	} else {
-		cancel()
-	}
+	defer storage.Disconnect()
+	storage.EnsureIndexes()
 
 	router := pat.New()
 
