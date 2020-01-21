@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/url"
 	"strconv"
@@ -18,7 +19,7 @@ import (
 
 const (
 	dataCollectionName = "deviceData"
-	dataStoreAPIPrefix = "api/data/store"
+	dataStoreAPIPrefix = "api/data/store "
 )
 
 type (
@@ -161,16 +162,15 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 
 // NewMongoStoreClient creates a new MongoStoreClient
 func NewMongoStoreClient(config *tpMongo.Config) *MongoStoreClient {
-
 	connectionString, err := config.ToConnectionString()
 	if err != nil {
-		log.Fatal(dataStoreAPIPrefix, err)
+		log.Fatal(dataStoreAPIPrefix, fmt.Sprintf("Invalid MongoDB configuration: %s", err))
 	}
 
 	clientOptions := options.Client().ApplyURI(connectionString)
-	mongoClient, err := mongo.Connect(context.TODO(), clientOptions)
+	mongoClient, err := mongo.Connect(context.Background(), clientOptions)
 	if err != nil {
-		log.Fatal(dataStoreAPIPrefix, err)
+		log.Fatal(dataStoreAPIPrefix, fmt.Sprintf("Invalid MongoDB connection string: %s", err))
 	}
 
 	return &MongoStoreClient{
@@ -192,7 +192,8 @@ func (c *MongoStoreClient) WithContext(ctx context.Context) *MongoStoreClient {
 	return c2
 }
 
-// EnsureIndexes exist for the MongoDB collection
+// EnsureIndexes exist for the MongoDB collection. EnsureIndexes uses the Background() context, in order
+// to pass back the MongoDB errors, rather than any context errors.
 func (c *MongoStoreClient) EnsureIndexes() error {
 	indexes := []mongo.IndexModel{
 		{
@@ -266,8 +267,8 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 
 	opts := options.CreateIndexes().SetMaxTime(10 * time.Second)
 
-	if _, err := dataCollection(c).Indexes().CreateMany(c.context, indexes, opts); err != nil {
-		log.Fatal(dataStoreAPIPrefix, err)
+	if _, err := dataCollection(c).Indexes().CreateMany(context.Background(), indexes, opts); err != nil {
+		log.Fatal(dataStoreAPIPrefix, fmt.Sprintf("Unable to create indexes: %s", err))
 	}
 
 	return nil
@@ -354,6 +355,11 @@ func generateMongoQuery(p *Params) bson.M {
 func (c *MongoStoreClient) Ping() error {
 	// do we have a store session
 	return c.client.Ping(c.context, nil)
+}
+
+// Disconnect from the MongoDB database
+func (c *MongoStoreClient) Disconnect() error {
+	return c.client.Disconnect(c.context)
 }
 
 // HasMedtronicDirectData - check whether the userID has Medtronic data that has been uploaded via Uploader
