@@ -265,9 +265,7 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 		},
 	}
 
-	opts := options.CreateIndexes().SetMaxTime(10 * time.Second)
-
-	if _, err := dataCollection(c).Indexes().CreateMany(context.Background(), indexes, opts); err != nil {
+	if _, err := dataCollection(c).Indexes().CreateMany(context.Background(), indexes); err != nil {
 		log.Fatal(dataStoreAPIPrefix, fmt.Sprintf("Unable to create indexes: %s", err))
 	}
 
