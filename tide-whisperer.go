@@ -183,6 +183,14 @@ func main() {
 		res.WriteHeader(501)
 		return
 	}))
+	router.Add("GET", "/swagger/docs/v2", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(501)
+		return
+	}))
+	router.Add("GET", "/swagger.json", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(501)
+		return
+	}))
 
 	router.Add("GET", "/v1", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(501)
