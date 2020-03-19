@@ -75,15 +75,6 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 	return d
 }
 
-func inArray(needle string, arr []string) bool {
-	for _, n := range arr {
-		if needle == n {
-			return true
-		}
-	}
-	return false
-}
-
 func main() {
 	var config Config
 
@@ -218,7 +209,7 @@ func main() {
 	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 
-		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion)
+		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion, &config.Mongo)
 
 		if err != nil {
 			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing query params: %s", err))
@@ -303,22 +294,10 @@ func main() {
 
 		var parametersHistory map[string]interface{}
 		var parametersHistoryErr error
-		if inArray("pumpSettings", queryParams.Types) || (len(queryParams.Types) == 1 && queryParams.Types[0] == "") {
+		if store.InArray("pumpSettings", queryParams.Types) || (len(queryParams.Types) == 1 && queryParams.Types[0] == "") {
 			log.Printf("Calling GetDiabeloopParametersHistory")
-			defaultLevelFilter := make([]int, 1)
-			defaultLevelFilter = append(defaultLevelFilter, 1)
 
-			var device string
-			var deviceErr error
-			if device, deviceErr = storage.GetDeviceModel(queryParams.UserId); deviceErr != nil {
-				log.Printf("Error in GetDeviceModel for user %s. Error: %s", queryParams.UserId, deviceErr)
-			}
-			if device == "DBLHU" {
-				defaultLevelFilter = append(defaultLevelFilter, 2)
-				defaultLevelFilter = append(defaultLevelFilter, 3)
-			}
-
-			if parametersHistory, parametersHistoryErr = storage.GetDiabeloopParametersHistory(queryParams.UserId, defaultLevelFilter); parametersHistoryErr != nil {
+			if parametersHistory, parametersHistoryErr = storage.GetDiabeloopParametersHistory(queryParams.UserId, queryParams.LevelFilter); parametersHistoryErr != nil {
 				log.Printf("%s request %s user %s GetDiabeloopParametersHistory returned error: %s", DATA_API_PREFIX, requestID, userID, parametersHistoryErr)
 				jsonError(res, error_running_query, start)
 				return

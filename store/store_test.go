@@ -426,9 +426,10 @@ func TestStore_GetParams_Empty(t *testing.T) {
 		SchemaVersion: schema,
 		Types:         []string{""},
 		SubTypes:      []string{""},
+		LevelFilter:   []int{0, 1},
 	}
 
-	params, err := GetParams(query, schema)
+	params, err := GetParams(query, schema, testingConfig)
 
 	if err != nil {
 		t.Error("should not have received error, but got one")
@@ -451,9 +452,10 @@ func TestStore_GetParams_Medtronic(t *testing.T) {
 		Types:         []string{""},
 		SubTypes:      []string{""},
 		Medtronic:     true,
+		LevelFilter:   []int{0, 1},
 	}
 
-	params, err := GetParams(query, schema)
+	params, err := GetParams(query, schema, testingConfig)
 
 	if err != nil {
 		t.Error("should not have received error, but got one")
@@ -476,9 +478,10 @@ func TestStore_GetParams_UploadId(t *testing.T) {
 		Types:         []string{""},
 		SubTypes:      []string{""},
 		UploadId:      "xyz123",
+		LevelFilter:   []int{0, 1},
 	}
 
-	params, err := GetParams(query, schema)
+	params, err := GetParams(query, schema, testingConfig)
 
 	if err != nil {
 		t.Error("should not have received error, but got one")

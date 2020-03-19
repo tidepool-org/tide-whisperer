@@ -1,21 +1,26 @@
 # Tide-whisperer
 
 Data access API for tidepool
+
+# 0.5.0 - 2020-03-19
+### Changed
+- PT-1150 Add filter on parameter level based on model
+
 # 0.4.0 - 2019-10-28 
 ### Added 
-- [PT-734] Display the application version number on the status endpoint (/status).
+- PT-734 Display the application version number on the status endpoint (/status).
 
 # 0.3.2 
 ### Fixed 
-- [PT-649] Get Level 2 and 3 parameters for parameter history
+- PT-649 Get Level 2 and 3 parameters for parameter history
 
 ## 0.3.1
 ### Added
-- [PT-607] DBLHU users should access to Level 1 and Level 2 parameters in the parameters history.
+- PT-607 DBLHU users should access to Level 1 and Level 2 parameters in the parameters history.
 
 ## 0.3.0
 ### Added
-- [PT-511] Access diabeloop system parameters history from tide-whisperer
+- PT-511 Access diabeloop system parameters history from tide-whisperer
 
 ## 0.2.0 
 ### Added

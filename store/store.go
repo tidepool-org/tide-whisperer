@@ -58,6 +58,7 @@ type (
 		MedtronicDate      string
 		MedtronicUploadIds []string
 		UploadId           string
+		LevelFilter        []int
 	}
 
 	Date struct {
@@ -71,6 +72,15 @@ type (
 	}
 )
 
+func InArray(needle string, arr []string) bool {
+	for _, n := range arr {
+		if needle == n {
+			return true
+		}
+	}
+	return false
+}
+
 func cleanDateString(dateString string) (string, error) {
 	if dateString == "" {
 		return "", nil
@@ -82,7 +92,7 @@ func cleanDateString(dateString string) (string, error) {
 	return date.Format(time.RFC3339Nano), nil
 }
 
-func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
+func GetParams(q url.Values, schema *SchemaVersion, config *mongo.Config) (*Params, error) {
 
 	startStr, err := cleanDateString(q.Get("startDate"))
 	if err != nil {
@@ -138,6 +148,23 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		}
 	}
 
+	storage := NewMongoStoreClient(config)
+
+	// get Device model
+	var device string
+	var deviceErr error
+	var UserID = q.Get(":userID")
+	if device, deviceErr = storage.GetDeviceModel(UserID); deviceErr != nil {
+		log.Printf("Error in GetDeviceModel for user %s. Error: %s", UserID, deviceErr)
+	}
+
+	LevelFilter := make([]int, 1)
+	LevelFilter = append(LevelFilter, 1)
+	if device == "DBLHU" {
+		LevelFilter = append(LevelFilter, 2)
+		LevelFilter = append(LevelFilter, 3)
+	}
+
 	p := &Params{
 		UserId:   q.Get(":userID"),
 		DeviceId: q.Get("deviceId"),
@@ -152,6 +179,7 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		Dexcom:        dexcom,
 		Latest:        latest,
 		Medtronic:     medtronic,
+		LevelFilter:   LevelFilter,
 	}
 
 	return p, nil
@@ -183,6 +211,8 @@ func mgoParametersHistoryCollection(cpy *mgo.Session) *mgo.Collection {
 // on parameters
 func generateMongoQuery(p *Params) bson.M {
 
+	finalQuery := bson.M{}
+	skipParamsQuery := false
 	groupDataQuery := bson.M{
 		"_userId":        p.UserId,
 		"_active":        true,
@@ -191,10 +221,16 @@ func generateMongoQuery(p *Params) bson.M {
 	//if optional parameters are present, then add them to the query
 	if len(p.Types) > 0 && p.Types[0] != "" {
 		groupDataQuery["type"] = bson.M{"$in": p.Types}
+		if !InArray("deviceEvent", p.Types) {
+			skipParamsQuery = true
+		}
 	}
 
 	if len(p.SubTypes) > 0 && p.SubTypes[0] != "" {
 		groupDataQuery["subType"] = bson.M{"$in": p.SubTypes}
+		if !InArray("deviceParameter", p.SubTypes) {
+			skipParamsQuery = true
+		}
 	}
 
 	if p.Date.Start != "" && p.Date.End != "" {
@@ -211,12 +247,14 @@ func generateMongoQuery(p *Params) bson.M {
 
 	if p.DeviceId != "" {
 		groupDataQuery["deviceId"] = p.DeviceId
+		skipParamsQuery = true
 	}
 
 	// If we have an explicit upload ID to filter by, we don't need or want to apply any further
 	// data source-based filtering
 	if p.UploadId != "" {
 		groupDataQuery["uploadId"] = p.UploadId
+		finalQuery = groupDataQuery
 	} else {
 		andQuery := []bson.M{}
 		if !p.Dexcom && p.DexcomDataSource != nil {
@@ -244,10 +282,36 @@ func generateMongoQuery(p *Params) bson.M {
 
 		if len(andQuery) > 0 {
 			groupDataQuery["$and"] = andQuery
+			finalQuery = groupDataQuery
+		} else if skipParamsQuery || len(p.LevelFilter) == 0 {
+			finalQuery = groupDataQuery
+		} else {
+			paramQuery := []bson.M{}
+			// create the level filter as string
+			levelFilterAsString := []string{}
+			for value := range p.LevelFilter {
+				levelFilterAsString = append(levelFilterAsString, strconv.Itoa(value))
+			}
+			paramQuery = append(paramQuery, groupDataQuery)
+
+			deviceParametersQuery := bson.M{}
+			deviceParametersQuery["type"] = "deviceEvent"
+			deviceParametersQuery["subType"] = "deviceParameter"
+			deviceParametersQuery["level"] = bson.M{"$in": levelFilterAsString}
+			otherDataQuery := bson.M{}
+			otherDataQuery["type"] = bson.M{"$ne": "deviceEvent"}
+			otherDataQuery["subType"] = bson.M{"$ne": "deviceParameter"}
+
+			orQuery := []bson.M{}
+			orQuery = append(orQuery, deviceParametersQuery)
+			orQuery = append(orQuery, otherDataQuery)
+
+			paramQuery = append(paramQuery, bson.M{"$or": orQuery})
+			finalQuery = bson.M{"$and": paramQuery}
 		}
 	}
 
-	return groupDataQuery
+	return finalQuery
 }
 
 func (d MongoStoreClient) Close() {
@@ -339,10 +403,10 @@ func (d MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string) 
 	defer session.Close()
 
 	query := bson.M{
-		"_active":                            true,
-		"_userId":                            userID,
-		"_schemaVersion":                     bson.M{"$gt": 0},
-		"time":                               bson.M{"$gte": date},
+		"_active":        true,
+		"_userId":        userID,
+		"_schemaVersion": bson.M{"$gt": 0},
+		"time":           bson.M{"$gte": date},
 		"origin.payload.device.manufacturer": "Medtronic",
 	}
 
@@ -549,11 +613,11 @@ func (d MongoStoreClient) GetDeviceModel(userID string) (string, error) {
 	payLoadDeviceNameQuery[1] = bson.M{"payload.device.name": bson.M{"$ne": nil}}
 
 	query := bson.M{
-		"_userId": userID,
-		// "type":    "upload",
-		// "_state":  "closed",
-		"_active": true,
-		"$and":    payLoadDeviceNameQuery,
+		"_userId":        userID,
+		"type":           "pumpSettings",
+		"_schemaVersion": bson.M{"$gt": 0},
+		"_active":        true,
+		"$and":           payLoadDeviceNameQuery,
 	}
 
 	session := d.session.Copy()
