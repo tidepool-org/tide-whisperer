@@ -299,7 +299,6 @@ func generateMongoQuery(p *Params) bson.M {
 			deviceParametersQuery["subType"] = "deviceParameter"
 			deviceParametersQuery["level"] = bson.M{"$in": levelFilterAsString}
 			otherDataQuery := bson.M{}
-			otherDataQuery["type"] = bson.M{"$ne": "deviceEvent"}
 			otherDataQuery["subType"] = bson.M{"$ne": "deviceParameter"}
 
 			orQuery := []bson.M{}

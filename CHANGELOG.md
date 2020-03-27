@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+# 0.5.1 - 2020-03-26
+### Fixed
+- PT-1220 ReservoirChange objects are not retrieved
+
 # 0.5.0 - 2020-03-19
 ### Changed
 - PT-1150 Add filter on parameter level based on model
