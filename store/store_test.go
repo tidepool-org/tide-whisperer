@@ -1053,8 +1053,6 @@ func TestStore_LatestNoFilter(t *testing.T) {
 	resultCount := 0
 	processedResultCount := 0
 	for iter.Next(&result) {
-		// For `latest`, we need to look inside the returned results at the `latest_doc` field
-		result = result["latest_doc"].(bson.M)
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
@@ -1095,8 +1093,6 @@ func TestStore_LatestTypeFilter(t *testing.T) {
 	resultCount := 0
 	processedResultCount := 0
 	for iter.Next(&result) {
-		// For `latest`, we need to look inside the returned results at the `latest_doc` field
-		result = result["latest_doc"].(bson.M)
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
@@ -1131,8 +1127,6 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 	resultCount := 0
 	processedResultCount := 0
 	for iter.Next(&result) {
-		// For `latest`, we need to look inside the returned results at the `latest_doc` field
-		result = result["latest_doc"].(bson.M)
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
@@ -1173,8 +1167,6 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 	resultCount := 0
 	processedResultCount := 0
 	for iter.Next(&result) {
-		// For `latest`, we need to look inside the returned results at the `latest_doc` field
-		result = result["latest_doc"].(bson.M)
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
