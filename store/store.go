@@ -428,9 +428,9 @@ func (d MongoStoreClient) GetDeviceData(p *Params) StorageIterator {
 								"$expr": bson.M{
 									"$and": []bson.M{
 										{"$eq": []string{"$_userId", "$$searchUserId"}},
-										{"$eq": []string{"$_active", "true"}},
+										{"$eq": []interface{}{"$_active", true}},
 										{"$eq": []string{"$type", "$$searchType"}},
-										{"$gt": []string{"$_schemaVersion", "0"}},
+										{"$gt": []interface{}{"$_schemaVersion", 0}},
 										{"$eq": []string{"$time", "$$searchTime"}},
 									},
 								},
