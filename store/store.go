@@ -410,36 +410,44 @@ func (d MongoStoreClient) GetDeviceData(p *Params) StorageIterator {
 			{
 				"$group": bson.M{
 					"_id": bson.M{
-						"type": "$type",
+						"userId": "$_userId",
+						"type":   "$type",
 					},
 					"groupId": bson.M{
-						"$first": "$_id",
+						"$first": "$time",
 					},
 				},
 			},
 			{
 				"$lookup": bson.M{
-					"from":         "deviceData",
-					"localField":   "groupId",
-					"foreignField": "_id",
-					"as":           "latest_doc",
+					"from": "deviceData",
+					"let":  bson.M{"searchUserId": "$_id.userId", "searchType": "$_id.type", "searchTime": "$groupId"},
+					"pipeline": []bson.M{
+						{
+							"$match": bson.M{
+								"$expr": bson.M{
+									"$and": []bson.M{
+										{"$eq": []string{"$_userId", "$$searchUserId"}},
+										{"$eq": []string{"$type", "$$searchType"}},
+										{"$eq": []string{"$time", "$$searchTime"}},
+									},
+								},
+							},
+						},
+					},
+					"as": "latest_doc",
 				},
 			},
 			{
 				"$unwind": "$latest_doc",
 			},
-			/*
-				// TODO: we can only use this code once we upgrade to MongoDB 3.4+
-				// We would also need to update the corresponding code in `tide-whisperer.go`
-				// (search for "latest_doc")
-				{
-					"$replaceRoot": bson.M{
-						"newRoot": "$latest_doc"
-					},
+			{
+				"$replaceRoot": bson.M{
+					"newRoot": "$latest_doc",
 				},
-			*/
+			},
 		}
-		pipe := mgoDataCollection(session).Pipe(pipeline)
+		pipe := mgoDataCollection(session).Pipe(pipeline).AllowDiskUse()
 		iter = pipe.Iter()
 	} else {
 		iter = mgoDataCollection(session).
