@@ -436,6 +436,7 @@ func (d MongoStoreClient) GetDeviceData(p *Params) StorageIterator {
 								},
 							},
 						},
+						{"$limit": 1},
 					},
 					"as": "latest_doc",
 				},
