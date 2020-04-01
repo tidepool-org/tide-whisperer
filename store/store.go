@@ -447,7 +447,9 @@ func (l *latestIterator) Next(result interface{}) bool {
 		return false
 	}
 
-	l.Iterators[l.pos].Next(result)
+	if l.Iterators[l.pos] != nil {
+		l.Iterators[l.pos].Next(result)
+	}
 	l.pos++
 	return true
 }
