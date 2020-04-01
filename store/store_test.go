@@ -213,10 +213,10 @@ func testDataForLatestTests() map[string]bson.M {
 	return testData
 }
 
-func outputData(inputData bson.M) bson.M {
+func dropInternalKeys(inputData bson.M) bson.M {
 	outputData := bson.M{}
 	for k, v := range inputData {
-		if string(k[0]) != "_" {
+		if !strings.HasPrefix(k, "_") {
 			outputData[k] = v
 		}
 	}
@@ -1066,14 +1066,14 @@ func TestStore_LatestNoFilter(t *testing.T) {
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
-			compareResult := outputData(testData["cbg1"])
+			compareResult := dropInternalKeys(testData["cbg1"])
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
 			processedResultCount++
 		case "upload":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
-			compareResult := outputData(testData["upload1"])
+			compareResult := dropInternalKeys(testData["upload1"])
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'upload' result when requesting latest data")
 			}
@@ -1108,7 +1108,7 @@ func TestStore_LatestTypeFilter(t *testing.T) {
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
-			compareResult := outputData(testData["cbg1"])
+			compareResult := dropInternalKeys(testData["cbg1"])
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
@@ -1143,14 +1143,14 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
-			compareResult := outputData(testData["cbg2"])
+			compareResult := dropInternalKeys(testData["cbg2"])
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
 			processedResultCount++
 		case "upload":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
-			compareResult := outputData(testData["upload2"])
+			compareResult := dropInternalKeys(testData["upload2"])
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'upload' result when requesting latest data")
 			}
@@ -1185,14 +1185,14 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
-			compareResult := outputData(testData["cbg3"])
+			compareResult := dropInternalKeys(testData["cbg3"])
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
 			processedResultCount++
 		case "upload":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
-			compareResult := outputData(testData["upload3"])
+			compareResult := dropInternalKeys(testData["upload3"])
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'upload' result when requesting latest data")
 			}
