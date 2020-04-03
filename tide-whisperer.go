@@ -330,7 +330,7 @@ func main() {
 					}
 					res.Write([]byte("\n"))
 					res.Write(bytes)
-					writeCount += 1
+					writeCount++
 				}
 			}
 		}

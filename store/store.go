@@ -63,9 +63,19 @@ type (
 		End   string
 	}
 
-	ClosingSessionIterator struct {
+	returnIterator interface {
+		Close() error
+		Next(result interface{}) bool
+	}
+
+	latestIterator struct {
+		Iterators []*mgo.Iter
+		pos       int
+	}
+
+	closingSessionIterator struct {
 		*mgo.Session
-		*mgo.Iter
+		Iter returnIterator
 	}
 )
 
@@ -392,66 +402,32 @@ func (d MongoStoreClient) GetDeviceData(p *Params) StorageIterator {
 	// closes session when the iterator is closed. See ClosingSessionIterator below.
 	session := d.session.Copy()
 
-	var iter *mgo.Iter
+	var iter returnIterator
 
 	if p.Latest {
-		// Create an $aggregate query to return the latest of each `type` requested
-		// that matches the query parameters
-		pipeline := []bson.M{
-			{
-				"$match": generateMongoQuery(p),
-			},
-			{
-				"$sort": bson.M{
-					"type": 1,
-					"time": -1,
-				},
-			},
-			{
-				"$group": bson.M{
-					"_id": bson.M{
-						"userId": "$_userId",
-						"type":   "$type",
-					},
-					"groupId": bson.M{
-						"$first": "$time",
-					},
-				},
-			},
-			{
-				"$lookup": bson.M{
-					"from": "deviceData",
-					"let":  bson.M{"searchUserId": "$_id.userId", "searchType": "$_id.type", "searchTime": "$groupId"},
-					"pipeline": []bson.M{
-						{
-							"$match": bson.M{
-								"$expr": bson.M{
-									"$and": []bson.M{
-										{"$eq": []string{"$_userId", "$$searchUserId"}},
-										{"$eq": []interface{}{"$_active", true}},
-										{"$eq": []string{"$type", "$$searchType"}},
-										{"$gt": []interface{}{"$_schemaVersion", 0}},
-										{"$eq": []string{"$time", "$$searchTime"}},
-									},
-								},
-							},
-						},
-						{"$limit": 1},
-					},
-					"as": "latest_doc",
-				},
-			},
-			{
-				"$unwind": "$latest_doc",
-			},
-			{
-				"$replaceRoot": bson.M{
-					"newRoot": "$latest_doc",
-				},
-			},
+		latest := &latestIterator{pos: 0, Iterators: []*mgo.Iter{}}
+
+		var typeRanges []string
+		if len(p.Types) > 0 && p.Types[0] != "" {
+			typeRanges = p.Types
+		} else {
+			typeRanges = []string{"physicalActivity", "basal", "cbg", "smbg", "bloodKetone", "bolus", "wizard", "deviceEvent", "food", "insulin", "cgmSettings", "pumpSettings", "reportedState", "upload"}
 		}
-		pipe := mgoDataCollection(session).Pipe(pipeline).AllowDiskUse()
-		iter = pipe.Iter()
+		for _, theType := range typeRanges {
+			query := generateMongoQuery(p)
+			query["type"] = theType
+			result := mgoDataCollection(session).
+				Find(query).
+				Select(removeFieldsForReturn).
+				Sort("-time").
+				Limit(1).
+				Iter()
+			if !result.Done() {
+				latest.Append(result)
+			}
+		}
+
+		iter = latest
 	} else {
 		iter = mgoDataCollection(session).
 			Find(generateMongoQuery(p)).
@@ -459,17 +435,40 @@ func (d MongoStoreClient) GetDeviceData(p *Params) StorageIterator {
 			Iter()
 	}
 
-	return &ClosingSessionIterator{session, iter}
+	return &closingSessionIterator{session, iter}
 }
 
-func (i *ClosingSessionIterator) Next(result interface{}) bool {
+func (l *latestIterator) Append(itr *mgo.Iter) {
+	l.Iterators = append(l.Iterators, itr)
+}
+
+func (l *latestIterator) Next(result interface{}) bool {
+	if len(l.Iterators) == l.pos {
+		return false
+	}
+
+	if l.Iterators[l.pos] != nil {
+		l.Iterators[l.pos].Next(result)
+	}
+	l.pos++
+	return true
+}
+
+func (l *latestIterator) Close() (err error) {
+	for _, i := range l.Iterators {
+		err = i.Close()
+	}
+	return err
+}
+
+func (i *closingSessionIterator) Next(result interface{}) bool {
 	if i.Iter != nil {
 		return i.Iter.Next(result)
 	}
 	return false
 }
 
-func (i *ClosingSessionIterator) Close() (err error) {
+func (i *closingSessionIterator) Close() (err error) {
 	if i.Iter != nil {
 		err = i.Iter.Close()
 		i.Iter = nil
