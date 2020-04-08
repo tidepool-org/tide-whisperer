@@ -4,4 +4,4 @@ wget -q -O artifact_go.sh 'https://raw.githubusercontent.com/mdblp/tools/dblp/ar
 chmod +x artifact_go.sh
 
 . ./version.sh
-./artifact_go.sh go
+./artifact_go.sh
