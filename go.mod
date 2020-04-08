@@ -2,6 +2,10 @@ module github.com/tidepool-org/tide-whisperer
 
 go 1.12
 
+replace github.com/tidepool-org/shoreline => ./
+
+replace github.com/tidepool-org/go-common => github.com/mdblp/go-common v0.3.0
+
 require (
 	github.com/DataDog/zstd v1.4.4 // indirect
 	github.com/daaku/go.httpgzip v0.0.0-20180202095102-86d27ccd810b
@@ -15,7 +19,7 @@ require (
 	github.com/gorilla/pat v1.0.1
 	github.com/pkg/errors v0.8.1 // indirect
 	github.com/stretchr/testify v1.3.0 // indirect
-	github.com/tidepool-org/go-common v0.5.0
+	github.com/tidepool-org/go-common v0.0.0-00010101000000-000000000000
 	github.com/tidwall/pretty v1.0.0 // indirect
 	github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c // indirect
 	github.com/xdg/stringprep v1.0.0 // indirect

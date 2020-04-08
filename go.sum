@@ -33,8 +33,8 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.3.0 h1:TivCn/peBQ7UY8ooIcPgZFpTNSz0Q2U6UrFlUfqbe0Q=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
-github.com/tidepool-org/go-common v0.5.0 h1:Atycq5m1l0P8YBRTz0NZGs8PKAx7cr8iRQzzdyRXFCo=
-github.com/tidepool-org/go-common v0.5.0/go.mod h1:tZr3DhGKfB4CbgwaeItEW7sulUXZTBUJ1vi4SVgdYxE=
+github.com/mdblp/go-common v0.3.0 h1:EoOBT+HhkGDdACvR8IZKtNGOnPNXXZY+OP/mxw78Nc4=
+github.com/mdblp/go-common v0.3.0/go.mod h1:EmpjlH/eTkSyv2HOvH4CfAH8Gg3h0tBw+mOSYjS5OaU=
 github.com/tidwall/pretty v1.0.0 h1:HsD+QiTn7sK6flMKIvNmpqz1qrpP3Ps6jOKIKMooyg4=
 github.com/tidwall/pretty v1.0.0/go.mod h1:XNkn88O1ChpSDQmQeStsy+sBenx6DDtFZJxhVysOjyk=
 github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c h1:u40Z8hqBAAQyv+vATcGgV0YCnDjqSL7/q/JyPhhJSPk=

@@ -1,4 +1,9 @@
 export TIDEPOOL_TIDE_WHISPERER_ENV='{
+  "auth": { 
+    "address": "http://${PLATFORM_AUTH_HOST}:9222", 
+    "serviceSecret": "${PLATFORM_AUTH_SERVICE_SECRET}", 
+    "userAgent": "Tidepool-TideWhisperer"
+  }
   "hakken": { "host": "localhost:8000" },
   "gatekeeper": { "serviceSpec": { "type": "static", "hosts": ["http://localhost:9123"] } },
   "seagull": { "serviceSpec": { "type": "static", "hosts": ["http://localhost:9120"] } },

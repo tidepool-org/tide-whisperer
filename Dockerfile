@@ -1,8 +1,9 @@
 # Development
 FROM golang:1.12.7-alpine AS development
+ENV GO111MODULE=on
 WORKDIR /go/src/github.com/tidepool-org/tide-whisperer
 RUN adduser -D tidepool && \
-    apk add --no-cache gcc musl-dev && \
+    apk add --no-cache gcc musl-dev git && \
     chown -R tidepool /go/src/github.com/tidepool-org/tide-whisperer
 USER tidepool
 COPY --chown=tidepool . .

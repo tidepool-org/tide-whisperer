@@ -139,6 +139,54 @@ func uploadIDQuery() bson.M {
 	return generateMongoQuery(qParams)
 }
 
+func blipQuery() bson.M {
+	qParams := &Params{
+		UserID:        "abc123",
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		LevelFilter:   []int{1, 2},
+		Date:          Date{"2015-10-07T15:00:00.000Z", "2015-11-07T15:00:00.000Z"},
+	}
+
+	return generateMongoQuery(qParams)
+}
+
+func typesWithDeviceEventQuery() bson.M {
+	qParams := &Params{
+		UserID:        "abc123",
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		LevelFilter:   []int{1, 2},
+		Date:          Date{"2015-10-07T15:00:00.000Z", "2015-11-07T15:00:00.000Z"},
+		Types:         []string{"deviceEvent", "food"},
+	}
+
+	return generateMongoQuery(qParams)
+}
+
+func typesWithoutDeviceEventQuery() bson.M {
+	qParams := &Params{
+		UserID:        "abc123",
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		LevelFilter:   []int{1, 2},
+		Date:          Date{"2015-10-07T15:00:00.000Z", "2015-11-07T15:00:00.000Z"},
+		Types:         []string{"food"},
+	}
+
+	return generateMongoQuery(qParams)
+}
+
+func typesWithDeviceEventAndSubTypeQuery() bson.M {
+	qParams := &Params{
+		UserID:        "abc123",
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		LevelFilter:   []int{1, 2},
+		Date:          Date{"2015-10-07T15:00:00.000Z", "2015-11-07T15:00:00.000Z"},
+		Types:         []string{"deviceEvent", "food"},
+		SubTypes:      []string{"reservoirChange"},
+	}
+
+	return generateMongoQuery(qParams)
+}
+
 func testDataForLatestTests() map[string]bson.M {
 	testData := map[string]bson.M{
 		"upload1": bson.M{
@@ -346,6 +394,118 @@ func TestStore_generateMongoQuery_noDates(t *testing.T) {
 	}
 }
 
+func TestStore_generateMongoQuery_blip(t *testing.T) {
+
+	query := blipQuery()
+
+	expectedQuery := bson.M{
+		"$and": []bson.M{
+			{
+				"_userId":        "abc123",
+				"_active":        true,
+				"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
+				"source":         bson.M{"$ne": "carelink"},
+				"time": bson.M{
+					"$gte": "2015-10-07T15:00:00.000Z",
+					"$lte": "2015-11-07T15:00:00.000Z"},
+			},
+			bson.M{"$or": []bson.M{
+				bson.M{
+					"level":   bson.M{"$in": []string{"0", "1"}},
+					"subType": "deviceParameter",
+					"type":    "deviceEvent",
+				},
+				bson.M{"subType": bson.M{"$ne": "deviceParameter"}},
+			},
+			},
+		},
+	}
+
+	eq := reflect.DeepEqual(query, expectedQuery)
+	if !eq {
+		t.Error(getErrString(query, expectedQuery))
+	}
+}
+
+func TestStore_generateMongoQuery_withDETypes(t *testing.T) {
+
+	query := typesWithDeviceEventQuery()
+
+	expectedQuery := bson.M{
+		"$and": []bson.M{
+			{
+				"_userId":        "abc123",
+				"_active":        true,
+				"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
+				"source":         bson.M{"$ne": "carelink"},
+				"time": bson.M{
+					"$gte": "2015-10-07T15:00:00.000Z",
+					"$lte": "2015-11-07T15:00:00.000Z"},
+				"type": bson.M{"$in": []string{"deviceEvent", "food"}},
+			},
+			bson.M{"$or": []bson.M{
+				bson.M{
+					"level":   bson.M{"$in": []string{"0", "1"}},
+					"subType": "deviceParameter",
+					"type":    "deviceEvent",
+				},
+				bson.M{"subType": bson.M{"$ne": "deviceParameter"}},
+			},
+			},
+		},
+	}
+
+	eq := reflect.DeepEqual(query, expectedQuery)
+	if !eq {
+		t.Error(getErrString(query, expectedQuery))
+	}
+}
+
+func TestStore_generateMongoQuery_withoutDETypes(t *testing.T) {
+
+	query := typesWithoutDeviceEventQuery()
+
+	expectedQuery := bson.M{
+		"_userId": "abc123",
+		"_active": true,
+		"time": bson.M{
+			"$gte": "2015-10-07T15:00:00.000Z",
+			"$lte": "2015-11-07T15:00:00.000Z"},
+		"type":           bson.M{"$in": []string{"food"}},
+		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
+		"source": bson.M{
+			"$ne": "carelink",
+		},
+	}
+
+	eq := reflect.DeepEqual(query, expectedQuery)
+	if !eq {
+		t.Error(getErrString(query, expectedQuery))
+	}
+}
+
+func TestStore_generateMongoQuery_withDETypesAndSubType(t *testing.T) {
+
+	query := typesWithDeviceEventAndSubTypeQuery()
+
+	expectedQuery := bson.M{
+		"_userId":        "abc123",
+		"_active":        true,
+		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
+		"source":         bson.M{"$ne": "carelink"},
+		"time": bson.M{
+			"$gte": "2015-10-07T15:00:00.000Z",
+			"$lte": "2015-11-07T15:00:00.000Z"},
+		"type":    bson.M{"$in": []string{"deviceEvent", "food"}},
+		"subType": bson.M{"$in": []string{"reservoirChange"}},
+	}
+
+	eq := reflect.DeepEqual(query, expectedQuery)
+	if !eq {
+		t.Error(getErrString(query, expectedQuery))
+	}
+}
+
 func TestStore_Ping(t *testing.T) {
 
 	store := before(t)
@@ -419,9 +579,10 @@ func TestStore_GetParams_Empty(t *testing.T) {
 		SchemaVersion: schema,
 		Types:         []string{""},
 		SubTypes:      []string{""},
+		LevelFilter:   []int{0, 1},
 	}
 
-	params, err := GetParams(query, schema)
+	params, err := GetParams(query, schema, testingConfig)
 
 	if err != nil {
 		t.Error("should not have received error, but got one")
@@ -444,9 +605,10 @@ func TestStore_GetParams_Medtronic(t *testing.T) {
 		Types:         []string{""},
 		SubTypes:      []string{""},
 		Medtronic:     true,
+		LevelFilter:   []int{0, 1},
 	}
 
-	params, err := GetParams(query, schema)
+	params, err := GetParams(query, schema, testingConfig)
 
 	if err != nil {
 		t.Error("should not have received error, but got one")
@@ -469,9 +631,10 @@ func TestStore_GetParams_UploadId(t *testing.T) {
 		Types:         []string{""},
 		SubTypes:      []string{""},
 		UploadID:      "xyz123",
+		LevelFilter:   []int{0, 1},
 	}
 
-	params, err := GetParams(query, schema)
+	params, err := GetParams(query, schema, testingConfig)
 
 	if err != nil {
 		t.Error("should not have received error, but got one")
@@ -1220,4 +1383,41 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 	if resultCount < 2 || processedResultCount < 2 {
 		t.Error("Not enough results when requesting latest data")
 	}
+}
+func TestStore_GetDeviceModel(t *testing.T) {
+	store := before(t,
+		bson.M{
+			"_active":        true,
+			"_userId":        "dblg1_1",
+			"_schemaVersion": 1,
+			"time":           "2019-01-19T00:42:51.902Z",
+			"type":           "pumpSettings",
+			"payload": bson.M{
+				"device": bson.M{
+					"name": "DBLHU",
+				},
+			},
+		},
+		bson.M{
+			"_active":        true,
+			"_userId":        "dblg1_1",
+			"_schemaVersion": 1,
+			"time":           "2019-03-19T00:42:51.902Z",
+			"type":           "pumpSettings",
+			"payload": bson.M{
+				"device": bson.M{
+					"name": "DBLG1",
+				},
+			},
+		})
+	var res string
+	var err error
+	if res, err = store.GetDeviceModel("dblg1_1"); err != nil {
+		t.Errorf("Unexpected Error during device model request: %s", err)
+	}
+	// Retreiving latest (time field desc) payload.device.name not null value
+	if res != "DBLG1" {
+		t.Errorf("%s should be equal to DBLG1", res)
+	}
+
 }

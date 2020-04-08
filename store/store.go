@@ -18,8 +18,10 @@ import (
 )
 
 const (
-	dataCollectionName = "deviceData"
-	dataStoreAPIPrefix = "api/data/store "
+	dataCollectionName          = "deviceData"
+	dataStoreAPIPrefix          = "api/data/store "
+	portalDb                    = "portal"
+	parametersHistoryCollection = "patient_parameters_history"
 )
 
 type (
@@ -63,6 +65,7 @@ type (
 		MedtronicDate      string
 		MedtronicUploadIds []string
 		UploadID           string
+		LevelFilter        []int
 	}
 
 	// Date struct
@@ -71,6 +74,15 @@ type (
 		End   string
 	}
 )
+
+func InArray(needle string, arr []string) bool {
+	for _, n := range arr {
+		if needle == n {
+			return true
+		}
+	}
+	return false
+}
 
 func cleanDateString(dateString string) (string, error) {
 	if dateString == "" {
@@ -84,7 +96,7 @@ func cleanDateString(dateString string) (string, error) {
 }
 
 // GetParams parses a URL to set parameters
-func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
+func GetParams(q url.Values, schema *SchemaVersion, config *tpMongo.Config) (*Params, error) {
 
 	startStr, err := cleanDateString(q.Get("startDate"))
 	if err != nil {
@@ -140,6 +152,23 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		}
 	}
 
+	storage := NewMongoStoreClient(config)
+
+	// get Device model
+	var device string
+	var deviceErr error
+	var UserID = q.Get(":userID")
+	if device, deviceErr = storage.GetDeviceModel(UserID); deviceErr != nil {
+		log.Printf("Error in GetDeviceModel for user %s. Error: %s", UserID, deviceErr)
+	}
+
+	LevelFilter := make([]int, 1)
+	LevelFilter = append(LevelFilter, 1)
+	if device == "DBLHU" {
+		LevelFilter = append(LevelFilter, 2)
+		LevelFilter = append(LevelFilter, 3)
+	}
+
 	p := &Params{
 		UserID:   q.Get(":userID"),
 		DeviceID: q.Get("deviceId"),
@@ -154,6 +183,7 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		Dexcom:        dexcom,
 		Latest:        latest,
 		Medtronic:     medtronic,
+		LevelFilter:   LevelFilter,
 	}
 
 	return p, nil
@@ -275,6 +305,9 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 func dataCollection(msc *MongoStoreClient) *mongo.Collection {
 	return msc.client.Database(msc.database).Collection(dataCollectionName)
 }
+func mgoParametersHistoryCollection(msc *MongoStoreClient) *mongo.Collection {
+	return msc.client.Database(portalDb).Collection(parametersHistoryCollection)
+}
 
 // generateMongoQuery takes in a number of parameters and constructs a mongo query
 // to retrieve objects from the Tidepool database. It is used by the router.Add("GET", "/{userID}"
@@ -282,6 +315,8 @@ func dataCollection(msc *MongoStoreClient) *mongo.Collection {
 // on parameters
 func generateMongoQuery(p *Params) bson.M {
 
+	finalQuery := bson.M{}
+	skipParamsQuery := false
 	groupDataQuery := bson.M{
 		"_userId":        p.UserID,
 		"_active":        true,
@@ -290,10 +325,16 @@ func generateMongoQuery(p *Params) bson.M {
 	//if optional parameters are present, then add them to the query
 	if len(p.Types) > 0 && p.Types[0] != "" {
 		groupDataQuery["type"] = bson.M{"$in": p.Types}
+		if !InArray("deviceEvent", p.Types) {
+			skipParamsQuery = true
+		}
 	}
 
 	if len(p.SubTypes) > 0 && p.SubTypes[0] != "" {
 		groupDataQuery["subType"] = bson.M{"$in": p.SubTypes}
+		if !InArray("deviceParameter", p.SubTypes) {
+			skipParamsQuery = true
+		}
 	}
 
 	if p.Date.Start != "" && p.Date.End != "" {
@@ -310,12 +351,14 @@ func generateMongoQuery(p *Params) bson.M {
 
 	if p.DeviceID != "" {
 		groupDataQuery["deviceId"] = p.DeviceID
+		skipParamsQuery = true
 	}
 
 	// If we have an explicit upload ID to filter by, we don't need or want to apply any further
 	// data source-based filtering
 	if p.UploadID != "" {
 		groupDataQuery["uploadId"] = p.UploadID
+		finalQuery = groupDataQuery
 	} else {
 		andQuery := []bson.M{}
 		if !p.Dexcom && p.DexcomDataSource != nil {
@@ -343,10 +386,35 @@ func generateMongoQuery(p *Params) bson.M {
 
 		if len(andQuery) > 0 {
 			groupDataQuery["$and"] = andQuery
+			finalQuery = groupDataQuery
+		} else if skipParamsQuery || len(p.LevelFilter) == 0 {
+			finalQuery = groupDataQuery
+		} else {
+			paramQuery := []bson.M{}
+			// create the level filter as string
+			levelFilterAsString := []string{}
+			for value := range p.LevelFilter {
+				levelFilterAsString = append(levelFilterAsString, strconv.Itoa(value))
+			}
+			paramQuery = append(paramQuery, groupDataQuery)
+
+			deviceParametersQuery := bson.M{}
+			deviceParametersQuery["type"] = "deviceEvent"
+			deviceParametersQuery["subType"] = "deviceParameter"
+			deviceParametersQuery["level"] = bson.M{"$in": levelFilterAsString}
+			otherDataQuery := bson.M{}
+			otherDataQuery["subType"] = bson.M{"$ne": "deviceParameter"}
+
+			orQuery := []bson.M{}
+			orQuery = append(orQuery, deviceParametersQuery)
+			orQuery = append(orQuery, otherDataQuery)
+
+			paramQuery = append(paramQuery, bson.M{"$or": orQuery})
+			finalQuery = bson.M{"$and": paramQuery}
 		}
 	}
 
-	return groupDataQuery
+	return finalQuery
 }
 
 // Ping the MongoDB database
@@ -552,4 +620,120 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (*mongo.Cursor, error) {
 		SetProjection(bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0})
 	return dataCollection(c).
 		Find(c.context, generateMongoQuery(p), opts)
+}
+
+func (c *MongoStoreClient) GetDiabeloopParametersHistory(userID string, levels []int) (bson.M, error) {
+	if userID == "" {
+		return nil, errors.New("user id is missing")
+	}
+	if levels == nil {
+		levels = make([]int, 1)
+		levels[0] = 1
+	}
+
+	var bsonLevels = make([]interface{}, len(levels))
+	for i, d := range levels {
+		bsonLevels[i] = d
+	}
+
+	// session := d.session.Copy()
+	// defer session.Close()
+
+	query := []bson.M{
+		// Filtering on userid
+		{
+			"$match": bson.M{"userid": userID},
+		},
+		// unnesting history array (keeping index for future grouping)
+		{
+			"$unwind": bson.M{"path": "$history", "includeArrayIndex": "historyIdx"},
+		},
+		// unnesting history.parameters array
+		{
+			"$unwind": "$history.parameters",
+		},
+		// filtering level parameters
+		{
+			"$match": bson.M{
+				"history.parameters.level": bson.M{"$in": bsonLevels},
+			},
+		},
+		// removing unnecessary fields
+		{
+			"$project": bson.M{
+				"userid":     1,
+				"historyIdx": 1,
+				"_id":        0,
+				"parameters": bson.M{
+					"changeType": "$history.parameters.changeType", "name": "$history.parameters.name",
+					"value": "$history.parameters.value", "unit": "$history.parameters.unit",
+					"level": "$history.parameters.level", "effectiveDate": "$history.parameters.effectiveDate",
+				},
+			},
+		},
+		// grouping by change
+		{
+			"$group": bson.M{
+				"_id":        bson.M{"historyIdx": "$historyIdx", "userid": "$userid"},
+				"parameters": bson.M{"$addToSet": "$parameters"},
+				"changeDate": bson.M{"$max": "$parameters.effectiveDate"},
+			},
+		},
+		// grouping all changes in one array
+		{
+			"$group": bson.M{
+				"_id":     bson.M{"userid": "$userid"},
+				"history": bson.M{"$addToSet": bson.M{"parameters": "$parameters", "changeDate": "$changeDate"}},
+			},
+		},
+		// removing unnecessary fields
+		{
+			"$project": bson.M{"_id": 0},
+		},
+	}
+	dataSources := []bson.M{}
+	cursor, err := mgoParametersHistoryCollection(c).Aggregate(c.context, query)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(c.context)
+	err = cursor.All(c.context, &dataSources)
+	if err != nil {
+		return nil, err
+	} else if len(dataSources) == 0 {
+		return nil, nil
+	}
+
+	return dataSources[0], nil
+}
+func (c *MongoStoreClient) GetDeviceModel(userID string) (string, error) {
+
+	if userID == "" {
+		return "", errors.New("user id is missing")
+	}
+
+	var payLoadDeviceNameQuery = make([]interface{}, 2)
+	payLoadDeviceNameQuery[0] = bson.M{"payload.device.name": bson.M{"$exists": true}}
+	payLoadDeviceNameQuery[1] = bson.M{"payload.device.name": bson.M{"$ne": nil}}
+
+	query := bson.M{
+		"_userId":        userID,
+		"type":           "pumpSettings",
+		"_schemaVersion": bson.M{"$gt": 0},
+		"_active":        true,
+		"$and":           payLoadDeviceNameQuery,
+	}
+
+	var res map[string]interface{}
+	opts := options.FindOne()
+	opts.SetSort(bson.D{{"time", -1}})
+	opts.SetProjection(bson.M{"payload.device.name": 1})
+
+	err := dataCollection(c).FindOne(c.context, query, opts).Decode(&res)
+	if err != nil {
+		return "", err
+	}
+
+	device := res["payload"].(map[string]interface{})["device"].(map[string]interface{})
+	return device["name"].(string), err
 }

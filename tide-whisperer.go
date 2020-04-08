@@ -23,6 +23,7 @@ import (
 	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/shoreline"
+	"github.com/tidepool-org/go-common/clients/status"
 
 	"github.com/tidepool-org/tide-whisperer/auth"
 	"github.com/tidepool-org/tide-whisperer/store"
@@ -153,13 +154,13 @@ func main() {
 		return !(perms["root"] == nil && perms["view"] == nil)
 	}
 
+	logError := func(err *detailedError, startedAt time.Time) {
+		err.ID = uuid.New().String()
+		log.Println(dataAPIPrefix, fmt.Sprintf("[%s][%s] failed after [%.3f]secs with error [%s][%s] ", err.ID, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
+	}
 	//log error detail and write as application/json
 	jsonError := func(res http.ResponseWriter, err detailedError, startedAt time.Time) {
-
-		err.ID = uuid.New().String()
-
-		log.Println(dataAPIPrefix, fmt.Sprintf("[%s][%s] failed after [%.3f]secs with error [%s][%s] ", err.ID, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
-
+		logError(&err, startedAt)
 		jsonErr, _ := json.Marshal(err)
 
 		res.Header().Add("content-type", "application/json")
@@ -201,11 +202,21 @@ func main() {
 
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
-		if err := storage.WithContext(req.Context()).Ping(); err != nil {
-			jsonError(res, errorStatusCheck.setInternalMessage(err), start)
-			return
+		var s status.ApiStatus
+		if err := storage.Ping(); err != nil {
+			errorLog := errorStatusCheck.setInternalMessage(err)
+			logError(&errorLog, start)
+			s = status.NewApiStatus(errorLog.Status, err.Error())
+		} else {
+			s = status.NewApiStatus(http.StatusOK, "OK")
 		}
-		res.Write([]byte("OK\n"))
+		if jsonDetails, err := json.Marshal(s); err != nil {
+			jsonError(res, errorLoadingEvents.setInternalMessage(err), start)
+		} else {
+			res.Header().Add("content-type", "application/json")
+			res.WriteHeader(s.Status.Code)
+			res.Write(jsonDetails)
+		}
 		return
 	}))
 
@@ -229,7 +240,7 @@ func main() {
 
 		storageWithCtx := storage.WithContext(req.Context())
 
-		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion)
+		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion, &config.Mongo)
 
 		if err != nil {
 			log.Println(dataAPIPrefix, fmt.Sprintf("Error parsing query params: %s", err))
@@ -323,6 +334,17 @@ func main() {
 
 		defer iter.Close(req.Context())
 
+		var parametersHistory map[string]interface{}
+		var parametersHistoryErr error
+		if store.InArray("pumpSettings", queryParams.Types) || (len(queryParams.Types) == 1 && queryParams.Types[0] == "") {
+			log.Printf("Calling GetDiabeloopParametersHistory")
+
+			if parametersHistory, parametersHistoryErr = storage.GetDiabeloopParametersHistory(queryParams.UserID, queryParams.LevelFilter); parametersHistoryErr != nil {
+				log.Printf("%s request %s user %s GetDiabeloopParametersHistory returned error: %s", dataAPIPrefix, requestID, userID, parametersHistoryErr)
+				jsonError(res, errorRunningQuery, start)
+				return
+			}
+		}
 		var writeCount int
 
 		res.Header().Add("Content-Type", "application/json")
@@ -344,6 +366,11 @@ func main() {
 				results = results["latest_doc"].(map[string]interface{})
 			}
 			if len(results) > 0 {
+				if results["type"].(string) == "pumpSettings" && parametersHistory != nil {
+					payload := results["payload"].(map[string]interface{})
+					payload["history"] = parametersHistory["history"]
+					results["payload"] = payload
+				}
 				if bytes, err := json.Marshal(results); err != nil {
 					log.Printf("%s request %s user %s Marshal returned error: %s", dataAPIPrefix, requestID, userID, err)
 				} else {
