@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+# UNRELEASED
+### Added 
+- PT-1232 Integrate latest changes from Tidepool develop branch
+
 # 0.5.1 - 2020-03-26
 ### Fixed
 - PT-1220 ReservoirChange objects are not retrieved

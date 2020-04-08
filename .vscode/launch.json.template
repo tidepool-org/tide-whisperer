@@ -12,7 +12,13 @@
             "program": "${fileDirname}",
             "env": {
                 "TIDEPOOL_TIDE_WHISPERER_ENV": "{\"auth\": {\"address\": \"http://${PLATFORM_AUTH_HOST}:9222\",\"serviceSecret\": \"${PLATFORM_AUTH_SERVICE_SECRET}\",\"userAgent\":\"Tidepool-TideWhisperer\"}, \"gatekeeper\": {\"serviceSpec\": {\"type\": \"static\", \"hosts\": [\"http://localhost:9123\"]}},\"hakken\": {\"host\": \"localhost:8000\"},\"seagull\": {\"serviceSpec\": {\"type\": \"static\", \"hosts\": [\"http://localhost:9120\"]}},\"shoreline\": {\"name\": \"tide-whisperer\",\"secret\": \"This needs to be the same secret everywhere. YaHut75NsK1f9UKUXuWqxNN0RUwHFBCy\",\"serviceSpec\": {\"type\": \"static\", \"hosts\": [\"http://localhost:9107\"]},\"tokenRefreshInterval\": \"1h\"}}",
-                "TIDEPOOL_TIDE_WHISPERER_SERVICE": "{\"auth_secret\": \"${AUTH_SECRET}\", \"mongo\": {\"connectionString\": \"mongodb://${HEALTH_DATA_ACCOUNT}:${HEALTH_DATA_PWD}@localhost/data?authSource=admin&ssl=false\"},\"schemaVersion\": {\"maximum\": 99,\"minimum\": 1},\"service\": {\"certFile\": \"config/cert.pem\",\"host\": \"localhost:9127\",\"keyFile\": \"config/key.pem\",\"protocol\": \"http\",\"service\": \"tide-whisperer\"}}"
+                "TIDEPOOL_TIDE_WHISPERER_SERVICE": "{\"auth_secret\": \"${AUTH_SECRET}\", \"schemaVersion\": {\"maximum\": 99,\"minimum\": 1},\"service\": {\"certFile\": \"config/cert.pem\",\"host\": \"localhost:9127\",\"keyFile\": \"config/key.pem\",\"protocol\": \"http\",\"service\": \"tide-whisperer\"}}",
+                "TIDEPOOL_STORE_ADDRESSES": "localhost",
+                "TIDEPOOL_STORE_DATABASE": "data",
+                "TIDEPOOL_STORE_USERNAME": "${HEALTH_DATA_ACCOUNT}",
+                "TIDEPOOL_STORE_PASSWORD": "${HEALTH_DATA_PWD}",
+                "TIDEPOOL_STORE_OPT_PARAMS": "&authSource=admin&ssl=false",
+                "CGO_ENABLED": 0
             },
             "args": []
         }

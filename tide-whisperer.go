@@ -14,8 +14,8 @@ import (
 	"time"
 
 	httpgzip "github.com/daaku/go.httpgzip"
+	"github.com/google/uuid"
 	"github.com/gorilla/pat"
-	uuid "github.com/satori/go.uuid"
 
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
@@ -30,6 +30,7 @@ import (
 )
 
 type (
+	// Config holds the configuration for the `tide-whisperer` service
 	Config struct {
 		clients.Config
 		Auth                *auth.Config        `json:"auth"`
@@ -42,7 +43,7 @@ type (
 	detailedError struct {
 		Status int `json:"status"`
 		//provided to user so that we can better track down issues
-		Id              string `json:"id"`
+		ID              string `json:"id"`
 		Code            string `json:"code"`
 		Message         string `json:"message"`
 		InternalMessage string `json:"-"` //used only for logging so we don't want to serialize it out
@@ -52,21 +53,20 @@ type (
 )
 
 var (
-	error_status_check = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
-
-	error_no_view_permisson  = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
-	error_no_permissons      = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissons for user"}
-	error_running_query      = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
-	error_loading_events     = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
-	error_invalid_parameters = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
+	errorStatusCheck       = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
+	errorNoViewPermission  = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
+	errorNoPermissions     = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissions for user"}
+	errorRunningQuery      = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
+	errorLoadingEvents     = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
+	errorInvalidParameters = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
 
 	storage store.Storage
 )
 
 const (
-	DATA_API_PREFIX           = "api/data"
-	MedtronicLoopBoundaryDate = "2017-09-01"
-	SlowQueryDuration         = 0.1 // seconds
+	dataAPIPrefix             = "api/data "
+	medtronicLoopBoundaryDate = "2017-09-01"
+	slowQueryDuration         = 0.1 // seconds
 )
 
 //set the intenal message that we will use for logging
@@ -78,14 +78,17 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 func main() {
 	var config Config
 
+	log.SetPrefix(dataAPIPrefix)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	if err := common.LoadEnvironmentConfig(
 		[]string{"TIDEPOOL_TIDE_WHISPERER_SERVICE", "TIDEPOOL_TIDE_WHISPERER_ENV"},
 		&config,
 	); err != nil {
-		log.Fatal(DATA_API_PREFIX, " Problem loading config: ", err)
+		log.Fatal(dataAPIPrefix, "Problem loading config: ", err)
 	}
 
-	// server secret may be passed via a separate env variable to accomodate easy secrets injection via Kubernetes
+	// server secret may be passed via a separate env variable to accommodate easy secrets injection via Kubernetes
 	serverSecret, found := os.LookupEnv("SERVER_SECRET")
 	if found {
 		config.ShorelineConfig.Secret = serverSecret
@@ -95,6 +98,8 @@ func main() {
 		config.Auth.ServiceSecret = authSecret
 	}
 
+	config.Mongo.FromEnv()
+
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -102,7 +107,7 @@ func main() {
 
 	authClient, err := auth.NewClient(config.Auth, httpClient)
 	if err != nil {
-		log.Fatal(DATA_API_PREFIX, err)
+		log.Fatal(dataAPIPrefix, err)
 	}
 
 	hakkenClient := hakken.NewHakkenBuilder().
@@ -111,11 +116,11 @@ func main() {
 
 	if !config.HakkenConfig.SkipHakken {
 		if err := hakkenClient.Start(); err != nil {
-			log.Fatal(DATA_API_PREFIX, err)
+			log.Fatal(dataAPIPrefix, err)
 		}
 		defer func() {
 			if err := hakkenClient.Close(); err != nil {
-				log.Panic(DATA_API_PREFIX, "Error closing hakkenClient, panicing to get stacks: ", err)
+				log.Panic(dataAPIPrefix, "Error closing hakkenClient, panicing to get stacks: ", err)
 			}
 		}()
 	} else {
@@ -141,7 +146,7 @@ func main() {
 
 		perms, err := gatekeeperClient.UserInGroup(authenticatedUserID, targetUserID)
 		if err != nil {
-			log.Println(DATA_API_PREFIX, "Error looking up user in group", err)
+			log.Println(dataAPIPrefix, "Error looking up user in group", err)
 			return false
 		}
 
@@ -150,8 +155,8 @@ func main() {
 	}
 
 	logError := func(err *detailedError, startedAt time.Time) {
-		err.Id = uuid.NewV4().String()
-		log.Println(DATA_API_PREFIX, fmt.Sprintf("[%s][%s] failed after [%.3f]secs with error [%s][%s] ", err.Id, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
+		err.ID = uuid.New().String()
+		log.Println(dataAPIPrefix, fmt.Sprintf("[%s][%s] failed after [%.3f]secs with error [%s][%s] ", err.ID, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
 	}
 	//log error detail and write as application/json
 	jsonError := func(res http.ResponseWriter, err detailedError, startedAt time.Time) {
@@ -168,21 +173,45 @@ func main() {
 	}
 
 	storage := store.NewMongoStoreClient(&config.Mongo)
+	defer storage.Disconnect()
+	storage.EnsureIndexes()
 
 	router := pat.New()
+
+	/*
+	 Gloo performs autodiscovery by trying certain paths,
+	 including /swagger, /v1, and v2.  Unfortunately, tide-whisperer
+	 interprets those paths as userids.  To avoid misleading
+	 error messages, we catch these calls and return an error
+	 code.
+	*/
+	router.Add("GET", "/swagger", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(501)
+		return
+	}))
+
+	router.Add("GET", "/v1", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(501)
+		return
+	}))
+
+	router.Add("GET", "/v2", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(501)
+		return
+	}))
 
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 		var s status.ApiStatus
 		if err := storage.Ping(); err != nil {
-			errorLog := error_status_check.setInternalMessage(err)
+			errorLog := errorStatusCheck.setInternalMessage(err)
 			logError(&errorLog, start)
 			s = status.NewApiStatus(errorLog.Status, err.Error())
 		} else {
 			s = status.NewApiStatus(http.StatusOK, "OK")
 		}
 		if jsonDetails, err := json.Marshal(s); err != nil {
-			jsonError(res, error_loading_events.setInternalMessage(err), start)
+			jsonError(res, errorLoadingEvents.setInternalMessage(err), start)
 		} else {
 			res.Header().Add("content-type", "application/json")
 			res.WriteHeader(s.Status.Code)
@@ -209,11 +238,13 @@ func main() {
 	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 
+		storageWithCtx := storage.WithContext(req.Context())
+
 		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion, &config.Mongo)
 
 		if err != nil {
-			log.Println(DATA_API_PREFIX, fmt.Sprintf("Error parsing query params: %s", err))
-			jsonError(res, error_invalid_parameters, start)
+			log.Println(dataAPIPrefix, fmt.Sprintf("Error parsing query params: %s", err))
+			jsonError(res, errorInvalidParameters, start)
 			return
 		}
 
@@ -227,92 +258,109 @@ func main() {
 			}
 		}
 
-		userID := queryParams.UserId
+		userID := queryParams.UserID
 		if td == nil || !(td.IsServer || td.UserID == userID || userCanViewData(td.UserID, userID)) {
-			jsonError(res, error_no_view_permisson, start)
+			log.Printf("userid %v", userID)
+			jsonError(res, errorNoViewPermission, start)
 			return
 		}
 
 		requestID := NewRequestID()
 		queryStart := time.Now()
 		if _, ok := req.URL.Query()["carelink"]; !ok {
-			if hasMedtronicDirectData, medtronicErr := storage.HasMedtronicDirectData(queryParams.UserId); medtronicErr != nil {
-				log.Printf("%s request %s user %s HasMedtronicDirectData returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
-				jsonError(res, error_running_query, start)
+			if hasMedtronicDirectData, medtronicErr := storageWithCtx.HasMedtronicDirectData(queryParams.UserID); medtronicErr != nil {
+				log.Printf("%s request %s user %s HasMedtronicDirectData returned error: %s", dataAPIPrefix, requestID, userID, medtronicErr)
+				jsonError(res, errorRunningQuery, start)
 				return
 			} else if !hasMedtronicDirectData {
 				queryParams.Carelink = true
 			}
-			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
-				log.Printf("%s request %s user %s HasMedtronicDirectData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
+				// XXX replace with metrics
+				//log.Printf("%s request %s user %s HasMedtronicDirectData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
 		}
 		if !queryParams.Dexcom {
-			if dexcomDataSource, dexcomErr := storage.GetDexcomDataSource(queryParams.UserId); dexcomErr != nil {
-				log.Printf("%s request %s user %s GetDexcomDataSource returned error: %s", DATA_API_PREFIX, requestID, userID, dexcomErr)
-				jsonError(res, error_running_query, start)
+			dexcomDataSource, dexcomErr := storageWithCtx.GetDexcomDataSource(queryParams.UserID)
+			if dexcomErr != nil {
+				log.Printf("%s request %s user %s GetDexcomDataSource returned error: %s", dataAPIPrefix, requestID, userID, dexcomErr)
+				jsonError(res, errorRunningQuery, start)
 				return
-			} else {
-				queryParams.DexcomDataSource = dexcomDataSource
 			}
-			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
-				log.Printf("%s request %s user %s GetDexcomDataSource took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			queryParams.DexcomDataSource = dexcomDataSource
+
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
+				log.Printf("%s request %s user %s GetDexcomDataSource took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
 		}
 		if _, ok := req.URL.Query()["medtronic"]; !ok {
-			if hasMedtronicLoopData, medtronicErr := storage.HasMedtronicLoopDataAfter(queryParams.UserId, MedtronicLoopBoundaryDate); medtronicErr != nil {
-				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
-				jsonError(res, error_running_query, start)
+			hasMedtronicLoopData, medtronicErr := storageWithCtx.HasMedtronicLoopDataAfter(queryParams.UserID, medtronicLoopBoundaryDate)
+			if medtronicErr != nil {
+				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter returned error: %s", dataAPIPrefix, requestID, userID, medtronicErr)
+				jsonError(res, errorRunningQuery, start)
 				return
-			} else if !hasMedtronicLoopData {
+			}
+			if !hasMedtronicLoopData {
 				queryParams.Medtronic = true
 			}
-			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
-				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
+				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
 		}
 		if !queryParams.Medtronic {
-			if medtronicUploadIds, medtronicErr := storage.GetLoopableMedtronicDirectUploadIdsAfter(queryParams.UserId, MedtronicLoopBoundaryDate); medtronicErr != nil {
-				log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter returned error: %s", DATA_API_PREFIX, requestID, userID, medtronicErr)
-				jsonError(res, error_running_query, start)
+			medtronicUploadIds, medtronicErr := storageWithCtx.GetLoopableMedtronicDirectUploadIdsAfter(queryParams.UserID, medtronicLoopBoundaryDate)
+			if medtronicErr != nil {
+				log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter returned error: %s", dataAPIPrefix, requestID, userID, medtronicErr)
+				jsonError(res, errorRunningQuery, start)
 				return
-			} else {
-				queryParams.MedtronicDate = MedtronicLoopBoundaryDate
-				queryParams.MedtronicUploadIds = medtronicUploadIds
 			}
-			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
-				log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+			queryParams.MedtronicDate = medtronicLoopBoundaryDate
+			queryParams.MedtronicUploadIds = medtronicUploadIds
+
+			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
+				// XXX replace with metrics
+				//log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
 		}
 
-		iter := storage.GetDeviceData(queryParams)
-		defer iter.Close()
+		iter, err := storageWithCtx.GetDeviceData(queryParams)
+		if err != nil {
+			log.Printf("%s request %s user %s Mongo Query returned error: %s", dataAPIPrefix, requestID, userID, err)
+		}
+
+		defer iter.Close(req.Context())
 
 		var parametersHistory map[string]interface{}
 		var parametersHistoryErr error
 		if store.InArray("pumpSettings", queryParams.Types) || (len(queryParams.Types) == 1 && queryParams.Types[0] == "") {
 			log.Printf("Calling GetDiabeloopParametersHistory")
 
-			if parametersHistory, parametersHistoryErr = storage.GetDiabeloopParametersHistory(queryParams.UserId, queryParams.LevelFilter); parametersHistoryErr != nil {
-				log.Printf("%s request %s user %s GetDiabeloopParametersHistory returned error: %s", DATA_API_PREFIX, requestID, userID, parametersHistoryErr)
-				jsonError(res, error_running_query, start)
+			if parametersHistory, parametersHistoryErr = storage.GetDiabeloopParametersHistory(queryParams.UserID, queryParams.LevelFilter); parametersHistoryErr != nil {
+				log.Printf("%s request %s user %s GetDiabeloopParametersHistory returned error: %s", dataAPIPrefix, requestID, userID, parametersHistoryErr)
+				jsonError(res, errorRunningQuery, start)
 				return
 			}
 		}
 		var writeCount int
 
 		res.Header().Add("Content-Type", "application/json")
+
 		res.Write([]byte("["))
 
-		var results map[string]interface{}
-		for iter.Next(&results) {
+		for iter.Next(req.Context()) {
+			var results map[string]interface{}
+			err := iter.Decode(&results)
+			if err != nil {
+				log.Printf("%s request %s user %s Mongo Decode returned error: %s", dataAPIPrefix, requestID, userID, err)
+			}
+
 			if queryParams.Latest {
 				// If we're using the `latest` parameter, then we ran an `$aggregate` query to get only the latest data.
-				// Since we use Mongo 3.2, we can't use the $replaceRoot function, so we need to manaully extract the
+				// Since we use Mongo 3.2, we can't use the $replaceRoot function, so we need to manually extract the
 				// latest subdocument here. When we move to MongoDB 3.4+ and can use $replaceRoot, we can get rid of this
 				// conditional block. We'd also need to fix the corresponding code in `store.go`
 				results = results["latest_doc"].(map[string]interface{})
@@ -324,14 +372,14 @@ func main() {
 					results["payload"] = payload
 				}
 				if bytes, err := json.Marshal(results); err != nil {
-					log.Printf("%s request %s user %s Marshal returned error: %s", DATA_API_PREFIX, requestID, userID, err)
+					log.Printf("%s request %s user %s Marshal returned error: %s", dataAPIPrefix, requestID, userID, err)
 				} else {
 					if writeCount > 0 {
 						res.Write([]byte(","))
 					}
 					res.Write([]byte("\n"))
 					res.Write(bytes)
-					writeCount += 1
+					writeCount++
 				}
 			}
 		}
@@ -341,10 +389,11 @@ func main() {
 		}
 		res.Write([]byte("]"))
 
-		if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > SlowQueryDuration {
-			log.Printf("%s request %s user %s GetDeviceData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+		if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
+			// XXX use metrics
+			//log.Printf("%s request %s user %s GetDeviceData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 		}
-		log.Printf("%s request %s user %s took %.3fs returned %d records", DATA_API_PREFIX, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
+		log.Printf("%s request %s user %s took %.3fs returned %d records", dataAPIPrefix, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
 	})))
 
 	done := make(chan bool)
@@ -361,7 +410,7 @@ func main() {
 		start = func() error { return server.ListenAndServe() }
 	}
 	if err := start(); err != nil {
-		log.Fatal(DATA_API_PREFIX, err)
+		log.Fatal(dataAPIPrefix, err)
 	}
 	hakkenClient.Publish(&config.Service)
 
@@ -370,7 +419,7 @@ func main() {
 	go func() {
 		for {
 			sig := <-signals
-			log.Printf(DATA_API_PREFIX+" Got signal [%s]", sig)
+			log.Printf(dataAPIPrefix+" Got signal [%s]", sig)
 
 			if sig == syscall.SIGINT || sig == syscall.SIGTERM {
 				server.Close()
@@ -382,6 +431,7 @@ func main() {
 	<-done
 }
 
+// NewRequestID returns a new random hexadecimal ID
 func NewRequestID() string {
 	bytes := make([]byte, 8)
 	_, _ = rand.Read(bytes) // In case of failure, do not fail request, just use default bytes (zero)
