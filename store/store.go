@@ -96,7 +96,7 @@ func cleanDateString(dateString string) (string, error) {
 }
 
 // GetParams parses a URL to set parameters
-func GetParams(q url.Values, schema *SchemaVersion, config *tpMongo.Config) (*Params, error) {
+func (c *MongoStoreClient) GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 
 	startStr, err := cleanDateString(q.Get("startDate"))
 	if err != nil {
@@ -152,13 +152,11 @@ func GetParams(q url.Values, schema *SchemaVersion, config *tpMongo.Config) (*Pa
 		}
 	}
 
-	storage := NewMongoStoreClient(config)
-
 	// get Device model
 	var device string
 	var deviceErr error
 	var UserID = q.Get(":userID")
-	if device, deviceErr = storage.GetDeviceModel(UserID); deviceErr != nil {
+	if device, deviceErr = c.GetDeviceModel(UserID); deviceErr != nil {
 		log.Printf("Error in GetDeviceModel for user %s. Error: %s", UserID, deviceErr)
 	}
 

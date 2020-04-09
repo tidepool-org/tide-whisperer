@@ -569,6 +569,7 @@ func TestStore_cleanDateString(t *testing.T) {
 }
 
 func TestStore_GetParams_Empty(t *testing.T) {
+	store := before(t)
 	query := url.Values{
 		":userID": []string{"1122334455"},
 	}
@@ -582,7 +583,7 @@ func TestStore_GetParams_Empty(t *testing.T) {
 		LevelFilter:   []int{0, 1},
 	}
 
-	params, err := GetParams(query, schema, testingConfig)
+	params, err := store.GetParams(query, schema)
 
 	if err != nil {
 		t.Error("should not have received error, but got one")
@@ -593,6 +594,7 @@ func TestStore_GetParams_Empty(t *testing.T) {
 }
 
 func TestStore_GetParams_Medtronic(t *testing.T) {
+	store := before(t)
 	query := url.Values{
 		":userID":   []string{"1122334455"},
 		"medtronic": []string{"true"},
@@ -608,7 +610,7 @@ func TestStore_GetParams_Medtronic(t *testing.T) {
 		LevelFilter:   []int{0, 1},
 	}
 
-	params, err := GetParams(query, schema, testingConfig)
+	params, err := store.GetParams(query, schema)
 
 	if err != nil {
 		t.Error("should not have received error, but got one")
@@ -619,6 +621,7 @@ func TestStore_GetParams_Medtronic(t *testing.T) {
 }
 
 func TestStore_GetParams_UploadId(t *testing.T) {
+	store := before(t)
 	query := url.Values{
 		":userID":  []string{"1122334455"},
 		"uploadId": []string{"xyz123"},
@@ -634,7 +637,7 @@ func TestStore_GetParams_UploadId(t *testing.T) {
 		LevelFilter:   []int{0, 1},
 	}
 
-	params, err := GetParams(query, schema, testingConfig)
+	params, err := store.GetParams(query, schema)
 
 	if err != nil {
 		t.Error("should not have received error, but got one")
