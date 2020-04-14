@@ -1,3 +1,19 @@
+// @title Tide-Whisperer API
+// @version 0.5.2
+// @description Data access API for Diabeloop's diabetes data as used by Blip
+// @license.name BSD 2-Clause "Simplified" License
+// @host localhost
+// @BasePath /data
+// @accept json
+// @produce json
+// @schemes https
+// @contact.name Diabeloop
+// #contact.url https://www.diabeloop.com
+// @contact.email platforms@diabeloop.fr
+
+// @securityDefinitions.apikey TidepoolAuth
+// @in header
+// @name x-tidepool-session-token
 package main
 
 import (

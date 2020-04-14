@@ -102,10 +102,9 @@ func (a *API) Get501(res http.ResponseWriter, req *http.Request) {
 // @Summary Get the api status
 // @Description Get the api status
 // @ID tide-whisperer-api-getstatus
-// @Accept json
 // @Produce json
-// @Success 200
-// @Failure 500 {string} string "error description"
+// @Success 200 {object} status.ApiStatus
+// @Failure 500 {object} status.ApiStatus
 // @Router /status [get]
 func (a *API) GetStatus(res http.ResponseWriter, req *http.Request) {
 	start := time.Now()
@@ -127,24 +126,26 @@ func (a *API) GetStatus(res http.ResponseWriter, req *http.Request) {
 	return
 }
 
-// The /data/userId endpoint retrieves device/health data for a user based on a set of parameters
-// userid: the ID of the user you want to retrieve data for
-// uploadId (optional) : Search for Tidepool data by uploadId. Only objects with a uploadId field matching the specified uploadId param will be returned.
-// deviceId (optional) : Search for Tidepool data by deviceId. Only objects with a deviceId field matching the specified uploadId param will be returned.
-// type (optional) : The Tidepool data type to search for. Only objects with a type field matching the specified type param will be returned.
-//					can be /userid?type=smbg or a comma seperated list e.g /userid?type=smgb,cbg . If is a comma seperated
-//					list, then objects matching any of the sub types will be returned
-// subType (optional) : The Tidepool data subtype to search for. Only objects with a subtype field matching the specified subtype param will be returned.
-//					can be /userid?subtype=physicalactivity or a comma seperated list e.g /userid?subtypetype=physicalactivity,steps . If is a comma seperated
-//					list, then objects matching any of the types will be returned
-// startDate (optional) : Only objects with 'time' field equal to or greater than start date will be returned.
-//					Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
-// endDate (optional) : Only objects with 'time' field less than to or equal to start date will be returned.
-//					Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
-// latest (optional) : Returns only the most recent results for each `type` matching the results filtered by the other query parameters
 // @Summary Get device/health data for a user based on a set of parameters
 // @Description Get device/health data for a user based on a set of parameters
 // @ID tide-whisperer-api-getdata
+// @Produce json
+// @Success 200 {array} deviceData "List of user data objects"
+// @Failure 500 {object} data.detailedError
+// @Failure 403 {object} data.detailedError
+// @Param userID path string true "The ID of the user to search data for"
+// @Param type query []string false "Type of data to search for - can be a list of types separated by commas" collectionFormat(csv)
+// @Param subType query []string false "Subtype of data to search for - can be a list of subtypes separated by commas" collectionFormat(csv)
+// @Param deviceId query string false "ID of the device to search data for"
+// @Param uploadId query string false "ID of the upload to search data for"
+// @Param startDate query string false "ISO Date time for search lower limit" format(date-time)
+// @Param endDate query string false "ISO Date time for search upper limit" format(date-time)
+// @Param carelink query bool false "N/A - Unused for diabeloop devices"
+// @Param dexcom query bool false "N/A - Unused for diabeloop devices"
+// @Param medtronic query bool false "N/A - Unused for diabeloop devices"
+// @Param latest query bool false "To return only the most recent results for each `type` matching the results filtered by the other query parameters"
+// @Security TidepoolAuth
+// @Router /{userID} [get]
 func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[string]string) {
 
 	start := time.Now()
