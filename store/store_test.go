@@ -141,7 +141,7 @@ func uploadIDQuery() bson.M {
 
 func testDataForLatestTests() map[string]bson.M {
 	testData := map[string]bson.M{
-		"upload1": bson.M{
+		"upload1": {
 			"_active":        true,
 			"_userId":        "abc123",
 			"_schemaVersion": int32(1),
@@ -150,7 +150,7 @@ func testDataForLatestTests() map[string]bson.M {
 			"deviceId":       "dev123",
 			"uploadId":       "9244bb16e27c4973c2f37af81784a05d",
 		},
-		"cbg1": bson.M{
+		"cbg1": {
 			"_active":        true,
 			"_userId":        "abc123",
 			"_schemaVersion": int32(1),
@@ -161,7 +161,7 @@ func testDataForLatestTests() map[string]bson.M {
 			"uploadId":       "9244bb16e27c4973c2f37af81784a05d",
 			"value":          12.82223,
 		},
-		"upload2": bson.M{
+		"upload2": {
 			"_active":        true,
 			"_userId":        "abc123",
 			"_schemaVersion": int32(1),
@@ -170,7 +170,7 @@ func testDataForLatestTests() map[string]bson.M {
 			"deviceId":       "dev456",
 			"uploadId":       "zzz4bb16e27c4973c2f37af81784a05d",
 		},
-		"cbg2": bson.M{
+		"cbg2": {
 			"_active":        true,
 			"_userId":        "abc123",
 			"_schemaVersion": int32(1),
@@ -181,7 +181,7 @@ func testDataForLatestTests() map[string]bson.M {
 			"deviceId":       "dev456",
 			"value":          9.7213,
 		},
-		"upload3": bson.M{
+		"upload3": {
 			"_active":        true,
 			"_userId":        "xyz123",
 			"_schemaVersion": int32(1),
@@ -190,7 +190,7 @@ func testDataForLatestTests() map[string]bson.M {
 			"deviceId":       "dev789",
 			"uploadId":       "xxx4bb16e27c4973c2f37af81784a05d",
 		},
-		"cbg3": bson.M{
+		"cbg3": {
 			"_active":        true,
 			"_userId":        "xyz123",
 			"_schemaVersion": int32(1),

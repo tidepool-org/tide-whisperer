@@ -29,6 +29,12 @@ type (
 		Decode(interface{}) error
 		Close(context.Context) error
 	}
+	// Storage - Interface for our storage layer
+	Storage interface {
+		Close()
+		Ping() error
+		GetDeviceData(p *Params) StorageIterator
+	}
 	// MongoStoreClient - Mongo Storage Client
 	MongoStoreClient struct {
 		client   *mongo.Client
