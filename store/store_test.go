@@ -140,6 +140,7 @@ func uploadIDQuery() bson.M {
 }
 
 func testDataForLatestTests() map[string]bson.M {
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	testData := map[string]bson.M{
 		"upload1": {
 			"_active":        true,
@@ -235,9 +236,8 @@ func TestStore_generateMongoQuery_basic(t *testing.T) {
 	query := basicQuery()
 
 	expectedQuery := bson.M{
-		"_userId":        "abc123",
-		"_active":        true,
-		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
+		"_userId": "abc123",
+		"_active": true,
 		"source": bson.M{
 			"$ne": "carelink",
 		},
@@ -255,12 +255,11 @@ func TestStore_generateMongoQuery_allParams(t *testing.T) {
 	query := allParamsQuery()
 
 	expectedQuery := bson.M{
-		"_userId":        "abc123",
-		"deviceId":       "device123",
-		"_active":        true,
-		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
-		"type":           bson.M{"$in": strings.Split("smbg,cbg", ",")},
-		"subType":        bson.M{"$in": strings.Split("stuff", ",")},
+		"_userId":  "abc123",
+		"deviceId": "device123",
+		"_active":  true,
+		"type":     bson.M{"$in": strings.Split("smbg,cbg", ",")},
+		"subType":  bson.M{"$in": strings.Split("stuff", ",")},
 		"time": bson.M{
 			"$gte": "2015-10-07T15:00:00.000Z",
 			"$lte": "2015-10-11T15:00:00.000Z"},
@@ -290,13 +289,12 @@ func TestStore_generateMongoQuery_allparamsWithUploadId(t *testing.T) {
 	query := allParamsIncludingUploadIDQuery()
 
 	expectedQuery := bson.M{
-		"_userId":        "abc123",
-		"deviceId":       "device123",
-		"_active":        true,
-		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
-		"type":           bson.M{"$in": strings.Split("smbg,cbg", ",")},
-		"subType":        bson.M{"$in": strings.Split("stuff", ",")},
-		"uploadId":       "xyz123",
+		"_userId":  "abc123",
+		"deviceId": "device123",
+		"_active":  true,
+		"type":     bson.M{"$in": strings.Split("smbg,cbg", ",")},
+		"subType":  bson.M{"$in": strings.Split("stuff", ",")},
+		"uploadId": "xyz123",
 		"time": bson.M{
 			"$gte": "2015-10-07T15:00:00.000Z",
 			"$lte": "2015-10-11T15:00:00.000Z"},
@@ -313,10 +311,9 @@ func TestStore_generateMongoQuery_uploadId(t *testing.T) {
 	query := uploadIDQuery()
 
 	expectedQuery := bson.M{
-		"_userId":        "abc123",
-		"_active":        true,
-		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
-		"uploadId":       "xyz123",
+		"_userId":  "abc123",
+		"_active":  true,
+		"uploadId": "xyz123",
 		"source": bson.M{
 			"$ne": "carelink",
 		},
@@ -333,11 +330,10 @@ func TestStore_generateMongoQuery_noDates(t *testing.T) {
 	query := typeAndSubtypeQuery()
 
 	expectedQuery := bson.M{
-		"_userId":        "abc123",
-		"_active":        true,
-		"type":           bson.M{"$in": strings.Split("smbg,cbg", ",")},
-		"subType":        bson.M{"$in": strings.Split("stuff", ",")},
-		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
+		"_userId": "abc123",
+		"_active": true,
+		"type":    bson.M{"$in": strings.Split("smbg,cbg", ",")},
+		"subType": bson.M{"$in": strings.Split("stuff", ",")},
 		"source": bson.M{
 			"$ne": "carelink",
 		},
@@ -737,6 +733,7 @@ func TestStore_HasMedtronicDirectData_NotFound_Multiple(t *testing.T) {
 }
 
 func TestStore_HasMedtronicLoopDataAfter_NotFound_UserID(t *testing.T) {
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	store := before(t, bson.M{
 		"_active":        true,
 		"_userId":        "0000000000",
@@ -753,12 +750,6 @@ func TestStore_HasMedtronicLoopDataAfter_NotFound_UserID(t *testing.T) {
 		"_active":        false,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 0,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	})
@@ -774,6 +765,7 @@ func TestStore_HasMedtronicLoopDataAfter_NotFound_UserID(t *testing.T) {
 }
 
 func TestStore_HasMedtronicLoopDataAfter_NotFound_Time(t *testing.T) {
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	store := before(t, bson.M{
 		"_active":        true,
 		"_userId":        "0000000000",
@@ -796,12 +788,6 @@ func TestStore_HasMedtronicLoopDataAfter_NotFound_Time(t *testing.T) {
 		"_active":        false,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 0,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	})
@@ -817,6 +803,7 @@ func TestStore_HasMedtronicLoopDataAfter_NotFound_Time(t *testing.T) {
 }
 
 func TestStore_HasMedtronicLoopDataAfter_Found(t *testing.T) {
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	store := before(t, bson.M{
 		"_active":        true,
 		"_userId":        "0000000000",
@@ -847,12 +834,6 @@ func TestStore_HasMedtronicLoopDataAfter_Found(t *testing.T) {
 		"_schemaVersion": 1,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 0,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	})
 
 	hasMedtronicLoopDataAfter, err := store.HasMedtronicLoopDataAfter("1234567890", "2017-01-01T00:00:00Z")
@@ -866,6 +847,7 @@ func TestStore_HasMedtronicLoopDataAfter_Found(t *testing.T) {
 }
 
 func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testing.T) {
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	store := before(t, bson.M{
 		"_active":        true,
 		"_userId":        "0000000000",
@@ -877,13 +859,6 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testi
 		"_active":        false,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "523",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 0,
 		"time":           "2018-02-03T04:05:06Z",
 		"type":           "upload",
 		"deviceModel":    "523",
@@ -914,6 +889,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testi
 }
 
 func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing.T) {
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	store := before(t, bson.M{
 		"_active":        true,
 		"_userId":        "0000000000",
@@ -928,13 +904,6 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing
 		"time":           "2018-02-03T04:05:06Z",
 		"type":           "upload",
 		"deviceModel":    "523",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 0,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "554",
 	}, bson.M{
 		"_active":        true,
 		"_userId":        "1234567890",
@@ -969,6 +938,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing
 }
 
 func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	store := before(t, bson.M{
 		"_active":        true,
 		"_userId":        "0000000000",
@@ -983,13 +953,6 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
 		"time":           "2018-02-03T04:05:06Z",
 		"type":           "upload",
 		"deviceModel":    "523",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 0,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "554",
 	}, bson.M{
 		"_active":        true,
 		"_userId":        "1234567890",

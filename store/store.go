@@ -205,7 +205,7 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 		{
 			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "deviceModel", Value: 1}},
 			Options: options.Index().
-				SetName("GetLoopableMedtronicDirectUploadIdsAfter").
+				SetName("GetLoopableMedtronicDirectUploadIdsAfter_v2").
 				SetBackground(true).
 				SetPartialFilterExpression(
 					bson.D{
@@ -217,16 +217,13 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 						{Key: "time", Value: bson.M{
 							"$gte": "2017-09-01",
 						}},
-						{Key: "_schemaVersion", Value: bson.M{
-							"$gt": 0,
-						}},
 					},
 				),
 		},
 		{
 			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "origin.payload.device.manufacturer", Value: 1}},
 			Options: options.Index().
-				SetName("HasMedtronicLoopDataAfter").
+				SetName("HasMedtronicLoopDataAfter_v2").
 				SetBackground(true).
 				SetPartialFilterExpression(
 					bson.D{
@@ -235,36 +232,16 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 						{Key: "time", Value: bson.M{
 							"$gte": "2017-09-01",
 						}},
-						{Key: "_schemaVersion", Value: bson.M{
-							"$gt": 0,
-						}},
 					},
 				),
 		},
 		{
 			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "time", Value: -1}, {Key: "type", Value: 1}},
 			Options: options.Index().
-				SetName("UserIdTimeWeighted").
+				SetName("UserIdTimeWeighted_v2").
 				SetBackground(true).
 				SetPartialFilterExpression(
 					bson.D{
-						{Key: "_schemaVersion", Value: bson.M{
-							"$gt": 0,
-						}},
-						{Key: "_active", Value: true},
-					},
-				),
-		},
-		{
-			Keys: bson.D{{Key: "deviceId", Value: 1}, {Key: "time", Value: -1}, {Key: "type", Value: 1}},
-			Options: options.Index().
-				SetName("DeviceId").
-				SetBackground(true).
-				SetPartialFilterExpression(
-					bson.D{
-						{Key: "_schemaVersion", Value: bson.M{
-							"$gt": 0,
-						}},
 						{Key: "_active", Value: true},
 					},
 				),
@@ -289,9 +266,8 @@ func dataCollection(msc *MongoStoreClient) *mongo.Collection {
 func generateMongoQuery(p *Params) bson.M {
 
 	groupDataQuery := bson.M{
-		"_userId":        p.UserID,
-		"_active":        true,
-		"_schemaVersion": bson.M{"$gte": p.SchemaVersion.Minimum, "$lte": p.SchemaVersion.Maximum}}
+		"_userId": p.UserID,
+		"_active": true}
 
 	//if optional parameters are present, then add them to the query
 	if len(p.Types) > 0 && p.Types[0] != "" {
@@ -446,7 +422,6 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 	query := bson.D{
 		{Key: "_active", Value: true},
 		{Key: "_userId", Value: userID},
-		{Key: "_schemaVersion", Value: bson.D{{Key: "$gt", Value: 0}}},
 		{Key: "time", Value: bson.D{{Key: "$gte", Value: date}}},
 		{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
 	}
@@ -470,12 +445,11 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 	}
 
 	query := bson.M{
-		"_active":        true,
-		"_userId":        userID,
-		"_schemaVersion": bson.M{"$gt": 0},
-		"time":           bson.M{"$gte": date},
-		"type":           "upload",
-		"deviceModel":    bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
+		"_active":     true,
+		"_userId":     userID,
+		"time":        bson.M{"$gte": date},
+		"type":        "upload",
+		"deviceModel": bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
 	}
 
 	objects := []struct {
@@ -506,6 +480,8 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 // GetDeviceData returns all of the device data for a user
 func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 
+	// _schemaVersion is still in the list of fields to remove. Although we don't query for it, data can still exist for it
+	// until BACK-1281 is done.
 	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
 
 	if p.Latest {
