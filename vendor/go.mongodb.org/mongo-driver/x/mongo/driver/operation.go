@@ -432,8 +432,10 @@ func (op Operation) Execute(ctx context.Context, scratch []byte) error {
 					Code:    int32(tt.WriteConcernError.Code),
 					Message: tt.WriteConcernError.Message,
 				}
-				if err.Code == 64 || err.Code == 50 || tt.WriteConcernError.Retryable() {
-					err.Labels = []string{UnknownTransactionCommitResult}
+				// The UnknownTransactionCommitResult label is added to all writeConcernErrors besides unknownReplWriteConcernCode
+				// and unsatisfiableWriteConcernCode
+				if err.Code != unknownReplWriteConcernCode && err.Code != unsatisfiableWriteConcernCode {
+					err.Labels = append(err.Labels, UnknownTransactionCommitResult)
 				}
 				return err
 			}
@@ -546,7 +548,7 @@ func (op Operation) roundTrip(ctx context.Context, conn Connection, wm []byte) (
 		if op.Client != nil && op.Client.Committing {
 			labels = append(labels, UnknownTransactionCommitResult)
 		}
-		return nil, Error{Message: err.Error(), Labels: labels}
+		return nil, Error{Message: err.Error(), Labels: labels, Wrapped: err}
 	}
 
 	wm, err = conn.ReadWireMessage(ctx, wm[:0])
@@ -561,7 +563,7 @@ func (op Operation) roundTrip(ctx context.Context, conn Connection, wm []byte) (
 		if op.Client != nil && op.Client.Committing {
 			labels = append(labels, UnknownTransactionCommitResult)
 		}
-		return nil, Error{Message: err.Error(), Labels: labels}
+		return nil, Error{Message: err.Error(), Labels: labels, Wrapped: err}
 	}
 
 	// decompress wiremessage
@@ -588,7 +590,7 @@ func (op *Operation) moreToComeRoundTrip(ctx context.Context, conn Connection, w
 		if op.Client != nil {
 			op.Client.MarkDirty()
 		}
-		err = Error{Message: err.Error(), Labels: []string{TransientTransactionError, NetworkError}}
+		err = Error{Message: err.Error(), Labels: []string{TransientTransactionError, NetworkError}, Wrapped: err}
 	}
 	return bsoncore.BuildDocument(nil, bsoncore.AppendInt32Element(nil, "ok", 1)), err
 }
@@ -889,8 +891,8 @@ func (op Operation) addSession(dst []byte, desc description.SelectedServer) ([]b
 	if client == nil || !description.SessionsSupported(desc.WireVersion) || desc.SessionTimeoutMinutes == 0 {
 		return dst, nil
 	}
-	if client.Terminated {
-		return dst, session.ErrSessionEnded
+	if err := client.UpdateUseTime(); err != nil {
+		return dst, err
 	}
 	lsid, _ := client.SessionID.MarshalBSON()
 	dst = bsoncore.AppendDocumentElement(dst, "lsid", lsid)
