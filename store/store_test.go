@@ -206,6 +206,16 @@ func testDataForLatestTests() map[string]bson.M {
 	return testData
 }
 
+func dropInternalKeys(inputData bson.M) bson.M {
+	outputData := bson.M{}
+	for k, v := range inputData {
+		if !strings.HasPrefix(k, "_") {
+			outputData[k] = v
+		}
+	}
+	return outputData
+}
+
 func storeDataForLatestTests() []interface{} {
 	testData := testDataForLatestTests()
 
@@ -1054,18 +1064,18 @@ func TestStore_LatestNoFilter(t *testing.T) {
 		if err != nil {
 			t.Error("Mongo Decode error")
 		}
-		// For `latest`, we need to look inside the returned results at the `latest_doc` field
-		result = result["latest_doc"].(bson.M)
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
-			if !reflect.DeepEqual(result, testData["cbg1"]) {
+			compareResult := dropInternalKeys(testData["cbg1"])
+			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
 			processedResultCount++
 		case "upload":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
-			if !reflect.DeepEqual(result, testData["upload1"]) {
+			compareResult := dropInternalKeys(testData["upload1"])
+			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'upload' result when requesting latest data")
 			}
 			processedResultCount++
@@ -1104,12 +1114,11 @@ func TestStore_LatestTypeFilter(t *testing.T) {
 		if err != nil {
 			t.Error("Mongo Decode error")
 		}
-		// For `latest`, we need to look inside the returned results at the `latest_doc` field
-		result = result["latest_doc"].(bson.M)
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
-			if !reflect.DeepEqual(result, testData["cbg1"]) {
+			compareResult := dropInternalKeys(testData["cbg1"])
+			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
 			processedResultCount++
@@ -1148,18 +1157,18 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 		if err != nil {
 			t.Error("Mongo Decode error")
 		}
-		// For `latest`, we need to look inside the returned results at the `latest_doc` field
-		result = result["latest_doc"].(bson.M)
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
-			if !reflect.DeepEqual(result, testData["cbg2"]) {
+			compareResult := dropInternalKeys(testData["cbg2"])
+			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
 			processedResultCount++
 		case "upload":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
-			if !reflect.DeepEqual(result, testData["upload2"]) {
+			compareResult := dropInternalKeys(testData["upload2"])
+			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'upload' result when requesting latest data")
 			}
 			processedResultCount++
@@ -1198,18 +1207,18 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 		if err != nil {
 			t.Error("Mongo Decode error")
 		}
-		// For `latest`, we need to look inside the returned results at the `latest_doc` field
-		result = result["latest_doc"].(bson.M)
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
-			if !reflect.DeepEqual(result, testData["cbg3"]) {
+			compareResult := dropInternalKeys(testData["cbg3"])
+			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
 			processedResultCount++
 		case "upload":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
-			if !reflect.DeepEqual(result, testData["upload3"]) {
+			compareResult := dropInternalKeys(testData["upload3"])
+			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'upload' result when requesting latest data")
 			}
 			processedResultCount++

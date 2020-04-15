@@ -25,14 +25,9 @@ const (
 type (
 	// StorageIterator - Interface for the query iterator
 	StorageIterator interface {
-		Next(result interface{}) bool
-		Close() error
-	}
-	// Storage - Interface for our storage layer
-	Storage interface {
-		Close()
-		Ping() error
-		GetDeviceData(p *Params) StorageIterator
+		Next(context.Context) bool
+		Decode(interface{}) error
+		Close(context.Context) error
 	}
 	// MongoStoreClient - Mongo Storage Client
 	MongoStoreClient struct {
@@ -69,6 +64,11 @@ type (
 	Date struct {
 		Start string
 		End   string
+	}
+
+	latestIterator struct {
+		results []bson.Raw
+		pos     int
 	}
 )
 
@@ -498,58 +498,53 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 }
 
 // GetDeviceData returns all of the device data for a user
-func (c *MongoStoreClient) GetDeviceData(p *Params) (*mongo.Cursor, error) {
+func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
+
+	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
 
 	if p.Latest {
-		// Create an $aggregate query to return the latest of each `type` requested
-		// that matches the query parameters
-		pipeline := []bson.M{
-			{
-				"$match": generateMongoQuery(p),
-			},
-			{
-				"$sort": bson.M{
-					"type": 1,
-					"time": -1,
-				},
-			},
-			{
-				"$group": bson.M{
-					"_id": bson.M{
-						"type": "$type",
-					},
-					"groupId": bson.M{
-						"$first": "$_id",
-					},
-				},
-			},
-			{
-				"$lookup": bson.M{
-					"from":         "deviceData",
-					"localField":   "groupId",
-					"foreignField": "_id",
-					"as":           "latest_doc",
-				},
-			},
-			{
-				"$unwind": "$latest_doc",
-			},
-			/*
-				// TODO: we can only use this code once we upgrade to MongoDB 3.4+
-				// We would also need to update the corresponding code in `tide-whisperer.go`
-				// (search for "latest_doc")
-				{
-					"$replaceRoot": bson.M{
-						"newRoot": "$latest_doc"
-					},
-				},
-			*/
+		latest := &latestIterator{pos: -1}
+
+		var typeRanges []string
+		if len(p.Types) > 0 && p.Types[0] != "" {
+			typeRanges = p.Types
+		} else {
+			typeRanges = []string{"physicalActivity", "basal", "cbg", "smbg", "bloodKetone", "bolus", "wizard", "deviceEvent", "food", "insulin", "cgmSettings", "pumpSettings", "reportedState", "upload"}
 		}
-		return dataCollection(c).Aggregate(c.context, pipeline)
+
+		var err error
+
+		for _, theType := range typeRanges {
+			query := generateMongoQuery(p)
+			query["type"] = theType
+			opts := options.FindOne().SetProjection(removeFieldsForReturn).SetSort(bson.M{"time": -1})
+			result, resultErr := dataCollection(c).
+				FindOne(c.context, generateMongoQuery(p), opts).
+				DecodeBytes()
+			if resultErr != nil {
+				err = resultErr
+				break
+			}
+
+			latest.results = append(latest.results, result)
+		}
+		return latest, err
 	}
 
-	opts := options.Find().
-		SetProjection(bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0})
+	opts := options.Find().SetProjection(removeFieldsForReturn)
 	return dataCollection(c).
 		Find(c.context, generateMongoQuery(p), opts)
+}
+
+func (l *latestIterator) Next(context.Context) bool {
+	l.pos++
+	return l.pos < len(l.results)
+}
+
+func (l *latestIterator) Decode(result interface{}) error {
+	return bson.Unmarshal(l.results[l.pos], result)
+}
+
+func (l *latestIterator) Close(context.Context) error {
+	return nil
 }

@@ -188,6 +188,14 @@ func main() {
 		res.WriteHeader(501)
 		return
 	}))
+	router.Add("GET", "/swagger/docs/v2", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(501)
+		return
+	}))
+	router.Add("GET", "/swagger.json", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		res.WriteHeader(501)
+		return
+	}))
 
 	router.Add("GET", "/v1", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		res.WriteHeader(501)
@@ -336,13 +344,6 @@ func main() {
 				log.Printf("%s request %s user %s Mongo Decode returned error: %s", dataAPIPrefix, requestID, userID, err)
 			}
 
-			if queryParams.Latest {
-				// If we're using the `latest` parameter, then we ran an `$aggregate` query to get only the latest data.
-				// Since we use Mongo 3.2, we can't use the $replaceRoot function, so we need to manually extract the
-				// latest subdocument here. When we move to MongoDB 3.4+ and can use $replaceRoot, we can get rid of this
-				// conditional block. We'd also need to fix the corresponding code in `store.go`
-				results = results["latest_doc"].(map[string]interface{})
-			}
 			if len(results) > 0 {
 				if bytes, err := json.Marshal(results); err != nil {
 					log.Printf("%s request %s user %s Marshal returned error: %s", dataAPIPrefix, requestID, userID, err)
