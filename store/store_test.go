@@ -230,6 +230,102 @@ func storeDataForLatestTests() []interface{} {
 	return storeData
 }
 
+func TestStore_EnsureIndexes(t *testing.T) {
+	store := before(t)
+	err := store.EnsureIndexes()
+	if err != nil {
+		t.Error("Failed to run EnsureIndexes()")
+	}
+
+	indexView := dataCollection(store).Indexes()
+	cursor, err := indexView.List(context.TODO())
+	if err != nil {
+		t.Error("Unexpected error fetching indexes")
+	}
+
+	defer cursor.Close(context.Background())
+	type mongoIndex struct {
+		Key                     bson.D
+		Name                    string
+		Background              bool
+		Unique                  bool
+		PartialFilterExpression bson.D
+	}
+	var indexes []mongoIndex
+
+	for cursor.Next(context.Background()) {
+		r := mongoIndex{}
+
+		if err = cursor.Decode(&r); err != nil {
+			break
+		}
+		indexes = append(indexes, r)
+	}
+	if err != nil {
+		t.Error("Unexpected error decoding indexes")
+	}
+
+	makeKeySlice := func(mgoList ...string) bson.D {
+		keySlice := bson.D{}
+		for _, key := range mgoList {
+			order := int32(1)
+			if key[0] == '-' {
+				order = int32(-1)
+				key = key[1:]
+			}
+			keySlice = append(keySlice, bson.E{Key: key, Value: order})
+		}
+		return keySlice
+	}
+
+	expectedIndexes := []mongoIndex{
+		{
+			Key:  makeKeySlice("_id"),
+			Name: "_id_",
+		},
+		{
+			Key:        makeKeySlice("_userId", "deviceModel"),
+			Background: true,
+			PartialFilterExpression: bson.D{
+				{Key: "_active", Value: true},
+				{Key: "type", Value: "upload"},
+				{Key: "deviceModel", Value: bson.D{
+					{Key: "$exists", Value: true},
+				}},
+				{Key: "time", Value: bson.D{
+					{Key: "$gte", Value: "2017-09-01"},
+				}},
+			},
+			Name: "GetLoopableMedtronicDirectUploadIdsAfter_v2",
+		},
+		{
+			Key:        makeKeySlice("_userId", "origin.payload.device.manufacturer"),
+			Background: true,
+			PartialFilterExpression: bson.D{
+				{Key: "_active", Value: true},
+				{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
+				{Key: "time", Value: bson.D{
+					{Key: "$gte", Value: "2017-09-01"},
+				}},
+			},
+			Name: "HasMedtronicLoopDataAfter_v2",
+		},
+		{
+			Key:        makeKeySlice("_userId", "-time", "type"),
+			Background: true,
+			PartialFilterExpression: bson.D{
+				{Key: "_active", Value: true},
+			},
+			Name: "UserIdTimeWeighted_v2",
+		},
+	}
+
+	eq := reflect.DeepEqual(indexes, expectedIndexes)
+	if !eq {
+		t.Error(fmt.Sprintf("expected:\n%+#v\ngot:\n%+#v\n", expectedIndexes, indexes))
+	}
+}
+
 func TestStore_generateMongoQuery_basic(t *testing.T) {
 
 	time.Now()
