@@ -1115,8 +1115,10 @@ func TestStore_LatestNoFilter(t *testing.T) {
 		t.Error("Error querying Mongo")
 	}
 
-	resultCount := 0
-	processedResultCount := 0
+	processedResults := struct {
+		cbg    bool
+		upload bool
+	}{}
 	for iter.Next(store.context) {
 		var result bson.M
 		err := iter.Decode(&result)
@@ -1130,19 +1132,18 @@ func TestStore_LatestNoFilter(t *testing.T) {
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
-			processedResultCount++
+			processedResults.cbg = true
 		case "upload":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
 			compareResult := dropInternalKeys(testData["upload1"])
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'upload' result when requesting latest data")
 			}
-			processedResultCount++
+			processedResults.upload = true
 		}
-		resultCount++
 	}
 
-	if resultCount < 2 || processedResultCount < 2 {
+	if processedResults.cbg == false || processedResults.upload == false {
 		t.Error("Not enough results when requesting latest data")
 	}
 }
@@ -1165,8 +1166,9 @@ func TestStore_LatestTypeFilter(t *testing.T) {
 		t.Error("Error querying Mongo")
 	}
 
-	resultCount := 0
-	processedResultCount := 0
+	processedResults := struct {
+		cbg bool
+	}{}
 	for iter.Next(store.context) {
 		var result bson.M
 		err := iter.Decode(&result)
@@ -1180,12 +1182,11 @@ func TestStore_LatestTypeFilter(t *testing.T) {
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
-			processedResultCount++
+			processedResults.cbg = true
 		}
-		resultCount++
 	}
 
-	if resultCount < 1 || processedResultCount < 1 {
+	if processedResults.cbg == false {
 		t.Error("Not enough results when requesting latest data")
 	}
 }
@@ -1208,8 +1209,10 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 		t.Error("Error querying Mongo")
 	}
 
-	resultCount := 0
-	processedResultCount := 0
+	processedResults := struct {
+		cbg    bool
+		upload bool
+	}{}
 	for iter.Next(store.context) {
 		var result bson.M
 		err := iter.Decode(&result)
@@ -1223,19 +1226,18 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
-			processedResultCount++
+			processedResults.cbg = true
 		case "upload":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
 			compareResult := dropInternalKeys(testData["upload2"])
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'upload' result when requesting latest data")
 			}
-			processedResultCount++
+			processedResults.upload = true
 		}
-		resultCount++
 	}
 
-	if resultCount < 2 || processedResultCount < 2 {
+	if processedResults.cbg == false || processedResults.upload == false {
 		t.Error("Not enough results when requesting latest data")
 	}
 }
@@ -1258,8 +1260,10 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 		t.Error("Error querying Mongo")
 	}
 
-	resultCount := 0
-	processedResultCount := 0
+	processedResults := struct {
+		cbg    bool
+		upload bool
+	}{}
 	for iter.Next(store.context) {
 		var result bson.M
 		err := iter.Decode(&result)
@@ -1273,19 +1277,18 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
-			processedResultCount++
+			processedResults.cbg = true
 		case "upload":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
 			compareResult := dropInternalKeys(testData["upload3"])
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'upload' result when requesting latest data")
 			}
-			processedResultCount++
+			processedResults.upload = true
 		}
-		resultCount++
 	}
 
-	if resultCount < 2 || processedResultCount < 2 {
+	if processedResults.cbg == false || processedResults.upload == false {
 		t.Error("Not enough results when requesting latest data")
 	}
 }
