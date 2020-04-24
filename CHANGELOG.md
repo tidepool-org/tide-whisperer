@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+# 0.6.0 - 2020-04-23
+### Added 
+- PT-1193 New API access point : compute time in range data for a set of users (last 24 hours)
+
 # 0.5.2 - 2020-04-14
 ### Engineering
 - PT-1232 Integrate latest changes from Tidepool develop branch

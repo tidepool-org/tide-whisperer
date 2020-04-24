@@ -14,18 +14,20 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/tidepool-org/go-common/clients"
-	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/shoreline"
 	"github.com/tidepool-org/go-common/clients/status"
 	"github.com/tidepool-org/tide-whisperer/auth"
 	"github.com/tidepool-org/tide-whisperer/store"
+
+	"strconv"
+	"strings"
 )
 
 type (
 	API struct {
-		store           *store.MongoStoreClient
-		shorelineClient *shoreline.ShorelineClient
-		authClient      *auth.Client
+		store           store.Storage
+		shorelineClient shoreline.Client
+		authClient      auth.ClientInterface
 		perms           clients.Gatekeeper
 		schemaVersion   store.SchemaVersion
 	}
@@ -62,8 +64,7 @@ var (
 	errorInvalidParameters = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
 )
 
-func InitApi(mongoConfig mongo.Config, shoreline *shoreline.ShorelineClient, auth *auth.Client, permsClient clients.Gatekeeper, schemaV store.SchemaVersion) *API {
-	storage := store.NewMongoStoreClient(&mongoConfig)
+func InitApi(storage store.Storage, shoreline shoreline.Client, auth auth.ClientInterface, permsClient clients.Gatekeeper, schemaV store.SchemaVersion) *API {
 	storage.EnsureIndexes()
 	return &API{
 		store:           storage,
@@ -86,6 +87,7 @@ func (a *API) SetHandlers(prefix string, rtr *mux.Router) {
 	rtr.HandleFunc("/v1", a.Get501).Methods("GET")
 	rtr.HandleFunc("/v2", a.Get501).Methods("GET")
 	rtr.HandleFunc("/status", a.GetStatus).Methods("GET")
+	rtr.HandleFunc("/compute/tir", a.GetTimeInRange).Methods("GET")
 	rtr.Handle("/{userID}", varsHandler(a.GetData)).Methods("GET")
 }
 
@@ -157,7 +159,7 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 		queryValues[k] = v
 	}
 
-	queryParams, err := storageWithCtx.GetParams(queryValues, &a.schemaVersion)
+	queryParams, err := a.parseDataParams(queryValues)
 
 	if err != nil {
 		log.Println(DataAPIPrefix, fmt.Sprintf("Error parsing query params: %s", err))
@@ -165,17 +167,8 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 		return
 	}
 
-	var td *shoreline.TokenData
-	if sessionToken := req.Header.Get("x-tidepool-session-token"); sessionToken != "" {
-		td = a.shorelineClient.CheckToken(sessionToken)
-	} else if restrictedTokens, found := req.URL.Query()["restricted_token"]; found && len(restrictedTokens) == 1 {
-		restrictedToken, restrictedTokenErr := a.authClient.GetRestrictedToken(req.Context(), restrictedTokens[0])
-		if restrictedTokenErr == nil && restrictedToken != nil && restrictedToken.Authenticates(req) {
-			td = &shoreline.TokenData{UserID: restrictedToken.UserID}
-		}
-	}
-
-	if td == nil || !(td.IsServer || td.UserID == queryParams.UserID || a.userCanViewData(td.UserID, queryParams.UserID)) {
+	userIDs := []string{queryParams.UserID}
+	if !(a.isAuthorized(req, userIDs)) {
 		log.Printf("userid %v", queryParams.UserID)
 		jsonError(res, errorNoViewPermission, start)
 		return
@@ -207,7 +200,7 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 		queryParams.DexcomDataSource = dexcomDataSource
 
 		if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
-			log.Printf("%s request %s user %s GetDexcomDataSource took %.3fs", DataAPIPrefix, requestID, queryParams.UserID, queryDuration)
+			log.Printf("%s SlowQuery: request %s user %s GetDexcomDataSource took %.3fs", DataAPIPrefix, requestID, queryParams.UserID, queryDuration)
 		}
 		queryStart = time.Now()
 	}
@@ -222,7 +215,7 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 			queryParams.Medtronic = true
 		}
 		if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
-			log.Printf("%s request %s user %s HasMedtronicLoopDataAfter took %.3fs", DataAPIPrefix, requestID, queryParams.UserID, queryDuration)
+			log.Printf("%s SlowQuery: request %s user %s HasMedtronicLoopDataAfter took %.3fs", DataAPIPrefix, requestID, queryParams.UserID, queryDuration)
 		}
 		queryStart = time.Now()
 	}
@@ -312,6 +305,73 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 	log.Printf("%s request %s user %s took %.3fs returned %d records", DataAPIPrefix, requestID, queryParams.UserID, time.Now().Sub(start).Seconds(), writeCount)
 }
 
+func cleanDateString(dateString string) (string, error) {
+	if dateString == "" {
+		return "", nil
+	}
+	date, err := time.Parse(time.RFC3339Nano, dateString)
+	if err != nil {
+		return "", err
+	}
+	return date.Format(time.RFC3339Nano), nil
+}
+func (a *API) parseDataParams(q url.Values) (*store.Params, error) {
+	var strPrms = make(map[string]string)
+	for _, dateField := range []string{"startDate", "endDate"} {
+		dateStr, err := cleanDateString(q.Get(dateField))
+		if err != nil {
+			return nil, err
+		}
+		strPrms[dateField] = dateStr
+	}
+	var boolPrms = make(map[string]bool)
+	for _, boolField := range []string{"carelink", "dexcom", "latest", "medtronic"} {
+		boolPrms[boolField] = false
+		if values, ok := q[boolField]; ok {
+			if len(values) < 1 {
+				return nil, fmt.Errorf("%s parameter not valid", boolField)
+			}
+			prmBool, err := strconv.ParseBool(values[len(values)-1])
+			if err != nil {
+				return nil, fmt.Errorf("%s parameter not valid", boolField)
+			}
+			boolPrms[boolField] = prmBool
+		}
+	}
+	// get Device model
+	var device string
+	var deviceErr error
+	var UserID = q.Get(":userID")
+	if device, deviceErr = a.store.GetDeviceModel(UserID); deviceErr != nil {
+		log.Printf("Error in GetDeviceModel for user %s. Error: %s", UserID, deviceErr)
+	}
+
+	LevelFilter := make([]int, 1)
+	LevelFilter = append(LevelFilter, 1)
+	if device == "DBLHU" {
+		LevelFilter = append(LevelFilter, 2)
+		LevelFilter = append(LevelFilter, 3)
+	}
+
+	p := &store.Params{
+		UserID:   q.Get(":userID"),
+		DeviceID: q.Get("deviceId"),
+		UploadID: q.Get("uploadId"),
+		//the query params for type and subtype can contain multiple values seperated
+		//by a comma e.g. "type=smbg,cbg" so split them out into an array of values
+		Types:         strings.Split(q.Get("type"), ","),
+		SubTypes:      strings.Split(q.Get("subType"), ","),
+		Date:          store.Date{strPrms["startDate"], strPrms["endDate"]},
+		SchemaVersion: &a.schemaVersion,
+		Carelink:      boolPrms["carelink"],
+		Dexcom:        boolPrms["dexcom"],
+		Latest:        boolPrms["latest"],
+		Medtronic:     boolPrms["medtronic"],
+		LevelFilter:   LevelFilter,
+	}
+	return p, nil
+}
+
 //log error detail and write as application/json
 func jsonError(res http.ResponseWriter, err detailedError, startedAt time.Time) {
 	logError(&err, startedAt)
@@ -333,19 +393,57 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 	return d
 }
 
-func (a *API) userCanViewData(authenticatedUserID string, targetUserID string) bool {
-	if authenticatedUserID == targetUserID {
-		return true
+func (a *API) getTokenData(req *http.Request) *shoreline.TokenData {
+	var td *shoreline.TokenData
+	if sessionToken := req.Header.Get("x-tidepool-session-token"); sessionToken != "" {
+		td = a.shorelineClient.CheckToken(sessionToken)
+	} else if restrictedTokens, found := req.URL.Query()["restricted_token"]; found && len(restrictedTokens) == 1 {
+		restrictedToken, restrictedTokenErr := a.authClient.GetRestrictedToken(req.Context(), restrictedTokens[0])
+		if restrictedTokenErr == nil && restrictedToken != nil && restrictedToken.Authenticates(req) {
+			td = &shoreline.TokenData{UserID: restrictedToken.UserID}
+		}
 	}
 
-	perms, err := a.perms.UserInGroup(authenticatedUserID, targetUserID)
+	return td
+}
+func (a *API) userCanViewData(authenticatedUserID string, targetUserIDs []string) bool {
+	if len(targetUserIDs) == 1 {
+		targetUserID := targetUserIDs[0]
+		log.Printf("authenticatedUserID::%v / targetUserID::%v", authenticatedUserID, targetUserID)
+		if authenticatedUserID == targetUserID {
+			return true
+		}
+		perms, err := a.perms.UserInGroup(authenticatedUserID, targetUserID)
+		if err != nil {
+			log.Println(DataAPIPrefix, "Error looking up user in group", err)
+			return false
+		}
+		return !(perms["root"] == nil && perms["view"] == nil)
+	}
+	userPerms, err := a.perms.GroupsForUser(authenticatedUserID)
 	if err != nil {
-		log.Println(DataAPIPrefix, "Error looking up user in group", err)
+		log.Println(DataAPIPrefix, "Error looking up users in group", err)
 		return false
 	}
+	authorized := true
+	for _, uid := range targetUserIDs {
+		if _, exists := userPerms[uid]; !exists {
+			authorized = false
+			break
+		}
+	}
 
-	log.Println(perms)
-	return !(perms["root"] == nil && perms["view"] == nil)
+	return authorized
+}
+func (a *API) isAuthorized(req *http.Request, targetUserIDs []string) bool {
+	td := a.getTokenData(req)
+	if td == nil {
+		return false
+	}
+	if td.IsServer {
+		return true
+	}
+	return a.userCanViewData(td.UserID, targetUserIDs)
 }
 
 func newRequestID() string {

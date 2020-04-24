@@ -17,6 +17,11 @@ type Config struct {
 	UserAgent     string `json:"userAgent"`
 }
 
+// ClientInterface interface that we will implement and mock
+type ClientInterface interface {
+	GetRestrictedToken(ctx context.Context, id string) (*RestrictedToken, error)
+}
+
 // Client holds the state of the Auth Client
 type Client struct {
 	config     *Config

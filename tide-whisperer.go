@@ -116,14 +116,14 @@ func main() {
 	if err := shorelineClient.Start(); err != nil {
 		log.Fatal(err)
 	}
-
+	storage := store.NewMongoStoreClient(&config.Mongo)
 	rtr := mux.NewRouter()
 
 	/*
 	 * Data-Api setup
 	 */
 
-	dataapi := data.InitApi(config.Mongo, shorelineClient, authClient, permsClient, config.SchemaVersion)
+	dataapi := data.InitApi(storage, shorelineClient, authClient, permsClient, config.SchemaVersion)
 	dataapi.SetHandlers("", rtr)
 
 	// ability to return compressed (gzip/deflate) responses if client browser accepts it
