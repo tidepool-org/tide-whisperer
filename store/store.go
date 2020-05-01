@@ -361,15 +361,11 @@ func (c *MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 
 	opts := options.FindOne()
 	err := dataCollection(c).FindOne(c.context, query, opts).Err()
-	if err != nil {
-		if err != mongo.ErrNoDocuments {
-			return false, err
-		}
-
+	if err == mongo.ErrNoDocuments {
 		return false, nil
 	}
 
-	return true, nil
+	return err == nil, err
 }
 
 // GetDexcomDataSource - get
@@ -432,15 +428,11 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 
 	opts := options.FindOne()
 	err := dataCollection(c).FindOne(c.context, query, opts).Err()
-	if err != nil {
-		if err != mongo.ErrNoDocuments {
-			return false, err
-		}
-
+	if err == mongo.ErrNoDocuments {
 		return false, nil
 	}
 
-	return true, nil
+	return err == nil, err
 }
 
 // GetLoopableMedtronicDirectUploadIdsAfter returns all Upload IDs for `userID` where Loop data was found
