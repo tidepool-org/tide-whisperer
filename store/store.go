@@ -359,13 +359,17 @@ func (c *MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 		"deviceManufacturers": "Medtronic",
 	}
 
-	opts := options.Count().SetLimit(1)
-	count, err := dataCollection(c).CountDocuments(c.context, query, opts)
+	opts := options.FindOne()
+	err := dataCollection(c).FindOne(c.context, query, opts).Err()
 	if err != nil {
-		return false, err
+		if err != mongo.ErrNoDocuments {
+			return false, err
+		}
+
+		return false, nil
 	}
 
-	return count > 0, nil
+	return true, nil
 }
 
 // GetDexcomDataSource - get
@@ -426,12 +430,17 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 		{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
 	}
 
-	count, err := dataCollection(c).CountDocuments(c.context, query)
+	opts := options.FindOne()
+	err := dataCollection(c).FindOne(c.context, query, opts).Err()
 	if err != nil {
-		return false, err
+		if err != mongo.ErrNoDocuments {
+			return false, err
+		}
+
+		return false, nil
 	}
 
-	return count > 0, nil
+	return true, nil
 }
 
 // GetLoopableMedtronicDirectUploadIdsAfter returns all Upload IDs for `userID` where Loop data was found
