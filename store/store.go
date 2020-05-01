@@ -252,10 +252,6 @@ func generateMongoQuery(p *Params) bson.M {
 		}
 	}
 
-	if p.UserID == "398d0ac771" {
-		log.Printf("%s DavesGetDeviceDataMongoQuery: %v", dataStoreAPIPrefix, groupDataQuery)
-	}
-
 	return groupDataQuery
 }
 
