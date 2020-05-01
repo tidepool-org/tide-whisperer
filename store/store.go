@@ -1,56 +1,48 @@
 package store
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"github.com/globalsign/mgo"
+	"github.com/globalsign/mgo/bson"
 
-	tpMongo "github.com/tidepool-org/go-common/clients/mongo"
+	"github.com/tidepool-org/go-common/clients/mongo"
 )
 
 const (
-	dataCollectionName = "deviceData"
-	dataStoreAPIPrefix = "api/data/store "
+	data_collection       = "deviceData"
+	DATA_STORE_API_PREFIX = "api/data/store"
 )
 
 type (
-	// StorageIterator - Interface for the query iterator
+	//Interface for the query iterator
 	StorageIterator interface {
-		Next(context.Context) bool
-		Decode(interface{}) error
-		Close(context.Context) error
+		Next(result interface{}) bool
+		Close() error
 	}
-	// Storage - Interface for our storage layer
+	//Interface for our storage layer
 	Storage interface {
 		Close()
 		Ping() error
 		GetDeviceData(p *Params) StorageIterator
 	}
-	// MongoStoreClient - Mongo Storage Client
+	//Mongo Storage Client
 	MongoStoreClient struct {
-		client   *mongo.Client
-		context  context.Context
-		database string
+		session *mgo.Session
 	}
 
-	// SchemaVersion struct
 	SchemaVersion struct {
 		Minimum int
 		Maximum int
 	}
 
-	// Params struct
 	Params struct {
-		UserID   string
+		UserId   string
 		Types    []string
 		SubTypes []string
 		Date
@@ -58,23 +50,32 @@ type (
 		Carelink           bool
 		Dexcom             bool
 		DexcomDataSource   bson.M
-		DeviceID           string
+		DeviceId           string
 		Latest             bool
 		Medtronic          bool
 		MedtronicDate      string
 		MedtronicUploadIds []string
-		UploadID           string
+		UploadId           string
 	}
 
-	// Date struct
 	Date struct {
 		Start string
 		End   string
 	}
 
+	returnIterator interface {
+		Close() error
+		Next(result interface{}) bool
+	}
+
 	latestIterator struct {
-		results []bson.Raw
-		pos     int
+		Iterators []*mgo.Iter
+		pos       int
+	}
+
+	closingSessionIterator struct {
+		*mgo.Session
+		Iter returnIterator
 	}
 )
 
@@ -89,7 +90,6 @@ func cleanDateString(dateString string) (string, error) {
 	return date.Format(time.RFC3339Nano), nil
 }
 
-// GetParams parses a URL to set parameters
 func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 
 	startStr, err := cleanDateString(q.Get("startDate"))
@@ -147,9 +147,9 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 	}
 
 	p := &Params{
-		UserID:   q.Get(":userID"),
-		DeviceID: q.Get("deviceId"),
-		UploadID: q.Get("uploadId"),
+		UserId:   q.Get(":userID"),
+		DeviceId: q.Get("deviceId"),
+		UploadId: q.Get("uploadId"),
 		//the query params for type and subtype can contain multiple values seperated
 		//by a comma e.g. "type=smbg,cbg" so split them out into an array of values
 		Types:         strings.Split(q.Get("type"), ","),
@@ -166,97 +166,20 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 
 }
 
-// NewMongoStoreClient creates a new MongoStoreClient
-func NewMongoStoreClient(config *tpMongo.Config) *MongoStoreClient {
-	connectionString, err := config.ToConnectionString()
-	if err != nil {
-		log.Fatal(dataStoreAPIPrefix, fmt.Sprintf("Invalid MongoDB configuration: %s", err))
-	}
+func NewMongoStoreClient(config *mongo.Config) *MongoStoreClient {
 
-	clientOptions := options.Client().ApplyURI(connectionString)
-	mongoClient, err := mongo.Connect(context.Background(), clientOptions)
+	mongoSession, err := mongo.Connect(config)
 	if err != nil {
-		log.Fatal(dataStoreAPIPrefix, fmt.Sprintf("Invalid MongoDB connection string: %s", err))
+		log.Fatal(DATA_STORE_API_PREFIX, err)
 	}
 
 	return &MongoStoreClient{
-		client:   mongoClient,
-		context:  context.Background(),
-		database: config.Database,
+		session: mongoSession,
 	}
 }
 
-// WithContext returns a shallow copy of c with its context changed
-// to ctx. The provided ctx must be non-nil.
-func (c *MongoStoreClient) WithContext(ctx context.Context) *MongoStoreClient {
-	if ctx == nil {
-		panic("nil context")
-	}
-	c2 := new(MongoStoreClient)
-	*c2 = *c
-	c2.context = ctx
-	return c2
-}
-
-// EnsureIndexes exist for the MongoDB collection. EnsureIndexes uses the Background() context, in order
-// to pass back the MongoDB errors, rather than any context errors.
-func (c *MongoStoreClient) EnsureIndexes() error {
-	indexes := []mongo.IndexModel{
-		{
-			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "deviceModel", Value: 1}},
-			Options: options.Index().
-				SetName("GetLoopableMedtronicDirectUploadIdsAfter_v2").
-				SetBackground(true).
-				SetPartialFilterExpression(
-					bson.D{
-						{Key: "_active", Value: true},
-						{Key: "type", Value: "upload"},
-						{Key: "deviceModel", Value: bson.M{
-							"$exists": true,
-						}},
-						{Key: "time", Value: bson.M{
-							"$gte": "2017-09-01",
-						}},
-					},
-				),
-		},
-		{
-			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "origin.payload.device.manufacturer", Value: 1}},
-			Options: options.Index().
-				SetName("HasMedtronicLoopDataAfter_v2").
-				SetBackground(true).
-				SetPartialFilterExpression(
-					bson.D{
-						{Key: "_active", Value: true},
-						{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
-						{Key: "time", Value: bson.M{
-							"$gte": "2017-09-01",
-						}},
-					},
-				),
-		},
-		{
-			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "time", Value: -1}, {Key: "type", Value: 1}},
-			Options: options.Index().
-				SetName("UserIdTimeWeighted_v2").
-				SetBackground(true).
-				SetPartialFilterExpression(
-					bson.D{
-						{Key: "_active", Value: true},
-					},
-				),
-		},
-	}
-
-	if _, err := dataCollection(c).Indexes().CreateMany(context.Background(), indexes); err != nil {
-		log.Fatal(dataStoreAPIPrefix, fmt.Sprintf("Unable to create indexes: %s", err))
-	}
-
-	return nil
-}
-
-func dataCollection(msc *MongoStoreClient) *mongo.Collection {
-	return msc.client.Database(msc.database).Collection(dataCollectionName)
+func mgoDataCollection(cpy *mgo.Session) *mgo.Collection {
+	return cpy.DB("").C(data_collection)
 }
 
 // generateMongoQuery takes in a number of parameters and constructs a mongo query
@@ -266,8 +189,9 @@ func dataCollection(msc *MongoStoreClient) *mongo.Collection {
 func generateMongoQuery(p *Params) bson.M {
 
 	groupDataQuery := bson.M{
-		"_userId": p.UserID,
-		"_active": true}
+		"_userId":        p.UserId,
+		"_active":        true,
+		"_schemaVersion": bson.M{"$gte": p.SchemaVersion.Minimum, "$lte": p.SchemaVersion.Maximum}}
 
 	//if optional parameters are present, then add them to the query
 	if len(p.Types) > 0 && p.Types[0] != "" {
@@ -290,14 +214,14 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["source"] = bson.M{"$ne": "carelink"}
 	}
 
-	if p.DeviceID != "" {
-		groupDataQuery["deviceId"] = p.DeviceID
+	if p.DeviceId != "" {
+		groupDataQuery["deviceId"] = p.DeviceId
 	}
 
 	// If we have an explicit upload ID to filter by, we don't need or want to apply any further
 	// data source-based filtering
-	if p.UploadID != "" {
-		groupDataQuery["uploadId"] = p.UploadID
+	if p.UploadId != "" {
+		groupDataQuery["uploadId"] = p.UploadId
 	} else {
 		andQuery := []bson.M{}
 		if !p.Dexcom && p.DexcomDataSource != nil {
@@ -328,29 +252,27 @@ func generateMongoQuery(p *Params) bson.M {
 		}
 	}
 
-	if p.UserID == "398d0ac771" {
-		log.Printf("%s DavesGetDeviceDataMongoQuery: %v", dataStoreAPIPrefix, groupDataQuery)
-	}
-
 	return groupDataQuery
 }
 
-// Ping the MongoDB database
-func (c *MongoStoreClient) Ping() error {
+func (d MongoStoreClient) Close() {
+	log.Print(DATA_STORE_API_PREFIX, "Close the session")
+	d.session.Close()
+	return
+}
+
+func (d MongoStoreClient) Ping() error {
 	// do we have a store session
-	return c.client.Ping(c.context, nil)
+	return d.session.Ping()
 }
 
-// Disconnect from the MongoDB database
-func (c *MongoStoreClient) Disconnect() error {
-	return c.client.Disconnect(c.context)
-}
-
-// HasMedtronicDirectData - check whether the userID has Medtronic data that has been uploaded via Uploader
-func (c *MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
+func (d MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 	if userID == "" {
 		return false, errors.New("user id is missing")
 	}
+
+	session := d.session.Copy()
+	defer session.Close()
 
 	query := bson.M{
 		"_userId": userID,
@@ -363,8 +285,7 @@ func (c *MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 		"deviceManufacturers": "Medtronic",
 	}
 
-	opts := options.Count().SetLimit(1)
-	count, err := dataCollection(c).CountDocuments(c.context, query, opts)
+	count, err := mgoDataCollection(session).Find(query).Limit(1).Count()
 	if err != nil {
 		return false, err
 	}
@@ -372,11 +293,13 @@ func (c *MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 	return count > 0, nil
 }
 
-// GetDexcomDataSource - get
-func (c *MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
+func (d MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 	if userID == "" {
 		return nil, errors.New("user id is missing")
 	}
+
+	session := d.session.Copy()
+	defer session.Close()
 
 	query := bson.M{
 		"userId":       userID,
@@ -397,14 +320,8 @@ func (c *MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 	}
 
 	dataSources := []bson.M{}
-	opts := options.Find().SetLimit(1)
-	cursor, err := c.client.Database("tidepool").Collection("data_sources").Find(c.context, query, opts)
+	err := session.DB("tidepool").C("data_sources").Find(query).Limit(1).All(&dataSources)
 	if err != nil {
-		return nil, err
-	}
-
-	defer cursor.Close(c.context)
-	if err = cursor.All(c.context, &dataSources); err != nil {
 		return nil, err
 	} else if len(dataSources) == 0 {
 		return nil, nil
@@ -413,9 +330,7 @@ func (c *MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 	return dataSources[0], nil
 }
 
-// HasMedtronicLoopDataAfter checks the database to see if Loop data exists for `userID` that originated
-// from a Medtronic device after `date`
-func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string) (bool, error) {
+func (d MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string) (bool, error) {
 	if userID == "" {
 		return false, errors.New("user id is missing")
 	}
@@ -423,14 +338,18 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 		return false, errors.New("date is missing")
 	}
 
-	query := bson.D{
-		{Key: "_active", Value: true},
-		{Key: "_userId", Value: userID},
-		{Key: "time", Value: bson.D{{Key: "$gte", Value: date}}},
-		{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
+	session := d.session.Copy()
+	defer session.Close()
+
+	query := bson.M{
+		"_active":                            true,
+		"_userId":                            userID,
+		"_schemaVersion":                     bson.M{"$gt": 0},
+		"time":                               bson.M{"$gte": date},
+		"origin.payload.device.manufacturer": "Medtronic",
 	}
 
-	count, err := dataCollection(c).CountDocuments(c.context, query)
+	count, err := mgoDataCollection(session).Find(query).Limit(1).Count()
 	if err != nil {
 		return false, err
 	}
@@ -438,9 +357,7 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 	return count > 0, nil
 }
 
-// GetLoopableMedtronicDirectUploadIdsAfter returns all Upload IDs for `userID` where Loop data was found
-// for a Medtronic device after `date`.
-func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID string, date string) ([]string, error) {
+func (d MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID string, date string) ([]string, error) {
 	if userID == "" {
 		return nil, errors.New("user id is missing")
 	}
@@ -448,27 +365,22 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 		return nil, errors.New("date is missing")
 	}
 
+	session := d.session.Copy()
+	defer session.Close()
+
 	query := bson.M{
-		"_active":     true,
-		"_userId":     userID,
-		"time":        bson.M{"$gte": date},
-		"type":        "upload",
-		"deviceModel": bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
+		"_active":        true,
+		"_userId":        userID,
+		"_schemaVersion": bson.M{"$gt": 0},
+		"time":           bson.M{"$gte": date},
+		"type":           "upload",
+		"deviceModel":    bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
 	}
 
 	objects := []struct {
 		UploadID string `bson:"uploadId"`
 	}{}
-
-	opts := options.Find().SetProjection(bson.M{"_id": 0, "uploadId": 1})
-	cursor, err := dataCollection(c).Find(c.context, query, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	defer cursor.Close(c.context)
-	err = cursor.All(c.context, &objects)
-
+	err := mgoDataCollection(session).Find(query).Select(bson.M{"_id": 0, "uploadId": 1}).All(&objects)
 	if err != nil {
 		return nil, err
 	}
@@ -481,15 +393,19 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 	return uploadIds, nil
 }
 
-// GetDeviceData returns all of the device data for a user
-func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
+func (d MongoStoreClient) GetDeviceData(p *Params) StorageIterator {
 
-	// _schemaVersion is still in the list of fields to remove. Although we don't query for it, data can still exist for it
-	// until BACK-1281 is done.
 	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
 
+	// Note: We do not defer closing the session copy here as the iterator is returned back to be
+	// caller for processing. Instead, we wrap the session and iterator in an object that
+	// closes session when the iterator is closed. See ClosingSessionIterator below.
+	session := d.session.Copy()
+
+	var iter returnIterator
+
 	if p.Latest {
-		latest := &latestIterator{pos: -1}
+		latest := &latestIterator{pos: 0, Iterators: []*mgo.Iter{}}
 
 		var typeRanges []string
 		if len(p.Types) > 0 && p.Types[0] != "" {
@@ -497,43 +413,69 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 		} else {
 			typeRanges = []string{"physicalActivity", "basal", "cbg", "smbg", "bloodKetone", "bolus", "wizard", "deviceEvent", "food", "insulin", "cgmSettings", "pumpSettings", "reportedState", "upload"}
 		}
-
-		var err error
-
 		for _, theType := range typeRanges {
 			query := generateMongoQuery(p)
 			query["type"] = theType
-			opts := options.FindOne().SetProjection(removeFieldsForReturn).SetSort(bson.M{"time": -1})
-			result, resultErr := dataCollection(c).
-				FindOne(c.context, query, opts).
-				DecodeBytes()
-			if resultErr != nil {
-				if resultErr == mongo.ErrNoDocuments {
-					continue
-				}
-				err = resultErr
-				break
+			result := mgoDataCollection(session).
+				Find(query).
+				Select(removeFieldsForReturn).
+				Sort("-time").
+				Limit(1).
+				Iter()
+			if !result.Done() {
+				latest.Append(result)
 			}
-
-			latest.results = append(latest.results, result)
 		}
-		return latest, err
+
+		iter = latest
+	} else {
+		iter = mgoDataCollection(session).
+			Find(generateMongoQuery(p)).
+			Select(removeFieldsForReturn).
+			Iter()
 	}
 
-	opts := options.Find().SetProjection(removeFieldsForReturn)
-	return dataCollection(c).
-		Find(c.context, generateMongoQuery(p), opts)
+	return &closingSessionIterator{session, iter}
 }
 
-func (l *latestIterator) Next(context.Context) bool {
+func (l *latestIterator) Append(itr *mgo.Iter) {
+	l.Iterators = append(l.Iterators, itr)
+}
+
+func (l *latestIterator) Next(result interface{}) bool {
+	if len(l.Iterators) == l.pos {
+		return false
+	}
+
+	if l.Iterators[l.pos] != nil {
+		l.Iterators[l.pos].Next(result)
+	}
 	l.pos++
-	return l.pos < len(l.results)
+	return true
 }
 
-func (l *latestIterator) Decode(result interface{}) error {
-	return bson.Unmarshal(l.results[l.pos], result)
+func (l *latestIterator) Close() (err error) {
+	for _, i := range l.Iterators {
+		err = i.Close()
+	}
+	return err
 }
 
-func (l *latestIterator) Close(context.Context) error {
-	return nil
+func (i *closingSessionIterator) Next(result interface{}) bool {
+	if i.Iter != nil {
+		return i.Iter.Next(result)
+	}
+	return false
+}
+
+func (i *closingSessionIterator) Close() (err error) {
+	if i.Iter != nil {
+		err = i.Iter.Close()
+		i.Iter = nil
+	}
+	if i.Session != nil {
+		i.Session.Close()
+		i.Session = nil
+	}
+	return err
 }

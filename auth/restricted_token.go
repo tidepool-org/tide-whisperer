@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-// RestrictedToken holds data for a restricted token from the `auth` service
 type RestrictedToken struct {
 	ID             string     `json:"id"`
 	UserID         string     `json:"userId"`
@@ -16,7 +15,6 @@ type RestrictedToken struct {
 	ModifiedTime   *time.Time `json:"modifiedTime,omitempty"`
 }
 
-// Authenticates determines whether the req has a valid restricted token.
 func (r *RestrictedToken) Authenticates(req *http.Request) bool {
 	if req == nil || req.URL == nil {
 		return false
