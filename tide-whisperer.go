@@ -172,36 +172,6 @@ func main() {
 
 	router := pat.New()
 
-	/*
-	 Gloo performs autodiscovery by trying certain paths,
-	 including /swagger, /v1, and v2.  Unfortunately, tide-whisperer
-	 interprets those paths as userids.  To avoid misleading
-	 error messages, we catch these calls and return an error
-	 code.
-	*/
-	router.Add("GET", "/swagger", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		res.WriteHeader(501)
-		return
-	}))
-	router.Add("GET", "/swagger/docs/v2", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		res.WriteHeader(501)
-		return
-	}))
-	router.Add("GET", "/swagger.json", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		res.WriteHeader(501)
-		return
-	}))
-
-	router.Add("GET", "/v1", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		res.WriteHeader(501)
-		return
-	}))
-
-	router.Add("GET", "/v2", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		res.WriteHeader(501)
-		return
-	}))
-
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 		if err := storage.Ping(); err != nil {
@@ -212,22 +182,7 @@ func main() {
 		return
 	}))
 
-	// The /data/userId endpoint retrieves device/health data for a user based on a set of parameters
-	// userid: the ID of the user you want to retrieve data for
-	// uploadId (optional) : Search for Tidepool data by uploadId. Only objects with a uploadId field matching the specified uploadId param will be returned.
-	// deviceId (optional) : Search for Tidepool data by deviceId. Only objects with a deviceId field matching the specified uploadId param will be returned.
-	// type (optional) : The Tidepool data type to search for. Only objects with a type field matching the specified type param will be returned.
-	//					can be /userid?type=smbg or a comma seperated list e.g /userid?type=smgb,cbg . If is a comma seperated
-	//					list, then objects matching any of the sub types will be returned
-	// subType (optional) : The Tidepool data subtype to search for. Only objects with a subtype field matching the specified subtype param will be returned.
-	//					can be /userid?subtype=physicalactivity or a comma seperated list e.g /userid?subtypetype=physicalactivity,steps . If is a comma seperated
-	//					list, then objects matching any of the types will be returned
-	// startDate (optional) : Only objects with 'time' field equal to or greater than start date will be returned.
-	//					Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
-	// endDate (optional) : Only objects with 'time' field less than to or equal to start date will be returned.
-	//					Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
-	// latest (optional) : Returns only the most recent results for each `type` matching the results filtered by the other query parameters
-	router.Add("GET", "/{userID}", httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+	f := httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 
 		queryParams, err := store.GetParams(req.URL.Query(), &config.SchemaVersion)
@@ -344,7 +299,25 @@ func main() {
 			log.Printf("%s request %s user %s GetDeviceData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 		}
 		log.Printf("%s request %s user %s took %.3fs returned %d records", DATA_API_PREFIX, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
-	})))
+	}))
+
+	// The /data/userId endpoint retrieves device/health data for a user based on a set of parameters
+	// userid: the ID of the user you want to retrieve data for
+	// uploadId (optional) : Search for Tidepool data by uploadId. Only objects with a uploadId field matching the specified uploadId param will be returned.
+	// deviceId (optional) : Search for Tidepool data by deviceId. Only objects with a deviceId field matching the specified uploadId param will be returned.
+	// type (optional) : The Tidepool data type to search for. Only objects with a type field matching the specified type param will be returned.
+	//					can be /userid?type=smbg or a comma seperated list e.g /userid?type=smgb,cbg . If is a comma seperated
+	//					list, then objects matching any of the sub types will be returned
+	// subType (optional) : The Tidepool data subtype to search for. Only objects with a subtype field matching the specified subtype param will be returned.
+	//					can be /userid?subtype=physicalactivity or a comma seperated list e.g /userid?subtypetype=physicalactivity,steps . If is a comma seperated
+	//					list, then objects matching any of the types will be returned
+	// startDate (optional) : Only objects with 'time' field equal to or greater than start date will be returned.
+	//					Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
+	// endDate (optional) : Only objects with 'time' field less than to or equal to start date will be returned.
+	//					Must be in ISO date/time format e.g. 2015-10-10T15:00:00.000Z
+	// latest (optional) : Returns only the most recent results for each `type` matching the results filtered by the other query parameters
+	router.Add("GET", "/data/{userID}", f)
+	router.Add("GET", "/{userID}", f)
 
 	done := make(chan bool)
 	server := common.NewServer(&http.Server{
