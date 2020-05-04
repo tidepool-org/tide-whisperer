@@ -358,8 +358,7 @@ func (c *MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 		"deviceManufacturers": "Medtronic",
 	}
 
-	opts := options.FindOne()
-	err := dataCollection(c).FindOne(c.context, query, opts).Err()
+	err := dataCollection(c).FindOne(c.context, query).Err()
 	if err == mongo.ErrNoDocuments {
 		return false, nil
 	}
@@ -393,8 +392,8 @@ func (c *MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 		},
 	}
 
-	dataSources := bson.M{}
-	err := c.client.Database("tidepool").Collection("data_sources").FindOne(c.context, query).Decode(&dataSources)
+	dataSource := bson.M{}
+	err := c.client.Database("tidepool").Collection("data_sources").FindOne(c.context, query).Decode(&dataSource)
 	if err == mongo.ErrNoDocuments {
 		return nil, nil
 	}
@@ -403,7 +402,7 @@ func (c *MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 		return nil, err
 	}
 
-	return dataSources, nil
+	return dataSource, nil
 }
 
 // HasMedtronicLoopDataAfter checks the database to see if Loop data exists for `userID` that originated
@@ -423,8 +422,7 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 		{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
 	}
 
-	opts := options.FindOne()
-	err := dataCollection(c).FindOne(c.context, query, opts).Err()
+	err := dataCollection(c).FindOne(c.context, query).Err()
 	if err == mongo.ErrNoDocuments {
 		return false, nil
 	}
