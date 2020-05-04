@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
@@ -305,12 +306,10 @@ func generateMongoQuery(p *Params) bson.M {
 				{"type": bson.M{"$ne": "cbg"}},
 				{"uploadId": bson.M{"$in": p.DexcomDataSource["dataSetIds"]}},
 			}
-			if earliestDataTime, ok := p.DexcomDataSource["earliestDataTime"].(time.Time); ok {
-				dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}})
-			}
-			if latestDataTime, ok := p.DexcomDataSource["latestDataTime"].(time.Time); ok {
-				dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}})
-			}
+			earliestDataTime := p.DexcomDataSource["earliestDataTime"].(primitive.DateTime).Time()
+			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}})
+			latestDataTime := p.DexcomDataSource["latestDataTime"].(primitive.DateTime).Time()
+			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}})
 			andQuery = append(andQuery, bson.M{"$or": dexcomQuery})
 		}
 
@@ -392,21 +391,17 @@ func (c *MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 		},
 	}
 
-	dataSources := []bson.M{}
-	opts := options.Find().SetLimit(1)
-	cursor, err := c.client.Database("tidepool").Collection("data_sources").Find(c.context, query, opts)
+	dataSources := bson.M{}
+	err := c.client.Database("tidepool").Collection("data_sources").FindOne(c.context, query).Decode(&dataSources)
 	if err != nil {
 		return nil, err
 	}
 
-	defer cursor.Close(c.context)
-	if err = cursor.All(c.context, &dataSources); err != nil {
-		return nil, err
-	} else if len(dataSources) == 0 {
+	if len(dataSources) == 0 {
 		return nil, nil
 	}
 
-	return dataSources[0], nil
+	return dataSources, nil
 }
 
 // HasMedtronicLoopDataAfter checks the database to see if Loop data exists for `userID` that originated
