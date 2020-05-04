@@ -373,6 +373,8 @@ func (c *MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 		return nil, errors.New("user id is missing")
 	}
 
+	// `earliestDataTime` and `latestDataTime` are bson.Date fields. Internally, they are int64's
+	// so if they exist, the must be set to something, even if 0 (ie Unix epoch)
 	query := bson.M{
 		"userId":       userID,
 		"providerType": "oauth",
