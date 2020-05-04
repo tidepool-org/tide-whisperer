@@ -306,9 +306,9 @@ func generateMongoQuery(p *Params) bson.M {
 				{"type": bson.M{"$ne": "cbg"}},
 				{"uploadId": bson.M{"$in": p.DexcomDataSource["dataSetIds"]}},
 			}
-			earliestDataTime := p.DexcomDataSource["earliestDataTime"].(primitive.DateTime).Time()
+			earliestDataTime := p.DexcomDataSource["earliestDataTime"].(primitive.DateTime).Time().UTC()
 			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}})
-			latestDataTime := p.DexcomDataSource["latestDataTime"].(primitive.DateTime).Time()
+			latestDataTime := p.DexcomDataSource["latestDataTime"].(primitive.DateTime).Time().UTC()
 			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}})
 			andQuery = append(andQuery, bson.M{"$or": dexcomQuery})
 		}
@@ -395,12 +395,12 @@ func (c *MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 
 	dataSources := bson.M{}
 	err := c.client.Database("tidepool").Collection("data_sources").FindOne(c.context, query).Decode(&dataSources)
-	if err != nil {
-		return nil, err
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
 	}
 
-	if len(dataSources) == 0 {
-		return nil, nil
+	if err != nil {
+		return nil, err
 	}
 
 	return dataSources, nil
