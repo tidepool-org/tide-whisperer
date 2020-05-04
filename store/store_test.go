@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -9,31 +10,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/globalsign/mgo"
-	"github.com/globalsign/mgo/bson"
+	"go.mongodb.org/mongo-driver/bson"
 
-	"github.com/tidepool-org/go-common/clients/mongo"
+	tpMongo "github.com/tidepool-org/go-common/clients/mongo"
 )
 
-var testingConfig = &mongo.Config{ConnectionString: "mongodb://127.0.0.1/data_test"}
+var testingConfig = &tpMongo.Config{ConnectionString: "mongodb://127.0.0.1/data_test", Database: "data_test"}
 
 func before(t *testing.T, docs ...interface{}) *MongoStoreClient {
 
 	store := NewMongoStoreClient(testingConfig)
 
 	//INIT THE TEST - we use a clean copy of the collection before we start
-	cpy := store.session.Copy()
-	defer cpy.Close()
-
 	//just drop and don't worry about any errors
-	mgoDataCollection(cpy).DropCollection()
-
-	if err := mgoDataCollection(cpy).Create(&mgo.CollectionInfo{}); err != nil {
-		t.Error("We couldn't created the deviceData collection for these tests ", err)
-	}
+	dataCollection(store).Drop(context.TODO())
 
 	if len(docs) > 0 {
-		if err := mgoDataCollection(cpy).Insert(docs...); err != nil {
+		if _, err := dataCollection(store).InsertMany(store.context, docs); err != nil {
 			t.Error("Unable to insert documents", err)
 		}
 	}
@@ -78,7 +71,7 @@ func contains(s []string, e string) bool {
 
 func basicQuery() bson.M {
 	qParams := &Params{
-		UserId:        "abc123",
+		UserID:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		Dexcom:        true,
 		Medtronic:     true,
@@ -92,8 +85,8 @@ func allParams() *Params {
 	latestDataTime, _ := time.Parse(time.RFC3339, "2016-12-13T02:00:00Z")
 
 	return &Params{
-		UserId:        "abc123",
-		DeviceId:      "device123",
+		UserID:        "abc123",
+		DeviceID:      "device123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		Date:          Date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
 		Types:         []string{"smbg", "cbg"},
@@ -116,16 +109,16 @@ func allParamsQuery() bson.M {
 	return generateMongoQuery(allParams())
 }
 
-func allParamsIncludingUploadIdQuery() bson.M {
+func allParamsIncludingUploadIDQuery() bson.M {
 	qParams := allParams()
-	qParams.UploadId = "xyz123"
+	qParams.UploadID = "xyz123"
 
 	return generateMongoQuery(qParams)
 }
 
 func typeAndSubtypeQuery() bson.M {
 	qParams := &Params{
-		UserId:             "abc123",
+		UserID:             "abc123",
 		SchemaVersion:      &SchemaVersion{Maximum: 2, Minimum: 0},
 		Types:              []string{"smbg", "cbg"},
 		SubTypes:           []string{"stuff"},
@@ -137,30 +130,31 @@ func typeAndSubtypeQuery() bson.M {
 	return generateMongoQuery(qParams)
 }
 
-func uploadIdQuery() bson.M {
+func uploadIDQuery() bson.M {
 	qParams := &Params{
-		UserId:        "abc123",
+		UserID:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		UploadId:      "xyz123",
+		UploadID:      "xyz123",
 	}
 	return generateMongoQuery(qParams)
 }
 
 func testDataForLatestTests() map[string]bson.M {
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	testData := map[string]bson.M{
-		"upload1": bson.M{
+		"upload1": {
 			"_active":        true,
 			"_userId":        "abc123",
-			"_schemaVersion": 1,
+			"_schemaVersion": int32(1),
 			"time":           "2019-03-15T01:24:28.000Z",
 			"type":           "upload",
 			"deviceId":       "dev123",
 			"uploadId":       "9244bb16e27c4973c2f37af81784a05d",
 		},
-		"cbg1": bson.M{
+		"cbg1": {
 			"_active":        true,
 			"_userId":        "abc123",
-			"_schemaVersion": 1,
+			"_schemaVersion": int32(1),
 			"time":           "2019-03-15T00:42:51.902Z",
 			"type":           "cbg",
 			"units":          "mmol/L",
@@ -168,19 +162,19 @@ func testDataForLatestTests() map[string]bson.M {
 			"uploadId":       "9244bb16e27c4973c2f37af81784a05d",
 			"value":          12.82223,
 		},
-		"upload2": bson.M{
+		"upload2": {
 			"_active":        true,
 			"_userId":        "abc123",
-			"_schemaVersion": 1,
+			"_schemaVersion": int32(1),
 			"time":           "2019-03-14T01:24:28.000Z",
 			"type":           "upload",
 			"deviceId":       "dev456",
 			"uploadId":       "zzz4bb16e27c4973c2f37af81784a05d",
 		},
-		"cbg2": bson.M{
+		"cbg2": {
 			"_active":        true,
 			"_userId":        "abc123",
-			"_schemaVersion": 1,
+			"_schemaVersion": int32(1),
 			"time":           "2019-03-14T00:42:51.902Z",
 			"type":           "cbg",
 			"units":          "mmol/L",
@@ -188,19 +182,19 @@ func testDataForLatestTests() map[string]bson.M {
 			"deviceId":       "dev456",
 			"value":          9.7213,
 		},
-		"upload3": bson.M{
+		"upload3": {
 			"_active":        true,
 			"_userId":        "xyz123",
-			"_schemaVersion": 1,
+			"_schemaVersion": int32(1),
 			"time":           "2019-03-19T01:24:28.000Z",
 			"type":           "upload",
 			"deviceId":       "dev789",
 			"uploadId":       "xxx4bb16e27c4973c2f37af81784a05d",
 		},
-		"cbg3": bson.M{
+		"cbg3": {
 			"_active":        true,
 			"_userId":        "xyz123",
-			"_schemaVersion": 1,
+			"_schemaVersion": int32(1),
 			"time":           "2019-03-19T00:42:51.902Z",
 			"type":           "cbg",
 			"units":          "mmol/L",
@@ -236,15 +230,110 @@ func storeDataForLatestTests() []interface{} {
 	return storeData
 }
 
+func TestStore_EnsureIndexes(t *testing.T) {
+	store := before(t)
+	err := store.EnsureIndexes()
+	if err != nil {
+		t.Error("Failed to run EnsureIndexes()")
+	}
+
+	indexView := dataCollection(store).Indexes()
+	cursor, err := indexView.List(context.TODO())
+	if err != nil {
+		t.Error("Unexpected error fetching indexes")
+	}
+
+	defer cursor.Close(context.Background())
+	type mongoIndex struct {
+		Key                     bson.D
+		Name                    string
+		Background              bool
+		Unique                  bool
+		PartialFilterExpression bson.D
+	}
+	var indexes []mongoIndex
+
+	for cursor.Next(context.Background()) {
+		r := mongoIndex{}
+
+		if err = cursor.Decode(&r); err != nil {
+			break
+		}
+		indexes = append(indexes, r)
+	}
+	if err != nil {
+		t.Error("Unexpected error decoding indexes")
+	}
+
+	makeKeySlice := func(mgoList ...string) bson.D {
+		keySlice := bson.D{}
+		for _, key := range mgoList {
+			order := int32(1)
+			if key[0] == '-' {
+				order = int32(-1)
+				key = key[1:]
+			}
+			keySlice = append(keySlice, bson.E{Key: key, Value: order})
+		}
+		return keySlice
+	}
+
+	expectedIndexes := []mongoIndex{
+		{
+			Key:  makeKeySlice("_id"),
+			Name: "_id_",
+		},
+		{
+			Key:        makeKeySlice("_userId", "deviceModel"),
+			Background: true,
+			PartialFilterExpression: bson.D{
+				{Key: "_active", Value: true},
+				{Key: "type", Value: "upload"},
+				{Key: "deviceModel", Value: bson.D{
+					{Key: "$exists", Value: true},
+				}},
+				{Key: "time", Value: bson.D{
+					{Key: "$gte", Value: "2017-09-01"},
+				}},
+			},
+			Name: "GetLoopableMedtronicDirectUploadIdsAfter_v2",
+		},
+		{
+			Key:        makeKeySlice("_userId", "origin.payload.device.manufacturer"),
+			Background: true,
+			PartialFilterExpression: bson.D{
+				{Key: "_active", Value: true},
+				{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
+				{Key: "time", Value: bson.D{
+					{Key: "$gte", Value: "2017-09-01"},
+				}},
+			},
+			Name: "HasMedtronicLoopDataAfter_v2",
+		},
+		{
+			Key:        makeKeySlice("_userId", "-time", "type"),
+			Background: true,
+			PartialFilterExpression: bson.D{
+				{Key: "_active", Value: true},
+			},
+			Name: "UserIdTimeWeighted_v2",
+		},
+	}
+
+	eq := reflect.DeepEqual(indexes, expectedIndexes)
+	if !eq {
+		t.Error(fmt.Sprintf("expected:\n%+#v\ngot:\n%+#v\n", expectedIndexes, indexes))
+	}
+}
+
 func TestStore_generateMongoQuery_basic(t *testing.T) {
 
 	time.Now()
 	query := basicQuery()
 
 	expectedQuery := bson.M{
-		"_userId":        "abc123",
-		"_active":        true,
-		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
+		"_userId": "abc123",
+		"_active": true,
 		"source": bson.M{
 			"$ne": "carelink",
 		},
@@ -262,12 +351,11 @@ func TestStore_generateMongoQuery_allParams(t *testing.T) {
 	query := allParamsQuery()
 
 	expectedQuery := bson.M{
-		"_userId":        "abc123",
-		"deviceId":       "device123",
-		"_active":        true,
-		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
-		"type":           bson.M{"$in": strings.Split("smbg,cbg", ",")},
-		"subType":        bson.M{"$in": strings.Split("stuff", ",")},
+		"_userId":  "abc123",
+		"deviceId": "device123",
+		"_active":  true,
+		"type":     bson.M{"$in": strings.Split("smbg,cbg", ",")},
+		"subType":  bson.M{"$in": strings.Split("stuff", ",")},
 		"time": bson.M{
 			"$gte": "2015-10-07T15:00:00.000Z",
 			"$lte": "2015-10-11T15:00:00.000Z"},
@@ -294,16 +382,15 @@ func TestStore_generateMongoQuery_allParams(t *testing.T) {
 
 func TestStore_generateMongoQuery_allparamsWithUploadId(t *testing.T) {
 
-	query := allParamsIncludingUploadIdQuery()
+	query := allParamsIncludingUploadIDQuery()
 
 	expectedQuery := bson.M{
-		"_userId":        "abc123",
-		"deviceId":       "device123",
-		"_active":        true,
-		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
-		"type":           bson.M{"$in": strings.Split("smbg,cbg", ",")},
-		"subType":        bson.M{"$in": strings.Split("stuff", ",")},
-		"uploadId":       "xyz123",
+		"_userId":  "abc123",
+		"deviceId": "device123",
+		"_active":  true,
+		"type":     bson.M{"$in": strings.Split("smbg,cbg", ",")},
+		"subType":  bson.M{"$in": strings.Split("stuff", ",")},
+		"uploadId": "xyz123",
 		"time": bson.M{
 			"$gte": "2015-10-07T15:00:00.000Z",
 			"$lte": "2015-10-11T15:00:00.000Z"},
@@ -317,13 +404,12 @@ func TestStore_generateMongoQuery_allparamsWithUploadId(t *testing.T) {
 
 func TestStore_generateMongoQuery_uploadId(t *testing.T) {
 
-	query := uploadIdQuery()
+	query := uploadIDQuery()
 
 	expectedQuery := bson.M{
-		"_userId":        "abc123",
-		"_active":        true,
-		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
-		"uploadId":       "xyz123",
+		"_userId":  "abc123",
+		"_active":  true,
+		"uploadId": "xyz123",
 		"source": bson.M{
 			"$ne": "carelink",
 		},
@@ -340,11 +426,10 @@ func TestStore_generateMongoQuery_noDates(t *testing.T) {
 	query := typeAndSubtypeQuery()
 
 	expectedQuery := bson.M{
-		"_userId":        "abc123",
-		"_active":        true,
-		"type":           bson.M{"$in": strings.Split("smbg,cbg", ",")},
-		"subType":        bson.M{"$in": strings.Split("stuff", ",")},
-		"_schemaVersion": bson.M{"$gte": 0, "$lte": 2},
+		"_userId": "abc123",
+		"_active": true,
+		"type":    bson.M{"$in": strings.Split("smbg,cbg", ",")},
+		"subType": bson.M{"$in": strings.Split("stuff", ",")},
 		"source": bson.M{
 			"$ne": "carelink",
 		},
@@ -432,7 +517,7 @@ func TestStore_GetParams_Empty(t *testing.T) {
 	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
 
 	expectedParams := &Params{
-		UserId:        "1122334455",
+		UserID:        "1122334455",
 		SchemaVersion: schema,
 		Types:         []string{""},
 		SubTypes:      []string{""},
@@ -456,7 +541,7 @@ func TestStore_GetParams_Medtronic(t *testing.T) {
 	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
 
 	expectedParams := &Params{
-		UserId:        "1122334455",
+		UserID:        "1122334455",
 		SchemaVersion: schema,
 		Types:         []string{""},
 		SubTypes:      []string{""},
@@ -481,11 +566,11 @@ func TestStore_GetParams_UploadId(t *testing.T) {
 	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
 
 	expectedParams := &Params{
-		UserId:        "1122334455",
+		UserID:        "1122334455",
 		SchemaVersion: schema,
 		Types:         []string{""},
 		SubTypes:      []string{""},
-		UploadId:      "xyz123",
+		UploadID:      "xyz123",
 	}
 
 	params, err := GetParams(query, schema)
@@ -744,6 +829,7 @@ func TestStore_HasMedtronicDirectData_NotFound_Multiple(t *testing.T) {
 }
 
 func TestStore_HasMedtronicLoopDataAfter_NotFound_UserID(t *testing.T) {
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	store := before(t, bson.M{
 		"_active":        true,
 		"_userId":        "0000000000",
@@ -760,12 +846,6 @@ func TestStore_HasMedtronicLoopDataAfter_NotFound_UserID(t *testing.T) {
 		"_active":        false,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 0,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	})
@@ -781,6 +861,7 @@ func TestStore_HasMedtronicLoopDataAfter_NotFound_UserID(t *testing.T) {
 }
 
 func TestStore_HasMedtronicLoopDataAfter_NotFound_Time(t *testing.T) {
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	store := before(t, bson.M{
 		"_active":        true,
 		"_userId":        "0000000000",
@@ -803,12 +884,6 @@ func TestStore_HasMedtronicLoopDataAfter_NotFound_Time(t *testing.T) {
 		"_active":        false,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 0,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	})
@@ -824,6 +899,7 @@ func TestStore_HasMedtronicLoopDataAfter_NotFound_Time(t *testing.T) {
 }
 
 func TestStore_HasMedtronicLoopDataAfter_Found(t *testing.T) {
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	store := before(t, bson.M{
 		"_active":        true,
 		"_userId":        "0000000000",
@@ -854,12 +930,6 @@ func TestStore_HasMedtronicLoopDataAfter_Found(t *testing.T) {
 		"_schemaVersion": 1,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 0,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	})
 
 	hasMedtronicLoopDataAfter, err := store.HasMedtronicLoopDataAfter("1234567890", "2017-01-01T00:00:00Z")
@@ -873,6 +943,7 @@ func TestStore_HasMedtronicLoopDataAfter_Found(t *testing.T) {
 }
 
 func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testing.T) {
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	store := before(t, bson.M{
 		"_active":        true,
 		"_userId":        "0000000000",
@@ -884,13 +955,6 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testi
 		"_active":        false,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "523",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 0,
 		"time":           "2018-02-03T04:05:06Z",
 		"type":           "upload",
 		"deviceModel":    "523",
@@ -921,6 +985,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testi
 }
 
 func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing.T) {
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	store := before(t, bson.M{
 		"_active":        true,
 		"_userId":        "0000000000",
@@ -935,13 +1000,6 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing
 		"time":           "2018-02-03T04:05:06Z",
 		"type":           "upload",
 		"deviceModel":    "523",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 0,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "554",
 	}, bson.M{
 		"_active":        true,
 		"_userId":        "1234567890",
@@ -976,6 +1034,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing
 }
 
 func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	store := before(t, bson.M{
 		"_active":        true,
 		"_userId":        "0000000000",
@@ -990,13 +1049,6 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
 		"time":           "2018-02-03T04:05:06Z",
 		"type":           "upload",
 		"deviceModel":    "523",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 0,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "554",
 	}, bson.M{
 		"_active":        true,
 		"_userId":        "1234567890",
@@ -1053,16 +1105,26 @@ func TestStore_LatestNoFilter(t *testing.T) {
 	store := before(t, storeData...)
 
 	qParams := &Params{
-		UserId:        "abc123",
+		UserID:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		Latest:        true,
 	}
 
-	var result bson.M
-	iter := store.GetDeviceData(qParams)
-	resultCount := 0
-	processedResultCount := 0
-	for iter.Next(&result) {
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Error("Error querying Mongo")
+	}
+
+	processedResults := struct {
+		cbg    bool
+		upload bool
+	}{}
+	for iter.Next(store.context) {
+		var result bson.M
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
@@ -1070,19 +1132,18 @@ func TestStore_LatestNoFilter(t *testing.T) {
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
-			processedResultCount++
+			processedResults.cbg = true
 		case "upload":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
 			compareResult := dropInternalKeys(testData["upload1"])
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'upload' result when requesting latest data")
 			}
-			processedResultCount++
+			processedResults.upload = true
 		}
-		resultCount++
 	}
 
-	if resultCount < 2 || processedResultCount < 2 {
+	if processedResults.cbg == false || processedResults.upload == false {
 		t.Error("Not enough results when requesting latest data")
 	}
 }
@@ -1094,17 +1155,26 @@ func TestStore_LatestTypeFilter(t *testing.T) {
 	store := before(t, storeData...)
 
 	qParams := &Params{
-		UserId:        "abc123",
+		UserID:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		Types:         []string{"cbg"},
 		Latest:        true,
 	}
 
-	var result bson.M
-	iter := store.GetDeviceData(qParams)
-	resultCount := 0
-	processedResultCount := 0
-	for iter.Next(&result) {
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Error("Error querying Mongo")
+	}
+
+	processedResults := struct {
+		cbg bool
+	}{}
+	for iter.Next(store.context) {
+		var result bson.M
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
@@ -1112,12 +1182,11 @@ func TestStore_LatestTypeFilter(t *testing.T) {
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
-			processedResultCount++
+			processedResults.cbg = true
 		}
-		resultCount++
 	}
 
-	if resultCount < 1 || processedResultCount < 1 {
+	if processedResults.cbg == false {
 		t.Error("Not enough results when requesting latest data")
 	}
 }
@@ -1129,17 +1198,27 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 	store := before(t, storeData...)
 
 	qParams := &Params{
-		UserId:        "abc123",
+		UserID:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		UploadId:      "zzz4bb16e27c4973c2f37af81784a05d",
+		UploadID:      "zzz4bb16e27c4973c2f37af81784a05d",
 		Latest:        true,
 	}
 
-	var result bson.M
-	iter := store.GetDeviceData(qParams)
-	resultCount := 0
-	processedResultCount := 0
-	for iter.Next(&result) {
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Error("Error querying Mongo")
+	}
+
+	processedResults := struct {
+		cbg    bool
+		upload bool
+	}{}
+	for iter.Next(store.context) {
+		var result bson.M
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
@@ -1147,19 +1226,18 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
-			processedResultCount++
+			processedResults.cbg = true
 		case "upload":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
 			compareResult := dropInternalKeys(testData["upload2"])
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'upload' result when requesting latest data")
 			}
-			processedResultCount++
+			processedResults.upload = true
 		}
-		resultCount++
 	}
 
-	if resultCount < 2 || processedResultCount < 2 {
+	if processedResults.cbg == false || processedResults.upload == false {
 		t.Error("Not enough results when requesting latest data")
 	}
 }
@@ -1171,17 +1249,27 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 	store := before(t, storeData...)
 
 	qParams := &Params{
-		UserId:        "xyz123",
-		DeviceId:      "dev789",
+		UserID:        "xyz123",
+		DeviceID:      "dev789",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		Latest:        true,
 	}
 
-	var result bson.M
-	iter := store.GetDeviceData(qParams)
-	resultCount := 0
-	processedResultCount := 0
-	for iter.Next(&result) {
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Error("Error querying Mongo")
+	}
+
+	processedResults := struct {
+		cbg    bool
+		upload bool
+	}{}
+	for iter.Next(store.context) {
+		var result bson.M
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
 		switch dataType := result["type"]; dataType {
 		case "cbg":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
@@ -1189,19 +1277,18 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'cbg' result when requesting latest data")
 			}
-			processedResultCount++
+			processedResults.cbg = true
 		case "upload":
 			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
 			compareResult := dropInternalKeys(testData["upload3"])
 			if !reflect.DeepEqual(result, compareResult) {
 				t.Error("Unexpected 'upload' result when requesting latest data")
 			}
-			processedResultCount++
+			processedResults.upload = true
 		}
-		resultCount++
 	}
 
-	if resultCount < 2 || processedResultCount < 2 {
+	if processedResults.cbg == false || processedResults.upload == false {
 		t.Error("Not enough results when requesting latest data")
 	}
 }
