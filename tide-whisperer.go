@@ -172,6 +172,16 @@ func main() {
 
 	router := pat.New()
 
+	router.Add("GET", "/data/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		start := time.Now()
+		if err := storage.Ping(); err != nil {
+			jsonError(res, error_status_check.setInternalMessage(err), start)
+			return
+		}
+		res.Write([]byte("OK\n"))
+		return
+	}))
+
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 		if err := storage.Ping(); err != nil {
