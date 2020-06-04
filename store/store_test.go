@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	tpMongo "github.com/tidepool-org/go-common/clients/mongo"
 )
@@ -95,8 +96,8 @@ func allParams() *Params {
 		Dexcom:        false,
 		DexcomDataSource: bson.M{
 			"dataSetIds":       []string{"123", "456"},
-			"earliestDataTime": earliestDataTime,
-			"latestDataTime":   latestDataTime,
+			"earliestDataTime": primitive.NewDateTimeFromTime(earliestDataTime),
+			"latestDataTime":   primitive.NewDateTimeFromTime(latestDataTime),
 		},
 		Latest:             false,
 		Medtronic:          false,

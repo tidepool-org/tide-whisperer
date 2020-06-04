@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
@@ -305,12 +306,10 @@ func generateMongoQuery(p *Params) bson.M {
 				{"type": bson.M{"$ne": "cbg"}},
 				{"uploadId": bson.M{"$in": p.DexcomDataSource["dataSetIds"]}},
 			}
-			if earliestDataTime, ok := p.DexcomDataSource["earliestDataTime"].(time.Time); ok {
-				dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}})
-			}
-			if latestDataTime, ok := p.DexcomDataSource["latestDataTime"].(time.Time); ok {
-				dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}})
-			}
+			earliestDataTime := p.DexcomDataSource["earliestDataTime"].(primitive.DateTime).Time().UTC()
+			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}})
+			latestDataTime := p.DexcomDataSource["latestDataTime"].(primitive.DateTime).Time().UTC()
+			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}})
 			andQuery = append(andQuery, bson.M{"$or": dexcomQuery})
 		}
 
@@ -359,8 +358,7 @@ func (c *MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 		"deviceManufacturers": "Medtronic",
 	}
 
-	opts := options.FindOne()
-	err := dataCollection(c).FindOne(c.context, query, opts).Err()
+	err := dataCollection(c).FindOne(c.context, query).Err()
 	if err == mongo.ErrNoDocuments {
 		return false, nil
 	}
@@ -374,6 +372,8 @@ func (c *MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 		return nil, errors.New("user id is missing")
 	}
 
+	// `earliestDataTime` and `latestDataTime` are bson.Date fields. Internally, they are int64's
+	// so if they exist, the must be set to something, even if 0 (ie Unix epoch)
 	query := bson.M{
 		"userId":       userID,
 		"providerType": "oauth",
@@ -392,21 +392,17 @@ func (c *MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 		},
 	}
 
-	dataSources := []bson.M{}
-	opts := options.Find().SetLimit(1)
-	cursor, err := c.client.Database("tidepool").Collection("data_sources").Find(c.context, query, opts)
+	dataSource := bson.M{}
+	err := c.client.Database("tidepool").Collection("data_sources").FindOne(c.context, query).Decode(&dataSource)
+	if err == mongo.ErrNoDocuments {
+		return nil, nil
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
-	defer cursor.Close(c.context)
-	if err = cursor.All(c.context, &dataSources); err != nil {
-		return nil, err
-	} else if len(dataSources) == 0 {
-		return nil, nil
-	}
-
-	return dataSources[0], nil
+	return dataSource, nil
 }
 
 // HasMedtronicLoopDataAfter checks the database to see if Loop data exists for `userID` that originated
@@ -426,8 +422,7 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 		{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
 	}
 
-	opts := options.FindOne()
-	err := dataCollection(c).FindOne(c.context, query, opts).Err()
+	err := dataCollection(c).FindOne(c.context, query).Err()
 	if err == mongo.ErrNoDocuments {
 		return false, nil
 	}
