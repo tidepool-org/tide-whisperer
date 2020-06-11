@@ -180,7 +180,7 @@ func main() {
 	router.Add("GET", "/data/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 		if err := storage.Ping(); err != nil {
-			jsonError(res, error_status_check.setInternalMessage(err), start)
+			jsonError(res, errorStatusCheck.setInternalMessage(err), start)
 			return
 		}
 		res.Write([]byte("OK\n"))
