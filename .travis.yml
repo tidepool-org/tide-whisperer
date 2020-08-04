@@ -13,6 +13,7 @@ env:
   global: 
     - GO111MODULE=on
     - BUILD_OPENAPI_DOC=true
+    - BUILD_SOUP=true
 
 before_install:
   - sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2930ADAE8CAF5059EE73BB4B58712A2291FA4AD5;
@@ -56,6 +57,19 @@ deploy:
     skip_cleanup: true
     local-dir: docs/openapi
     upload-dir: openapi/tide-whisperer
+    cache_control: "max-age=21600"
+  # Deploy SOUP
+  - provider: s3
+    on:
+      tags: true
+      condition: $BUILD_SOUP = true
+    access_key_id: $AWS_ACCESS_KEY_ID
+    secret_access_key: $AWS_SECRET_ACCESS_KEY
+    region: $AWS_DEFAULT_REGION
+    bucket: com.diabeloop.yourloops.doc
+    skip_cleanup: true
+    local_dir: ./docs/soup
+    upload-dir: soup
     cache_control: "max-age=21600"
 
 
