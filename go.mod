@@ -4,13 +4,13 @@ go 1.12
 
 require (
 	github.com/daaku/go.httpgzip v0.0.0-20180202095102-86d27ccd810b
-	github.com/google/go-cmp v0.3.1 // indirect
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.7.4 // indirect
 	github.com/gorilla/pat v1.0.1
 	github.com/klauspost/compress v1.10.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/prometheus/client_golang v1.7.1
 	github.com/tidepool-org/go-common v0.5.0
 	github.com/xdg/stringprep v1.0.0 // indirect
 	go.mongodb.org/mongo-driver v1.3.2

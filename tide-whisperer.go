@@ -26,6 +26,10 @@ import (
 
 	"github.com/tidepool-org/tide-whisperer/auth"
 	"github.com/tidepool-org/tide-whisperer/store"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type (
@@ -60,6 +64,21 @@ var (
 	errorInvalidParameters = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
 
 	storage store.Storage
+
+	tideWhispererConfig = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "tidepool_tide_whisperer_valid_config",
+		Help: "Indicates if the latest tide-whisperer configuration is valid.",
+	})
+
+	slowDeviceManifacturerCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "tidepool_tide_whisperer_slow_device_manifacturer_check",
+		Help: "Counts slow device manifacturer checks.",
+	}, []string{"manifacturer", "data_access_type"})
+
+	mongoErrorCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "tidepool_tide_mongo_error_count",
+		Help: "Counts Mongo errors.",
+	}, []string{"type"})
 )
 
 const (
@@ -86,6 +105,7 @@ func main() {
 	); err != nil {
 		log.Fatal(dataAPIPrefix, "Problem loading config: ", err)
 	}
+	tideWhispererConfig.Set(1)
 
 	// server secret may be passed via a separate env variable to accommodate easy secrets injection via Kubernetes
 	serverSecret, found := os.LookupEnv("SERVER_SECRET")
@@ -177,6 +197,8 @@ func main() {
 
 	router := pat.New()
 
+	router.Handle("/metrics", promhttp.Handler())
+
 	router.Add("GET", "/data/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 		if err := storage.Ping(); err != nil {
@@ -238,8 +260,8 @@ func main() {
 				queryParams.Carelink = true
 			}
 			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
-				// XXX replace with metrics
-				//log.Printf("%s request %s user %s HasMedtronicDirectData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+				slowDeviceManifacturerCount.WithLabelValues("medtronic", "direct").Inc()
+				log.Printf("%s request %s user %s HasMedtronicDirectData took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
 		}
@@ -254,6 +276,7 @@ func main() {
 
 			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
 				log.Printf("%s request %s user %s GetDexcomDataSource took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
+				slowDeviceManifacturerCount.WithLabelValues("dexcom", "direct").Inc()
 			}
 			queryStart = time.Now()
 		}
@@ -268,6 +291,7 @@ func main() {
 				queryParams.Medtronic = true
 			}
 			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
+				slowDeviceManifacturerCount.WithLabelValues("medtronic", "loop_data").Inc()
 				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
@@ -283,14 +307,15 @@ func main() {
 			queryParams.MedtronicUploadIds = medtronicUploadIds
 
 			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
-				// XXX replace with metrics
-				//log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
+				slowDeviceManifacturerCount.WithLabelValues("medtronic", "loop_direct_upload_ids").Inc()
+				log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
 		}
 
 		iter, err := storageWithCtx.GetDeviceData(queryParams)
 		if err != nil {
+			mongoErrorCount.WithLabelValues(err.Error()).Inc()
 			log.Printf("%s request %s user %s Mongo Query returned error: %s", dataAPIPrefix, requestID, userID, err)
 		}
 
@@ -306,11 +331,13 @@ func main() {
 			var results map[string]interface{}
 			err := iter.Decode(&results)
 			if err != nil {
+				mongoErrorCount.WithLabelValues("decode").Inc()
 				log.Printf("%s request %s user %s Mongo Decode returned error: %s", dataAPIPrefix, requestID, userID, err)
 			}
 
 			if len(results) > 0 {
 				if bytes, err := json.Marshal(results); err != nil {
+					mongoErrorCount.WithLabelValues("marshal").Inc()
 					log.Printf("%s request %s user %s Marshal returned error: %s", dataAPIPrefix, requestID, userID, err)
 				} else {
 					if writeCount > 0 {

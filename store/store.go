@@ -16,6 +16,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	tpMongo "github.com/tidepool-org/go-common/clients/mongo"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 const (
@@ -77,6 +80,17 @@ type (
 		results []bson.Raw
 		pos     int
 	}
+)
+
+var (
+	mongoConfig = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "tidepool_tide_whisperer_mongo_config_valid",
+		Help: "Indicates if the latest tide-whisperer's Mongo configuration is valid.",
+	})
+	mongoIndexes = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "tidepool_tide_whisperer_mongo_indexes_valid",
+		Help: "Indicates if the indexes are succesfully added.",
+	})
 )
 
 func cleanDateString(dateString string) (string, error) {
@@ -180,6 +194,9 @@ func NewMongoStoreClient(config *tpMongo.Config) *MongoStoreClient {
 		log.Fatal(dataStoreAPIPrefix, fmt.Sprintf("Invalid MongoDB connection string: %s", err))
 	}
 
+	// Passed all checks Mongo configuration is valid
+	mongoConfig.Set(1)
+
 	return &MongoStoreClient{
 		client:   mongoClient,
 		context:  context.Background(),
@@ -252,6 +269,8 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 	if _, err := dataCollection(c).Indexes().CreateMany(context.Background(), indexes); err != nil {
 		log.Fatal(dataStoreAPIPrefix, fmt.Sprintf("Unable to create indexes: %s", err))
 	}
+
+	mongoIndexes.Set(1)
 
 	return nil
 }
