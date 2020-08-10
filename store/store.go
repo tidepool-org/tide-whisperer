@@ -83,11 +83,11 @@ type (
 )
 
 var (
-	mongoConfig = promauto.NewGauge(prometheus.GaugeOpts{
+	mongoConfigValid = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "tidepool_tide_whisperer_mongo_config_valid",
 		Help: "Indicates if the latest tide-whisperer's Mongo configuration is valid.",
 	})
-	mongoIndexes = promauto.NewGauge(prometheus.GaugeOpts{
+	mongoIndexesValid = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "tidepool_tide_whisperer_mongo_indexes_valid",
 		Help: "Indicates if the indexes are successfully added.",
 	})
@@ -195,7 +195,7 @@ func NewMongoStoreClient(config *tpMongo.Config) *MongoStoreClient {
 	}
 
 	// Passed all checks Mongo configuration is valid
-	mongoConfig.Set(1)
+	mongoConfigValid.Set(1)
 
 	return &MongoStoreClient{
 		client:   mongoClient,
@@ -270,7 +270,7 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 		log.Fatal(dataStoreAPIPrefix, fmt.Sprintf("Unable to create indexes: %s", err))
 	}
 
-	mongoIndexes.Set(1)
+	mongoIndexesValid.Set(1)
 
 	return nil
 }

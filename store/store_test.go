@@ -342,7 +342,7 @@ func TestStore_prometheusMetrics_indexes(t *testing.T) {
         tidepool_tide_whisperer_mongo_indexes_valid 1
 	`
 
-	if err := testutil.CollectAndCompare(mongoIndexes, strings.NewReader(expected)); err != nil {
+	if err := testutil.CollectAndCompare(mongoIndexesValid, strings.NewReader(expected)); err != nil {
 		t.Fatal("Unexpected metrics returned:", err)
 	}
 }
@@ -354,7 +354,7 @@ func TestStore_prometheusMetrics_config(t *testing.T) {
         tidepool_tide_whisperer_mongo_config_valid 1
 	`
 
-	if err := testutil.CollectAndCompare(mongoConfig, strings.NewReader(expected)); err != nil {
+	if err := testutil.CollectAndCompare(mongoConfigValid, strings.NewReader(expected)); err != nil {
 		t.Fatal("Unexpected metrics returned:", err)
 	}
 }
