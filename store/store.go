@@ -89,7 +89,7 @@ var (
 	})
 	mongoIndexes = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "tidepool_tide_whisperer_mongo_indexes_valid",
-		Help: "Indicates if the indexes are succesfully added.",
+		Help: "Indicates if the indexes are successfully added.",
 	})
 )
 

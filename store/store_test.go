@@ -14,6 +14,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	tpMongo "github.com/tidepool-org/go-common/clients/mongo"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
 var testingConfig = &tpMongo.Config{ConnectionString: "mongodb://127.0.0.1/data_test", Database: "data_test"}
@@ -324,6 +326,36 @@ func TestStore_EnsureIndexes(t *testing.T) {
 	eq := reflect.DeepEqual(indexes, expectedIndexes)
 	if !eq {
 		t.Error(fmt.Sprintf("expected:\n%+#v\ngot:\n%+#v\n", expectedIndexes, indexes))
+	}
+}
+
+func TestStore_prometheusMetrics_indexes(t *testing.T) {
+	store := before(t)
+	err := store.EnsureIndexes()
+	if err != nil {
+		t.Error("Failed to run EnsureIndexes()")
+	}
+
+	expected := `
+        # HELP tidepool_tide_whisperer_mongo_indexes_valid Indicates if the indexes are successfully added.
+        # TYPE tidepool_tide_whisperer_mongo_indexes_valid gauge
+        tidepool_tide_whisperer_mongo_indexes_valid 1
+	`
+
+	if err := testutil.CollectAndCompare(mongoIndexes, strings.NewReader(expected)); err != nil {
+		t.Fatal("Unexpected metrics returned:", err)
+	}
+}
+
+func TestStore_prometheusMetrics_config(t *testing.T) {
+	expected := `
+        # HELP tidepool_tide_whisperer_mongo_config_valid Indicates if the latest tide-whisperer's Mongo configuration is valid.
+        # TYPE tidepool_tide_whisperer_mongo_config_valid gauge
+        tidepool_tide_whisperer_mongo_config_valid 1
+	`
+
+	if err := testutil.CollectAndCompare(mongoConfig, strings.NewReader(expected)); err != nil {
+		t.Fatal("Unexpected metrics returned:", err)
 	}
 }
 
