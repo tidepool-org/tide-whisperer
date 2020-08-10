@@ -71,7 +71,7 @@ var (
 	})
 
 	slowDataCheckCount = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "tidepool_tide_whisperer_slow_device_manifacturer_count",
+		Name: "tidepool_tide_whisperer_slow_data_check_count",
 		Help: "Counts slow device data checks.",
 	}, []string{"manufacturer", "data_access_type"})
 
