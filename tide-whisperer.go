@@ -70,10 +70,10 @@ var (
 		Help: "Indicates if the latest tide-whisperer configuration is valid.",
 	})
 
-	slowDeviceManifacturerCount = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "tidepool_tide_whisperer_slow_device_manifacturer_check",
-		Help: "Counts slow device manifacturer checks.",
-	}, []string{"manifacturer", "data_access_type"})
+	slowDataCheckCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "tidepool_tide_whisperer_slow_device_manifacturer_count",
+		Help: "Counts slow device data checks.",
+	}, []string{"manufacturer", "data_access_type"})
 
 	mongoErrorCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "tidepool_tide_mongo_error_count",
@@ -105,6 +105,8 @@ func main() {
 	); err != nil {
 		log.Fatal(dataAPIPrefix, "Problem loading config: ", err)
 	}
+
+	// Config valid
 	tideWhispererConfig.Set(1)
 
 	// server secret may be passed via a separate env variable to accommodate easy secrets injection via Kubernetes
@@ -260,7 +262,7 @@ func main() {
 				queryParams.Carelink = true
 			}
 			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
-				slowDeviceManifacturerCount.WithLabelValues("medtronic", "direct").Inc()
+				slowDataCheckCount.WithLabelValues("medtronic", "direct").Inc()
 				log.Printf("%s request %s user %s HasMedtronicDirectData took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
@@ -275,8 +277,8 @@ func main() {
 			queryParams.DexcomDataSource = dexcomDataSource
 
 			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
+				slowDataCheckCount.WithLabelValues("dexcom", "datasource").Inc()
 				log.Printf("%s request %s user %s GetDexcomDataSource took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
-				slowDeviceManifacturerCount.WithLabelValues("dexcom", "direct").Inc()
 			}
 			queryStart = time.Now()
 		}
@@ -291,7 +293,7 @@ func main() {
 				queryParams.Medtronic = true
 			}
 			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
-				slowDeviceManifacturerCount.WithLabelValues("medtronic", "loop_data").Inc()
+				slowDataCheckCount.WithLabelValues("medtronic", "loop_data").Inc()
 				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
@@ -307,7 +309,7 @@ func main() {
 			queryParams.MedtronicUploadIds = medtronicUploadIds
 
 			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
-				slowDeviceManifacturerCount.WithLabelValues("medtronic", "loop_direct_upload_ids").Inc()
+				slowDataCheckCount.WithLabelValues("medtronic", "loop_direct_upload_ids").Inc()
 				log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
