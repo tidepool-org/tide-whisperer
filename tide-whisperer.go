@@ -65,11 +65,6 @@ var (
 
 	storage store.Storage
 
-	tideWhispererConfig = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "tidepool_tide_whisperer_valid_config",
-		Help: "Indicates if the latest tide-whisperer configuration is valid.",
-	})
-
 	slowDataCheckCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "tidepool_tide_whisperer_slow_data_check_count",
 		Help: "Counts slow device data checks.",
@@ -105,9 +100,6 @@ func main() {
 	); err != nil {
 		log.Fatal(dataAPIPrefix, "Problem loading config: ", err)
 	}
-
-	// Config valid
-	tideWhispererConfig.Set(1)
 
 	// server secret may be passed via a separate env variable to accommodate easy secrets injection via Kubernetes
 	serverSecret, found := os.LookupEnv("SERVER_SECRET")
