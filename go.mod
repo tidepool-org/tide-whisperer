@@ -4,7 +4,7 @@ go 1.12
 
 require (
 	github.com/daaku/go.httpgzip v0.0.0-20180202095102-86d27ccd810b
-	github.com/go-pg/pg/v10 v10.0.0-beta.11
+	github.com/go-pg/pg/v10 v10.0.1
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/mux v1.7.4 // indirect
