@@ -1,6 +1,6 @@
 module github.com/tidepool-org/tide-whisperer
 
-go 1.13
+go 1.15
 
 require (
 	github.com/daaku/go.httpgzip v0.0.0-20180202095102-86d27ccd810b
