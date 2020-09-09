@@ -39,13 +39,13 @@ func ArrayScanner(typ reflect.Type) ScannerFunc {
 	if kind == reflect.Slice {
 		switch elemType {
 		case stringType:
-			return scanStringArrayValue
+			return scanSliceStringValue
 		case intType:
-			return scanIntArrayValue
+			return scanSliceIntValue
 		case int64Type:
-			return scanInt64ArrayValue
+			return scanSliceInt64Value
 		case float64Type:
-			return scanFloat64ArrayValue
+			return scanSliceFloat64Value
 		}
 	}
 
@@ -110,13 +110,13 @@ func ArrayScanner(typ reflect.Type) ScannerFunc {
 	}
 }
 
-func scanStringArrayValue(v reflect.Value, rd Reader, n int) error {
+func scanSliceStringValue(v reflect.Value, rd Reader, n int) error {
 	v = reflect.Indirect(v)
 	if !v.CanSet() {
 		return fmt.Errorf("pg: Scan(non-settable %s)", v.Type())
 	}
 
-	strings, err := scanStringArray(rd, n)
+	strings, err := decodeSliceString(rd, n)
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func scanStringArrayValue(v reflect.Value, rd Reader, n int) error {
 	return nil
 }
 
-func scanStringArray(rd Reader, n int) ([]string, error) {
+func decodeSliceString(rd Reader, n int) ([]string, error) {
 	if n == -1 {
 		return nil, nil
 	}
@@ -147,7 +147,7 @@ func scanStringArray(rd Reader, n int) ([]string, error) {
 	return slice, nil
 }
 
-func scanIntArrayValue(v reflect.Value, rd Reader, n int) error {
+func scanSliceIntValue(v reflect.Value, rd Reader, n int) error {
 	v = reflect.Indirect(v)
 	if !v.CanSet() {
 		return fmt.Errorf("pg: Scan(non-settable %s)", v.Type())
@@ -194,13 +194,13 @@ func decodeSliceInt(rd Reader, n int) ([]int, error) {
 	return slice, nil
 }
 
-func scanInt64ArrayValue(v reflect.Value, rd Reader, n int) error {
+func scanSliceInt64Value(v reflect.Value, rd Reader, n int) error {
 	v = reflect.Indirect(v)
 	if !v.CanSet() {
 		return fmt.Errorf("pg: Scan(non-settable %s)", v.Type())
 	}
 
-	slice, err := scanInt64Array(rd, n)
+	slice, err := decodeSliceInt64(rd, n)
 	if err != nil {
 		return err
 	}
@@ -209,7 +209,7 @@ func scanInt64ArrayValue(v reflect.Value, rd Reader, n int) error {
 	return nil
 }
 
-func scanInt64Array(rd Reader, n int) ([]int64, error) {
+func decodeSliceInt64(rd Reader, n int) ([]int64, error) {
 	if n == -1 {
 		return nil, nil
 	}
@@ -241,13 +241,13 @@ func scanInt64Array(rd Reader, n int) ([]int64, error) {
 	return slice, nil
 }
 
-func scanFloat64ArrayValue(v reflect.Value, rd Reader, n int) error {
+func scanSliceFloat64Value(v reflect.Value, rd Reader, n int) error {
 	v = reflect.Indirect(v)
 	if !v.CanSet() {
 		return fmt.Errorf("pg: Scan(non-settable %s)", v.Type())
 	}
 
-	slice, err := scanFloat64Array(rd, n)
+	slice, err := decodeSliceFloat64(rd, n)
 	if err != nil {
 		return err
 	}
@@ -256,7 +256,7 @@ func scanFloat64ArrayValue(v reflect.Value, rd Reader, n int) error {
 	return nil
 }
 
-func scanFloat64Array(rd Reader, n int) ([]float64, error) {
+func decodeSliceFloat64(rd Reader, n int) ([]float64, error) {
 	if n == -1 {
 		return nil, nil
 	}

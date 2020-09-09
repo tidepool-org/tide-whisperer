@@ -5,50 +5,44 @@ import (
 	"strings"
 )
 
-type SelectQuery struct {
+func Select(db DB, model interface{}) error {
+	return NewQuery(db, model).WherePK().Select()
+}
+
+type selectQuery struct {
 	q     *Query
 	count string
 }
 
-var (
-	_ QueryAppender = (*SelectQuery)(nil)
-	_ QueryCommand  = (*SelectQuery)(nil)
-)
+var _ QueryAppender = (*selectQuery)(nil)
+var _ queryCommand = (*selectQuery)(nil)
 
-func NewSelectQuery(q *Query) *SelectQuery {
-	return &SelectQuery{
+func newSelectQuery(q *Query) *selectQuery {
+	return &selectQuery{
 		q: q,
 	}
 }
 
-func (q *SelectQuery) String() string {
-	b, err := q.AppendQuery(defaultFmter, nil)
-	if err != nil {
-		panic(err)
-	}
-	return string(b)
-}
-
-func (q *SelectQuery) Operation() QueryOp {
+func (q *selectQuery) Operation() string {
 	return SelectOp
 }
 
-func (q *SelectQuery) Clone() QueryCommand {
-	return &SelectQuery{
+func (q *selectQuery) Clone() queryCommand {
+	return &selectQuery{
 		q:     q.q.Clone(),
 		count: q.count,
 	}
 }
 
-func (q *SelectQuery) Query() *Query {
+func (q *selectQuery) Query() *Query {
 	return q.q
 }
 
-func (q *SelectQuery) AppendTemplate(b []byte) ([]byte, error) {
+func (q *selectQuery) AppendTemplate(b []byte) ([]byte, error) {
 	return q.AppendQuery(dummyFormatter{}, b)
 }
 
-func (q *SelectQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte, err error) { //nolint:gocyclo
+func (q *selectQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte, err error) { //nolint:gocyclo
 	if q.q.stickyErr != nil {
 		return nil, q.q.stickyErr
 	}
@@ -110,10 +104,25 @@ func (q *SelectQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte, err
 		return nil, err
 	}
 
-	for _, j := range q.q.joins {
-		b, err = j.AppendQuery(fmter, b)
-		if err != nil {
-			return nil, err
+	if len(q.q.joins) > 0 {
+		for _, j := range q.q.joins {
+			b = append(b, ' ')
+			b, err = j.join.AppendQuery(fmter, b)
+			if err != nil {
+				return nil, err
+			}
+			if len(j.on) > 0 {
+				b = append(b, " ON "...)
+			}
+			for i, on := range j.on {
+				if i > 0 {
+					b = on.AppendSep(b)
+				}
+				b, err = on.AppendQuery(fmter, b)
+				if err != nil {
+					return nil, err
+				}
+			}
 		}
 	}
 
@@ -207,7 +216,7 @@ func (q *SelectQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte, err
 	return b, q.q.stickyErr
 }
 
-func (q SelectQuery) appendColumns(fmter QueryFormatter, b []byte) (_ []byte, err error) {
+func (q selectQuery) appendColumns(fmter QueryFormatter, b []byte) (_ []byte, err error) {
 	start := len(b)
 
 	switch {
@@ -216,8 +225,8 @@ func (q SelectQuery) appendColumns(fmter QueryFormatter, b []byte) (_ []byte, er
 		if err != nil {
 			return nil, err
 		}
-	case q.q.hasExplicitTableModel():
-		table := q.q.tableModel.Table()
+	case q.q.hasExplicitModel():
+		table := q.q.model.Table()
 		b = appendColumns(b, table.Alias, table.Fields)
 	default:
 		b = append(b, '*')
@@ -244,7 +253,7 @@ func (q SelectQuery) appendColumns(fmter QueryFormatter, b []byte) (_ []byte, er
 	return b, nil
 }
 
-func (q *SelectQuery) isDistinct() bool {
+func (q *selectQuery) isDistinct() bool {
 	if q.q.distinctOn != nil {
 		return true
 	}
@@ -260,12 +269,12 @@ func (q *SelectQuery) isDistinct() bool {
 	return false
 }
 
-func (q *SelectQuery) appendTables(fmter QueryFormatter, b []byte) (_ []byte, err error) {
+func (q *selectQuery) appendTables(fmter QueryFormatter, b []byte) (_ []byte, err error) {
 	tables := q.q.tables
 
 	if q.q.modelHasTableName() {
-		table := q.q.tableModel.Table()
-		b = fmter.FormatQuery(b, string(table.SQLNameForSelects))
+		table := q.q.model.Table()
+		b = fmter.FormatQuery(b, string(table.FullNameForSelects))
 		if table.Alias != "" {
 			b = append(b, " AS "...)
 			b = append(b, table.Alias...)
@@ -281,7 +290,7 @@ func (q *SelectQuery) appendTables(fmter QueryFormatter, b []byte) (_ []byte, er
 		}
 		if q.q.modelHasTableAlias() {
 			b = append(b, " AS "...)
-			b = append(b, q.q.tableModel.Table().Alias...)
+			b = append(b, q.q.model.Table().Alias...)
 		}
 
 		tables = tables[1:]
@@ -297,41 +306,6 @@ func (q *SelectQuery) appendTables(fmter QueryFormatter, b []byte) (_ []byte, er
 		b, err = f.AppendQuery(fmter, b)
 		if err != nil {
 			return nil, err
-		}
-	}
-
-	return b, nil
-}
-
-//------------------------------------------------------------------------------
-
-type joinQuery struct {
-	join *SafeQueryAppender
-	on   []*condAppender
-}
-
-func (j *joinQuery) AppendOn(app *condAppender) {
-	j.on = append(j.on, app)
-}
-
-func (j *joinQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte, err error) {
-	b = append(b, ' ')
-
-	b, err = j.join.AppendQuery(fmter, b)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(j.on) > 0 {
-		b = append(b, " ON "...)
-		for i, on := range j.on {
-			if i > 0 {
-				b = on.AppendSep(b)
-			}
-			b, err = on.AppendQuery(fmter, b)
-			if err != nil {
-				return nil, err
-			}
 		}
 	}
 

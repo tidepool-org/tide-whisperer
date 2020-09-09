@@ -19,8 +19,8 @@ import (
 	"fmt"
 	"sync"
 
+	"go.opentelemetry.io/otel/api/kv"
 	"go.opentelemetry.io/otel/api/metric"
-	"go.opentelemetry.io/otel/label"
 )
 
 // Provider is a standard metric.Provider for wrapping `MeterImpl`
@@ -42,9 +42,8 @@ type uniqueInstrumentMeterImpl struct {
 var _ metric.MeterImpl = (*uniqueInstrumentMeterImpl)(nil)
 
 type key struct {
-	instrumentName         string
-	instrumentationName    string
-	InstrumentationVersion string
+	name        string
+	libraryName string
 }
 
 // NewProvider returns a new provider that implements instrument
@@ -56,8 +55,8 @@ func NewProvider(impl metric.MeterImpl) *Provider {
 }
 
 // Meter implements metric.Provider.
-func (p *Provider) Meter(instrumentationName string, opts ...metric.MeterOption) metric.Meter {
-	return metric.WrapMeterImpl(p.impl, instrumentationName, opts...)
+func (p *Provider) Meter(name string) metric.Meter {
+	return metric.WrapMeterImpl(p.impl, name)
 }
 
 // ErrMetricKindMismatch is the standard error for mismatched metric
@@ -75,25 +74,23 @@ func NewUniqueInstrumentMeterImpl(impl metric.MeterImpl) metric.MeterImpl {
 }
 
 // RecordBatch implements metric.MeterImpl.
-func (u *uniqueInstrumentMeterImpl) RecordBatch(ctx context.Context, labels []label.KeyValue, ms ...metric.Measurement) {
+func (u *uniqueInstrumentMeterImpl) RecordBatch(ctx context.Context, labels []kv.KeyValue, ms ...metric.Measurement) {
 	u.impl.RecordBatch(ctx, labels, ms...)
 }
 
 func keyOf(descriptor metric.Descriptor) key {
 	return key{
 		descriptor.Name(),
-		descriptor.InstrumentationName(),
-		descriptor.InstrumentationVersion(),
+		descriptor.LibraryName(),
 	}
 }
 
 // NewMetricKindMismatchError formats an error that describes a
 // mismatched metric instrument definition.
 func NewMetricKindMismatchError(desc metric.Descriptor) error {
-	return fmt.Errorf("Metric was %s (%s %s)registered as a %s %s: %w",
+	return fmt.Errorf("Metric was %s (%s) registered as a %s %s: %w",
 		desc.Name(),
-		desc.InstrumentationName(),
-		desc.InstrumentationVersion(),
+		desc.LibraryName(),
 		desc.NumberKind(),
 		desc.MetricKind(),
 		ErrMetricKindMismatch)

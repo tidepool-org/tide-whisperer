@@ -8,62 +8,50 @@ type CreateCompositeOptions struct {
 	Varchar int // replaces PostgreSQL data type `text` with `varchar(n)`
 }
 
-type CreateCompositeQuery struct {
+func CreateComposite(db DB, model interface{}, opt *CreateCompositeOptions) error {
+	q := NewQuery(db, model)
+	_, err := q.db.Exec(&createCompositeQuery{
+		q:   q,
+		opt: opt,
+	})
+	return err
+}
+
+type createCompositeQuery struct {
 	q   *Query
 	opt *CreateCompositeOptions
 }
 
-var (
-	_ QueryAppender = (*CreateCompositeQuery)(nil)
-	_ QueryCommand  = (*CreateCompositeQuery)(nil)
-)
+var _ QueryAppender = (*createCompositeQuery)(nil)
+var _ queryCommand = (*createCompositeQuery)(nil)
 
-func NewCreateCompositeQuery(q *Query, opt *CreateCompositeOptions) *CreateCompositeQuery {
-	return &CreateCompositeQuery{
-		q:   q,
-		opt: opt,
-	}
-}
-
-func (q *CreateCompositeQuery) String() string {
-	b, err := q.AppendQuery(defaultFmter, nil)
-	if err != nil {
-		panic(err)
-	}
-	return string(b)
-}
-
-func (q *CreateCompositeQuery) Operation() QueryOp {
-	return CreateCompositeOp
-}
-
-func (q *CreateCompositeQuery) Clone() QueryCommand {
-	return &CreateCompositeQuery{
+func (q *createCompositeQuery) Clone() queryCommand {
+	return &createCompositeQuery{
 		q:   q.q.Clone(),
 		opt: q.opt,
 	}
 }
 
-func (q *CreateCompositeQuery) Query() *Query {
+func (q *createCompositeQuery) Query() *Query {
 	return q.q
 }
 
-func (q *CreateCompositeQuery) AppendTemplate(b []byte) ([]byte, error) {
+func (q *createCompositeQuery) AppendTemplate(b []byte) ([]byte, error) {
 	return q.AppendQuery(dummyFormatter{}, b)
 }
 
-func (q *CreateCompositeQuery) AppendQuery(fmter QueryFormatter, b []byte) ([]byte, error) {
+func (q *createCompositeQuery) AppendQuery(fmter QueryFormatter, b []byte) ([]byte, error) {
 	if q.q.stickyErr != nil {
 		return nil, q.q.stickyErr
 	}
-	if q.q.tableModel == nil {
+	if q.q.model == nil {
 		return nil, errModelNil
 	}
 
-	table := q.q.tableModel.Table()
+	table := q.q.model.Table()
 
 	b = append(b, "CREATE TYPE "...)
-	b = append(b, table.Alias...)
+	b = append(b, q.q.model.Table().Alias...)
 	b = append(b, " AS ("...)
 
 	for i, field := range table.Fields {

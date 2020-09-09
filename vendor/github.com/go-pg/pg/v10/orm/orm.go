@@ -1,6 +1,3 @@
-/*
-The API in this package is not stable and may change without any notice.
-*/
 package orm
 
 import (
@@ -16,7 +13,7 @@ type ColumnScanner interface {
 	//
 	// An error should be returned if the value can not be stored
 	// without loss of information.
-	ScanColumn(col types.ColumnInfo, rd types.Reader, n int) error
+	ScanColumn(colIdx int, colName string, rd types.Reader, n int) error
 }
 
 type QueryAppender interface {
@@ -27,12 +24,10 @@ type TemplateAppender interface {
 	AppendTemplate(b []byte) ([]byte, error)
 }
 
-type QueryCommand interface {
+type queryCommand interface {
 	QueryAppender
 	TemplateAppender
-	String() string
-	Operation() QueryOp
-	Clone() QueryCommand
+	Clone() queryCommand
 	Query() *Query
 }
 
@@ -40,6 +35,11 @@ type QueryCommand interface {
 type DB interface {
 	Model(model ...interface{}) *Query
 	ModelContext(c context.Context, model ...interface{}) *Query
+	Select(model interface{}) error
+	Insert(model ...interface{}) error
+	Update(model interface{}) error
+	Delete(model interface{}) error
+	ForceDelete(model interface{}) error
 
 	Exec(query interface{}, params ...interface{}) (Result, error)
 	ExecContext(c context.Context, query interface{}, params ...interface{}) (Result, error)

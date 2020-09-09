@@ -17,14 +17,14 @@ package metric
 import (
 	"context"
 
-	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/api/kv"
 )
 
 // MeterImpl is the interface an SDK must implement to supply a Meter
 // implementation.
 type MeterImpl interface {
 	// RecordBatch atomically records a batch of measurements.
-	RecordBatch(context.Context, []label.KeyValue, ...Measurement)
+	RecordBatch(context.Context, []kv.KeyValue, ...Measurement)
 
 	// NewSyncInstrument returns a newly constructed
 	// synchronous instrument implementation or an error, should
@@ -59,10 +59,10 @@ type SyncImpl interface {
 
 	// Bind creates an implementation-level bound instrument,
 	// binding a label set with this instrument implementation.
-	Bind(labels []label.KeyValue) BoundSyncImpl
+	Bind(labels []kv.KeyValue) BoundSyncImpl
 
 	// RecordOne captures a single synchronous metric event.
-	RecordOne(ctx context.Context, number Number, labels []label.KeyValue)
+	RecordOne(ctx context.Context, number Number, labels []kv.KeyValue)
 }
 
 // BoundSyncImpl is the implementation-level interface to a
@@ -85,10 +85,9 @@ type AsyncImpl interface {
 
 // WrapMeterImpl constructs a `Meter` implementation from a
 // `MeterImpl` implementation.
-func WrapMeterImpl(impl MeterImpl, instrumentatioName string, opts ...MeterOption) Meter {
+func WrapMeterImpl(impl MeterImpl, libraryName string) Meter {
 	return Meter{
-		impl:    impl,
-		name:    instrumentatioName,
-		version: ConfigureMeter(opts).InstrumentationVersion,
+		impl:        impl,
+		libraryName: libraryName,
 	}
 }

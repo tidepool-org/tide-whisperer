@@ -3,8 +3,9 @@ package types
 import (
 	"bytes"
 	"database/sql"
-	"encoding/json"
 	"time"
+
+	"github.com/segmentio/encoding/json"
 )
 
 var jsonNull = []byte("null")
@@ -15,12 +16,10 @@ type NullTime struct {
 	time.Time
 }
 
-var (
-	_ json.Marshaler   = (*NullTime)(nil)
-	_ json.Unmarshaler = (*NullTime)(nil)
-	_ sql.Scanner      = (*NullTime)(nil)
-	_ ValueAppender    = (*NullTime)(nil)
-)
+var _ json.Marshaler = (*NullTime)(nil)
+var _ json.Unmarshaler = (*NullTime)(nil)
+var _ sql.Scanner = (*NullTime)(nil)
+var _ ValueAppender = (*NullTime)(nil)
 
 func (tm NullTime) MarshalJSON() ([]byte, error) {
 	if tm.IsZero() {

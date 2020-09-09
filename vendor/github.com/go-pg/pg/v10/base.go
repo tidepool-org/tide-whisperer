@@ -5,13 +5,12 @@ import (
 	"io"
 	"time"
 
+	"go.opentelemetry.io/otel/api/kv"
 	"go.opentelemetry.io/otel/api/trace"
-	"go.opentelemetry.io/otel/label"
 
 	"github.com/go-pg/pg/v10/internal"
 	"github.com/go-pg/pg/v10/internal/pool"
 	"github.com/go-pg/pg/v10/orm"
-	"github.com/go-pg/pg/v10/types"
 )
 
 type baseDB struct {
@@ -88,10 +87,10 @@ func (db *baseDB) getConn(ctx context.Context) (*pool.Conn, error) {
 		return db.initConn(ctx, cn)
 	})
 	if err != nil {
-		db.pool.Remove(ctx, cn, err)
-		// It is safe to reset StickyConnPool if conn can't be initialized.
-		if p, ok := db.pool.(*pool.StickyConnPool); ok {
-			_ = p.Reset(ctx)
+		db.pool.Remove(cn, err)
+		// It is safe to reset SingleConnPool if conn can't be initialized.
+		if p, ok := db.pool.(*pool.SingleConnPool); ok {
+			_ = p.Reset()
 		}
 		if err := internal.Unwrap(err); err != nil {
 			return nil, err
@@ -102,37 +101,38 @@ func (db *baseDB) getConn(ctx context.Context) (*pool.Conn, error) {
 	return cn, nil
 }
 
-func (db *baseDB) initConn(ctx context.Context, cn *pool.Conn) error {
+func (db *baseDB) initConn(c context.Context, cn *pool.Conn) error {
 	if cn.Inited {
 		return nil
 	}
 	cn.Inited = true
 
 	if db.opt.TLSConfig != nil {
-		err := db.enableSSL(ctx, cn, db.opt.TLSConfig)
+		err := db.enableSSL(c, cn, db.opt.TLSConfig)
 		if err != nil {
 			return err
 		}
 	}
 
-	err := db.startup(ctx, cn, db.opt.User, db.opt.Password, db.opt.Database, db.opt.ApplicationName)
+	err := db.startup(c, cn, db.opt.User, db.opt.Password, db.opt.Database, db.opt.ApplicationName)
 	if err != nil {
 		return err
 	}
 
 	if db.opt.OnConnect != nil {
-		p := pool.NewSingleConnPool(db.pool, cn)
-		return db.opt.OnConnect(ctx, newConn(ctx, db.withPool(p)))
+		p := pool.NewSingleConnPool(nil)
+		p.SetConn(cn)
+		return db.opt.OnConnect(newConn(c, db.withPool(p)))
 	}
 
 	return nil
 }
 
-func (db *baseDB) releaseConn(ctx context.Context, cn *pool.Conn, err error) {
+func (db *baseDB) releaseConn(cn *pool.Conn, err error) {
 	if isBadConn(err, false) {
-		db.pool.Remove(ctx, cn, err)
+		db.pool.Remove(cn, err)
 	} else {
-		db.pool.Put(ctx, cn)
+		db.pool.Put(cn)
 	}
 }
 
@@ -154,7 +154,7 @@ func (db *baseDB) withConn(
 				case <-ctx.Done():
 					err := db.cancelRequest(cn.ProcessID, cn.SecretKey)
 					if err != nil {
-						internal.Logger.Printf(ctx, "cancelRequest failed: %s", err)
+						internal.Logger.Printf("cancelRequest failed: %s", err)
 					}
 					// Signal end of conn use.
 					fnDone <- struct{}{}
@@ -169,7 +169,7 @@ func (db *baseDB) withConn(
 				case fnDone <- struct{}{}: // signal fn finish, skip cancel goroutine
 				}
 			}
-			db.releaseConn(ctx, cn, err)
+			db.releaseConn(cn, err)
 		}()
 
 		err = fn(ctx, cn)
@@ -179,12 +179,9 @@ func (db *baseDB) withConn(
 
 func (db *baseDB) shouldRetry(err error) bool {
 	switch err {
-	case io.EOF, io.ErrUnexpectedEOF:
-		return true
 	case nil, context.Canceled, context.DeadlineExceeded:
 		return false
 	}
-
 	if pgerr, ok := err.(Error); ok {
 		switch pgerr.Field('C') {
 		case "40001", // serialization_failure
@@ -197,12 +194,7 @@ func (db *baseDB) shouldRetry(err error) bool {
 			return false
 		}
 	}
-
-	if _, ok := err.(timeoutError); ok {
-		return true
-	}
-
-	return false
+	return isNetworkError(err)
 }
 
 // Close closes the database client, releasing any open resources.
@@ -243,7 +235,7 @@ func (db *baseDB) exec(ctx context.Context, query interface{}, params ...interfa
 
 		lastErr = internal.WithSpan(ctx, "exec", func(ctx context.Context, span trace.Span) error {
 			if attempt > 0 {
-				span.SetAttributes(label.Int("retry", attempt))
+				span.SetAttributes(kv.Int("retry", attempt))
 
 				if err := internal.Sleep(ctx, db.retryBackoff(attempt-1)); err != nil {
 					return err
@@ -321,7 +313,7 @@ func (db *baseDB) query(ctx context.Context, model, query interface{}, params ..
 
 		lastErr = internal.WithSpan(ctx, "query", func(ctx context.Context, span trace.Span) error {
 			if attempt > 0 {
-				span.SetAttributes(label.Int("retry", attempt))
+				span.SetAttributes(kv.Int("retry", attempt))
 
 				if err := internal.Sleep(ctx, db.retryBackoff(attempt-1)); err != nil {
 					return err
@@ -381,7 +373,7 @@ func (db *baseDB) CopyFrom(r io.Reader, query interface{}, params ...interface{}
 	return res, err
 }
 
-// TODO: don't get/put conn in the pool.
+// TODO: don't get/put conn in the pool
 func (db *baseDB) copyFrom(
 	ctx context.Context, cn *pool.Conn, r io.Reader, query interface{}, params ...interface{},
 ) (res Result, err error) {
@@ -404,7 +396,6 @@ func (db *baseDB) copyFrom(
 		return nil, err
 	}
 
-	// Note that afterQuery uses the err.
 	defer func() {
 		if afterQueryErr := db.afterQuery(ctx, evt, res, err); afterQueryErr != nil {
 			err = afterQueryErr
@@ -443,7 +434,7 @@ func (db *baseDB) copyFrom(
 		return nil, err
 	}
 
-	err = cn.WithReader(ctx, db.opt.ReadTimeout, func(rd *pool.ReaderContext) error {
+	err = cn.WithReader(ctx, db.opt.ReadTimeout, func(rd *pool.BufReader) error {
 		res, err = readReadyForQuery(rd)
 		return err
 	})
@@ -465,7 +456,7 @@ func (db *baseDB) CopyTo(w io.Writer, query interface{}, params ...interface{}) 
 }
 
 func (db *baseDB) copyTo(
-	ctx context.Context, cn *pool.Conn, w io.Writer, query interface{}, params ...interface{},
+	c context.Context, cn *pool.Conn, w io.Writer, query interface{}, params ...interface{},
 ) (res Result, err error) {
 	var evt *QueryEvent
 
@@ -481,26 +472,25 @@ func (db *baseDB) copyTo(
 		model, _ = params[len(params)-1].(orm.TableModel)
 	}
 
-	ctx, evt, err = db.beforeQuery(ctx, db.db, model, query, params, wb.Query())
+	c, evt, err = db.beforeQuery(c, db.db, model, query, params, wb.Query())
 	if err != nil {
 		return nil, err
 	}
 
-	// Note that afterQuery uses the err.
 	defer func() {
-		if afterQueryErr := db.afterQuery(ctx, evt, res, err); afterQueryErr != nil {
+		if afterQueryErr := db.afterQuery(c, evt, res, err); afterQueryErr != nil {
 			err = afterQueryErr
 		}
 	}()
 
-	err = cn.WithWriter(ctx, db.opt.WriteTimeout, func(wb *pool.WriteBuffer) error {
+	err = cn.WithWriter(c, db.opt.WriteTimeout, func(wb *pool.WriteBuffer) error {
 		return writeQueryMsg(wb, db.fmter, query, params...)
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	err = cn.WithReader(ctx, db.opt.ReadTimeout, func(rd *pool.ReaderContext) error {
+	err = cn.WithReader(c, db.opt.ReadTimeout, func(rd *pool.BufReader) error {
 		err := readCopyOutResponse(rd)
 		if err != nil {
 			return err
@@ -532,6 +522,52 @@ func (db *baseDB) ModelContext(c context.Context, model ...interface{}) *orm.Que
 	return orm.NewQueryContext(c, db.db, model...)
 }
 
+// Select selects the model by primary key.
+func (db *baseDB) Select(model interface{}) error {
+	return orm.Select(db.db, model)
+}
+
+// Insert inserts the model updating primary keys if they are empty.
+func (db *baseDB) Insert(model ...interface{}) error {
+	return orm.Insert(db.db, model...)
+}
+
+// Update updates the model by primary key.
+func (db *baseDB) Update(model interface{}) error {
+	return orm.Update(db.db, model)
+}
+
+// Delete deletes the model by primary key.
+func (db *baseDB) Delete(model interface{}) error {
+	return orm.Delete(db.db, model)
+}
+
+// Delete forces delete of the model with deleted_at column.
+func (db *baseDB) ForceDelete(model interface{}) error {
+	return orm.ForceDelete(db.db, model)
+}
+
+// CreateTable creates table for the model. It recognizes following field tags:
+//   - notnull - sets NOT NULL constraint.
+//   - unique - sets UNIQUE constraint.
+//   - default:value - sets default value.
+func (db *baseDB) CreateTable(model interface{}, opt *orm.CreateTableOptions) error {
+	return orm.CreateTable(db.db, model, opt)
+}
+
+// DropTable drops table for the model.
+func (db *baseDB) DropTable(model interface{}, opt *orm.DropTableOptions) error {
+	return orm.DropTable(db.db, model, opt)
+}
+
+func (db *baseDB) CreateComposite(model interface{}, opt *orm.CreateCompositeOptions) error {
+	return orm.CreateComposite(db.db, model, opt)
+}
+
+func (db *baseDB) DropComposite(model interface{}, opt *orm.DropCompositeOptions) error {
+	return orm.DropComposite(db.db, model, opt)
+}
+
 func (db *baseDB) Formatter() orm.QueryFormatter {
 	return db.fmter
 }
@@ -561,7 +597,7 @@ func (db *baseDB) simpleQuery(
 	}
 
 	var res *result
-	if err := cn.WithReader(c, db.opt.ReadTimeout, func(rd *pool.ReaderContext) error {
+	if err := cn.WithReader(c, db.opt.ReadTimeout, func(rd *pool.BufReader) error {
 		var err error
 		res, err = readSimpleQuery(rd)
 		return err
@@ -580,7 +616,7 @@ func (db *baseDB) simpleQueryData(
 	}
 
 	var res *result
-	if err := cn.WithReader(c, db.opt.ReadTimeout, func(rd *pool.ReaderContext) error {
+	if err := cn.WithReader(c, db.opt.ReadTimeout, func(rd *pool.BufReader) error {
 		var err error
 		res, err = readSimpleQueryData(c, rd, model)
 		return err
@@ -595,12 +631,12 @@ func (db *baseDB) simpleQueryData(
 // executions. Multiple queries or executions may be run concurrently
 // from the returned statement.
 func (db *baseDB) Prepare(q string) (*Stmt, error) {
-	return prepareStmt(db.withPool(pool.NewStickyConnPool(db.pool)), q)
+	return prepareStmt(db.withPool(pool.NewSingleConnPool(db.pool)), q)
 }
 
 func (db *baseDB) prepare(
 	c context.Context, cn *pool.Conn, q string,
-) (string, []types.ColumnInfo, error) {
+) (string, [][]byte, error) {
 	name := cn.NextID()
 	err := cn.WithWriter(c, db.opt.WriteTimeout, func(wb *pool.WriteBuffer) error {
 		writeParseDescribeSyncMsg(wb, name, q)
@@ -610,8 +646,8 @@ func (db *baseDB) prepare(
 		return "", nil, err
 	}
 
-	var columns []types.ColumnInfo
-	err = cn.WithReader(c, db.opt.ReadTimeout, func(rd *pool.ReaderContext) error {
+	var columns [][]byte
+	err = cn.WithReader(c, db.opt.ReadTimeout, func(rd *pool.BufReader) error {
 		columns, err = readParseDescribeSync(rd)
 		return err
 	})

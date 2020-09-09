@@ -2,7 +2,6 @@ package types
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -10,18 +9,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/segmentio/encoding/json"
+
 	"github.com/go-pg/pg/v10/internal"
 	"github.com/go-pg/pg/v10/pgjson"
 )
 
-var (
-	valueScannerType   = reflect.TypeOf((*ValueScanner)(nil)).Elem()
-	sqlScannerType     = reflect.TypeOf((*sql.Scanner)(nil)).Elem()
-	timeType           = reflect.TypeOf((*time.Time)(nil)).Elem()
-	ipType             = reflect.TypeOf((*net.IP)(nil)).Elem()
-	ipNetType          = reflect.TypeOf((*net.IPNet)(nil)).Elem()
-	jsonRawMessageType = reflect.TypeOf((*json.RawMessage)(nil)).Elem()
-)
+var valueScannerType = reflect.TypeOf((*ValueScanner)(nil)).Elem()
+var sqlScannerType = reflect.TypeOf((*sql.Scanner)(nil)).Elem()
+var timeType = reflect.TypeOf((*time.Time)(nil)).Elem()
+var ipType = reflect.TypeOf((*net.IP)(nil)).Elem()
+var ipNetType = reflect.TypeOf((*net.IPNet)(nil)).Elem()
+var jsonRawMessageType = reflect.TypeOf((*json.RawMessage)(nil)).Elem()
 
 type ScannerFunc func(reflect.Value, Reader, int) error
 
@@ -189,12 +188,12 @@ func scanBoolValue(v reflect.Value, rd Reader, n int) error {
 		return nil
 	}
 
-	flag, err := ScanBool(rd, n)
+	tmp, err := rd.ReadFullTemp()
 	if err != nil {
 		return err
 	}
 
-	v.SetBool(flag)
+	v.SetBool(len(tmp) == 1 && (tmp[0] == 't' || tmp[0] == '1'))
 	return nil
 }
 
@@ -250,7 +249,7 @@ func scanStringValue(v reflect.Value, rd Reader, n int) error {
 
 func scanJSONValue(v reflect.Value, rd Reader, n int) error {
 	// Zero value so it works with SelectOrInsert.
-	// TODO: better handle slices
+	//TODO: better handle slices
 	v.Set(reflect.New(v.Type()).Elem())
 
 	if n == -1 {

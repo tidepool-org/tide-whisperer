@@ -23,16 +23,16 @@ type Descriptor struct {
 	name       string
 	kind       Kind
 	numberKind NumberKind
-	config     InstrumentConfig
+	config     Config
 }
 
 // NewDescriptor returns a Descriptor with the given contents.
-func NewDescriptor(name string, mkind Kind, nkind NumberKind, opts ...InstrumentOption) Descriptor {
+func NewDescriptor(name string, mkind Kind, nkind NumberKind, opts ...Option) Descriptor {
 	return Descriptor{
 		name:       name,
 		kind:       mkind,
 		numberKind: nkind,
-		config:     ConfigureInstrument(opts),
+		config:     Configure(opts),
 	}
 }
 
@@ -64,14 +64,8 @@ func (d Descriptor) NumberKind() NumberKind {
 	return d.numberKind
 }
 
-// InstrumentationName returns the name of the library that provided
-// instrumentation for this instrument.
-func (d Descriptor) InstrumentationName() string {
-	return d.config.InstrumentationName
-}
-
-// InstrumentationVersion returns the version of the library that provided
-// instrumentation for this instrument.
-func (d Descriptor) InstrumentationVersion() string {
-	return d.config.InstrumentationVersion
+// LibraryName returns the metric instrument's library name, typically
+// given via a call to Provider.Meter().
+func (d Descriptor) LibraryName() string {
+	return d.config.LibraryName
 }

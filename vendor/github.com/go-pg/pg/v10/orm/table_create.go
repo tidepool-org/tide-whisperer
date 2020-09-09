@@ -19,59 +19,49 @@ type CreateTableOptions struct {
 	FKConstraints bool
 }
 
-type CreateTableQuery struct {
+func CreateTable(db DB, model interface{}, opt *CreateTableOptions) error {
+	return NewQuery(db, model).CreateTable(opt)
+}
+
+type createTableQuery struct {
 	q   *Query
 	opt *CreateTableOptions
 }
 
-var (
-	_ QueryAppender = (*CreateTableQuery)(nil)
-	_ QueryCommand  = (*CreateTableQuery)(nil)
-)
+var _ QueryAppender = (*createTableQuery)(nil)
+var _ queryCommand = (*createTableQuery)(nil)
 
-func NewCreateTableQuery(q *Query, opt *CreateTableOptions) *CreateTableQuery {
-	return &CreateTableQuery{
+func newCreateTableQuery(q *Query, opt *CreateTableOptions) *createTableQuery {
+	return &createTableQuery{
 		q:   q,
 		opt: opt,
 	}
 }
 
-func (q *CreateTableQuery) String() string {
-	b, err := q.AppendQuery(defaultFmter, nil)
-	if err != nil {
-		panic(err)
-	}
-	return string(b)
-}
-
-func (q *CreateTableQuery) Operation() QueryOp {
-	return CreateTableOp
-}
-
-func (q *CreateTableQuery) Clone() QueryCommand {
-	return &CreateTableQuery{
+func (q *createTableQuery) Clone() queryCommand {
+	return &createTableQuery{
 		q:   q.q.Clone(),
 		opt: q.opt,
 	}
 }
 
-func (q *CreateTableQuery) Query() *Query {
+func (q *createTableQuery) Query() *Query {
 	return q.q
 }
 
-func (q *CreateTableQuery) AppendTemplate(b []byte) ([]byte, error) {
+func (q *createTableQuery) AppendTemplate(b []byte) ([]byte, error) {
 	return q.AppendQuery(dummyFormatter{}, b)
 }
 
-func (q *CreateTableQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte, err error) {
+func (q *createTableQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte, err error) {
 	if q.q.stickyErr != nil {
 		return nil, q.q.stickyErr
 	}
-	if q.q.tableModel == nil {
+	if q.q.model == nil {
 		return nil, errModelNil
 	}
 
-	table := q.q.tableModel.Table()
+	table := q.q.model.Table()
 
 	b = append(b, "CREATE "...)
 	if q.opt != nil && q.opt.Temp {
@@ -130,7 +120,7 @@ func (q *CreateTableQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte
 	return b, q.q.stickyErr
 }
 
-func (q *CreateTableQuery) appendSQLType(b []byte, field *Field) []byte {
+func (q *createTableQuery) appendSQLType(b []byte, field *Field) []byte {
 	if field.UserSQLType != "" {
 		return append(b, field.UserSQLType...)
 	}
@@ -191,27 +181,27 @@ func appendUnique(b []byte, fields []*Field) []byte {
 	return b
 }
 
-func (q *CreateTableQuery) appendFKConstraint(fmter QueryFormatter, b []byte, rel *Relation) []byte {
+func (q createTableQuery) appendFKConstraint(fmter QueryFormatter, b []byte, rel *Relation) []byte {
 	if rel.Type != HasOneRelation {
 		return b
 	}
 
 	b = append(b, ", FOREIGN KEY ("...)
-	b = appendColumns(b, "", rel.BaseFKs)
+	b = appendColumns(b, "", rel.FKs)
 	b = append(b, ")"...)
 
 	b = append(b, " REFERENCES "...)
-	b = fmter.FormatQuery(b, string(rel.JoinTable.SQLName))
+	b = fmter.FormatQuery(b, string(rel.JoinTable.FullName))
 	b = append(b, " ("...)
-	b = appendColumns(b, "", rel.JoinFKs)
+	b = appendColumns(b, "", rel.JoinTable.PKs)
 	b = append(b, ")"...)
 
-	if s := onDelete(rel.BaseFKs); s != "" {
+	if s := onDelete(rel.FKs); s != "" {
 		b = append(b, " ON DELETE "...)
 		b = append(b, s...)
 	}
 
-	if s := onUpdate(rel.BaseFKs); s != "" {
+	if s := OnUpdate(rel.FKs); s != "" {
 		b = append(b, " ON UPDATE "...)
 		b = append(b, s...)
 	}
@@ -219,7 +209,7 @@ func (q *CreateTableQuery) appendFKConstraint(fmter QueryFormatter, b []byte, re
 	return b
 }
 
-func (q *CreateTableQuery) appendTablespace(b []byte, tableSpace types.Safe) []byte {
+func (q createTableQuery) appendTablespace(b []byte, tableSpace types.Safe) []byte {
 	b = append(b, " TABLESPACE "...)
 	b = append(b, tableSpace...)
 	return b
@@ -236,7 +226,7 @@ func onDelete(fks []*Field) string {
 	return onDelete
 }
 
-func onUpdate(fks []*Field) string {
+func OnUpdate(fks []*Field) string {
 	var onUpdate string
 	for _, f := range fks {
 		if f.OnUpdate != "" {

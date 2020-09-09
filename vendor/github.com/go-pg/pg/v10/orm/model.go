@@ -31,7 +31,6 @@ type HooklessModel interface {
 type Model interface {
 	HooklessModel
 
-	AfterScanHook
 	AfterSelectHook
 
 	BeforeInsertHook
@@ -44,56 +43,29 @@ type Model interface {
 	AfterDeleteHook
 }
 
-func NewModel(value interface{}) (Model, error) {
-	return newModel(value, false)
-}
-
-func newScanModel(values []interface{}) (Model, error) {
+func NewModel(values ...interface{}) (Model, error) {
 	if len(values) > 1 {
 		return Scan(values...), nil
 	}
-	return newModel(values[0], true)
-}
 
-func newModel(value interface{}, scan bool) (Model, error) {
-	switch value := value.(type) {
+	v0 := values[0]
+	switch v0 := v0.(type) {
 	case Model:
-		return value, nil
+		return v0, nil
 	case HooklessModel:
-		return newModelWithHookStubs(value), nil
+		return newModelWithHookStubs(v0), nil
 	case types.ValueScanner, sql.Scanner:
-		if !scan {
-			return nil, fmt.Errorf("pg: Model(unsupported %T)", value)
-		}
-		return Scan(value), nil
+		return Scan(v0), nil
 	}
 
-	v := reflect.ValueOf(value)
+	v := reflect.ValueOf(v0)
 	if !v.IsValid() {
 		return nil, errModelNil
 	}
 	if v.Kind() != reflect.Ptr {
-		return nil, fmt.Errorf("pg: Model(non-pointer %T)", value)
+		return nil, fmt.Errorf("pg: Model(non-pointer %T)", v0)
 	}
-
-	if v.IsNil() {
-		typ := v.Type().Elem()
-		if typ.Kind() == reflect.Struct {
-			return newStructTableModel(GetTable(typ)), nil
-		}
-		return nil, errModelNil
-	}
-
 	v = v.Elem()
-
-	if v.Kind() == reflect.Interface {
-		if !v.IsNil() {
-			v = v.Elem()
-			if v.Kind() != reflect.Ptr {
-				return nil, fmt.Errorf("pg: Model(non-pointer %s)", v.Type().String())
-			}
-		}
-	}
 
 	switch v.Kind() {
 	case reflect.Struct:
@@ -101,33 +73,15 @@ func newModel(value interface{}, scan bool) (Model, error) {
 			return newStructTableModelValue(v), nil
 		}
 	case reflect.Slice:
-		elemType := sliceElemType(v)
-		switch elemType.Kind() {
-		case reflect.Struct:
-			if elemType != timeType {
-				return newSliceTableModel(v, elemType), nil
-			}
-		case reflect.Map:
-			if err := validMap(elemType); err != nil {
-				return nil, err
-			}
-			slicePtr := v.Addr().Interface().(*[]map[string]interface{})
-			return newMapSliceModel(slicePtr), nil
+		typ := v.Type()
+		elemType := indirectType(typ.Elem())
+		if elemType.Kind() == reflect.Struct && elemType != timeType {
+			return newSliceTableModel(v, elemType), nil
 		}
 		return newSliceModel(v, elemType), nil
-	case reflect.Map:
-		typ := v.Type()
-		if err := validMap(typ); err != nil {
-			return nil, err
-		}
-		mapPtr := v.Addr().Interface().(*map[string]interface{})
-		return newMapModel(mapPtr), nil
 	}
 
-	if !scan {
-		return nil, fmt.Errorf("pg: Model(unsupported %T)", value)
-	}
-	return Scan(value), nil
+	return Scan(v0), nil
 }
 
 type modelWithHookStubs struct {
@@ -139,12 +93,4 @@ func newModelWithHookStubs(m HooklessModel) Model {
 	return modelWithHookStubs{
 		HooklessModel: m,
 	}
-}
-
-func validMap(typ reflect.Type) error {
-	if typ.Key().Kind() != reflect.String || typ.Elem().Kind() != reflect.Interface {
-		return fmt.Errorf("pg: Model(unsupported %s, expected *map[string]interface{})",
-			typ.String())
-	}
-	return nil
 }

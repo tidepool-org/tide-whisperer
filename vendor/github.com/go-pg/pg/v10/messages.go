@@ -19,7 +19,6 @@ import (
 	"github.com/go-pg/pg/v10/types"
 )
 
-// https://www.postgresql.org/docs/current/protocol-message-formats.html
 const (
 	commandCompleteMsg  = 'C'
 	errorResponseMsg    = 'E'
@@ -85,7 +84,7 @@ func (db *baseDB) startup(
 		return err
 	}
 
-	return cn.WithReader(c, db.opt.ReadTimeout, func(rd *pool.ReaderContext) error {
+	return cn.WithReader(c, db.opt.ReadTimeout, func(rd *pool.BufReader) error {
 		for {
 			typ, msgLen, err := readMessageType(rd)
 			if err != nil {
@@ -138,7 +137,7 @@ func (db *baseDB) enableSSL(c context.Context, cn *pool.Conn, tlsConf *tls.Confi
 		return err
 	}
 
-	err = cn.WithReader(c, db.opt.ReadTimeout, func(rd *pool.ReaderContext) error {
+	err = cn.WithReader(c, db.opt.ReadTimeout, func(rd *pool.BufReader) error {
 		c, err := rd.ReadByte()
 		if err != nil {
 			return err
@@ -157,7 +156,7 @@ func (db *baseDB) enableSSL(c context.Context, cn *pool.Conn, tlsConf *tls.Confi
 }
 
 func (db *baseDB) auth(
-	c context.Context, cn *pool.Conn, rd *pool.ReaderContext, user, password string,
+	c context.Context, cn *pool.Conn, rd *pool.BufReader, user, password string,
 ) error {
 	num, err := readInt32(rd)
 	if err != nil {
@@ -179,7 +178,7 @@ func (db *baseDB) auth(
 }
 
 func (db *baseDB) authCleartext(
-	c context.Context, cn *pool.Conn, rd *pool.ReaderContext, password string,
+	c context.Context, cn *pool.Conn, rd *pool.BufReader, password string,
 ) error {
 	err := cn.WithWriter(c, db.opt.WriteTimeout, func(wb *pool.WriteBuffer) error {
 		writePasswordMsg(wb, password)
@@ -192,7 +191,7 @@ func (db *baseDB) authCleartext(
 }
 
 func (db *baseDB) authMD5(
-	c context.Context, cn *pool.Conn, rd *pool.ReaderContext, user, password string,
+	c context.Context, cn *pool.Conn, rd *pool.BufReader, user, password string,
 ) error {
 	b, err := rd.ReadN(4)
 	if err != nil {
@@ -211,7 +210,7 @@ func (db *baseDB) authMD5(
 	return readAuthOK(rd)
 }
 
-func readAuthOK(rd *pool.ReaderContext) error {
+func readAuthOK(rd *pool.BufReader) error {
 	c, _, err := readMessageType(rd)
 	if err != nil {
 		return err
@@ -239,7 +238,7 @@ func readAuthOK(rd *pool.ReaderContext) error {
 }
 
 func (db *baseDB) authSASL(
-	c context.Context, cn *pool.Conn, rd *pool.ReaderContext, user, password string,
+	c context.Context, cn *pool.Conn, rd *pool.BufReader, user, password string,
 ) error {
 	s, err := readString(rd)
 	if err != nil {
@@ -333,7 +332,7 @@ func (db *baseDB) authSASL(
 	}
 }
 
-func readAuthSASLFinal(rd *pool.ReaderContext, client *sasl.Negotiator) error {
+func readAuthSASLFinal(rd *pool.BufReader, client *sasl.Negotiator) error {
 	c, n, err := readMessageType(rd)
 	if err != nil {
 		return err
@@ -486,8 +485,8 @@ func writeParseDescribeSyncMsg(buf *pool.WriteBuffer, name, q string) {
 	writeSyncMsg(buf)
 }
 
-func readParseDescribeSync(rd *pool.ReaderContext) ([]types.ColumnInfo, error) {
-	var columns []types.ColumnInfo
+func readParseDescribeSync(rd *pool.BufReader) ([][]byte, error) {
+	var columns [][]byte
 	var firstErr error
 	for {
 		c, msgLen, err := readMessageType(rd)
@@ -501,7 +500,7 @@ func readParseDescribeSync(rd *pool.ReaderContext) ([]types.ColumnInfo, error) {
 				return nil, err
 			}
 		case rowDescriptionMsg: // Response to the DESCRIBE message.
-			columns, err = readRowDescription(rd, pool.NewColumnAlloc())
+			columns, err = readRowDescription(rd, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -583,7 +582,7 @@ func writeCloseMsg(buf *pool.WriteBuffer, name string) {
 	buf.FinishMessage()
 }
 
-func readCloseCompleteMsg(rd *pool.ReaderContext) error {
+func readCloseCompleteMsg(rd *pool.BufReader) error {
 	for {
 		c, msgLen, err := readMessageType(rd)
 		if err != nil {
@@ -613,7 +612,7 @@ func readCloseCompleteMsg(rd *pool.ReaderContext) error {
 	}
 }
 
-func readSimpleQuery(rd *pool.ReaderContext) (*result, error) {
+func readSimpleQuery(rd *pool.BufReader) (*result, error) {
 	var res result
 	var firstErr error
 	for {
@@ -676,7 +675,7 @@ func readSimpleQuery(rd *pool.ReaderContext) (*result, error) {
 	}
 }
 
-func readExtQuery(rd *pool.ReaderContext) (*result, error) {
+func readExtQuery(rd *pool.BufReader) (*result, error) {
 	var res result
 	var firstErr error
 	for {
@@ -740,47 +739,42 @@ func readExtQuery(rd *pool.ReaderContext) (*result, error) {
 	}
 }
 
-func readRowDescription(
-	rd *pool.ReaderContext, columnAlloc *pool.ColumnAlloc,
-) ([]types.ColumnInfo, error) {
-	numCol, err := readInt16(rd)
+func readRowDescription(rd *pool.BufReader, columns [][]byte) ([][]byte, error) {
+	colNum, err := readInt16(rd)
 	if err != nil {
 		return nil, err
 	}
 
-	for i := 0; i < int(numCol); i++ {
+	columns = setByteSliceLen(columns, int(colNum))
+	for i := 0; i < int(colNum); i++ {
 		b, err := rd.ReadSlice(0)
 		if err != nil {
 			return nil, err
 		}
+		columns[i] = append(columns[i][:0], b[:len(b)-1]...)
 
-		col := columnAlloc.New(int16(i), b[:len(b)-1])
-
-		if _, err := rd.ReadN(6); err != nil {
-			return nil, err
-		}
-
-		dataType, err := readInt32(rd)
+		_, err = rd.ReadN(18)
 		if err != nil {
-			return nil, err
-		}
-		col.DataType = dataType
-
-		if _, err := rd.ReadN(8); err != nil {
 			return nil, err
 		}
 	}
 
-	return columnAlloc.Columns(), nil
+	return columns, nil
+}
+
+func setByteSliceLen(b [][]byte, n int) [][]byte {
+	if n <= cap(b) {
+		return b[:n]
+	}
+	b = b[:cap(b)]
+	b = append(b, make([][]byte, n-cap(b))...)
+	return b
 }
 
 func readDataRow(
-	ctx context.Context,
-	rd *pool.ReaderContext,
-	columns []types.ColumnInfo,
-	scanner orm.ColumnScanner,
+	ctx context.Context, rd *pool.BufReader, scanner orm.ColumnScanner, columns [][]byte,
 ) error {
-	numCol, err := readInt16(rd)
+	colNum, err := readInt16(rd)
 	if err != nil {
 		return err
 	}
@@ -793,12 +787,13 @@ func readDataRow(
 
 	var firstErr error
 
-	for colIdx := int16(0); colIdx < numCol; colIdx++ {
+	for colIdx := int16(0); colIdx < colNum; colIdx++ {
 		n, err := readInt32(rd)
 		if err != nil {
 			return err
 		}
 
+		column := internal.BytesToString(columns[colIdx])
 		var colRd types.Reader
 		if n >= 0 {
 			bytesRd := rd.BytesReader(int(n))
@@ -812,9 +807,7 @@ func readDataRow(
 			colRd = rd.BytesReader(0)
 		}
 
-		column := columns[colIdx]
-
-		err = scanner.ScanColumn(column, colRd, int(n))
+		err = scanner.ScanColumn(int(colIdx), column, colRd, int(n))
 		if err != nil && firstErr == nil {
 			firstErr = internal.Errorf(err.Error())
 		}
@@ -848,9 +841,8 @@ func newModel(mod interface{}) (orm.Model, error) {
 }
 
 func readSimpleQueryData(
-	ctx context.Context, rd *pool.ReaderContext, mod interface{},
+	ctx context.Context, rd *pool.BufReader, mod interface{},
 ) (*result, error) {
-	var columns []types.ColumnInfo
 	var res result
 	var firstErr error
 	for {
@@ -861,7 +853,7 @@ func readSimpleQueryData(
 
 		switch c {
 		case rowDescriptionMsg:
-			columns, err = readRowDescription(rd, rd.ColumnAlloc)
+			rd.Columns, err = readRowDescription(rd, rd.Columns[:0])
 			if err != nil {
 				return nil, err
 			}
@@ -878,7 +870,7 @@ func readSimpleQueryData(
 			}
 		case dataRowMsg:
 			scanner := res.model.NextColumnScanner()
-			if err := readDataRow(ctx, rd, columns, scanner); err != nil {
+			if err := readDataRow(ctx, rd, scanner, rd.Columns); err != nil {
 				if firstErr == nil {
 					firstErr = err
 				}
@@ -933,7 +925,7 @@ func readSimpleQueryData(
 }
 
 func readExtQueryData(
-	ctx context.Context, rd *pool.ReaderContext, mod interface{}, columns []types.ColumnInfo,
+	ctx context.Context, rd *pool.BufReader, mod interface{}, columns [][]byte,
 ) (*result, error) {
 	var res result
 	var firstErr error
@@ -962,7 +954,7 @@ func readExtQueryData(
 			}
 
 			scanner := res.model.NextColumnScanner()
-			if err := readDataRow(ctx, rd, columns, scanner); err != nil {
+			if err := readDataRow(ctx, rd, scanner, columns); err != nil {
 				if firstErr == nil {
 					firstErr = err
 				}
@@ -1012,7 +1004,7 @@ func readExtQueryData(
 	}
 }
 
-func readCopyInResponse(rd *pool.ReaderContext) error {
+func readCopyInResponse(rd *pool.BufReader) error {
 	var firstErr error
 	for {
 		c, msgLen, err := readMessageType(rd)
@@ -1052,7 +1044,7 @@ func readCopyInResponse(rd *pool.ReaderContext) error {
 	}
 }
 
-func readCopyOutResponse(rd *pool.ReaderContext) error {
+func readCopyOutResponse(rd *pool.BufReader) error {
 	var firstErr error
 	for {
 		c, msgLen, err := readMessageType(rd)
@@ -1092,7 +1084,7 @@ func readCopyOutResponse(rd *pool.ReaderContext) error {
 	}
 }
 
-func readCopyData(rd *pool.ReaderContext, w io.Writer) (*result, error) {
+func readCopyData(rd *pool.BufReader, w io.Writer) (*result, error) {
 	var res result
 	var firstErr error
 	for {
@@ -1170,7 +1162,7 @@ func writeCopyDone(buf *pool.WriteBuffer) {
 	buf.FinishMessage()
 }
 
-func readReadyForQuery(rd *pool.ReaderContext) (*result, error) {
+func readReadyForQuery(rd *pool.BufReader) (*result, error) {
 	var res result
 	var firstErr error
 	for {
@@ -1219,7 +1211,7 @@ func readReadyForQuery(rd *pool.ReaderContext) (*result, error) {
 	}
 }
 
-func readNotification(rd *pool.ReaderContext) (channel, payload string, err error) {
+func readNotification(rd *pool.BufReader) (channel, payload string, err error) {
 	for {
 		c, msgLen, err := readMessageType(rd)
 		if err != nil {
@@ -1277,17 +1269,17 @@ func terminateConn(cn *pool.Conn) error {
 
 //------------------------------------------------------------------------------
 
-func logNotice(rd *pool.ReaderContext, msgLen int) error {
+func logNotice(rd *pool.BufReader, msgLen int) error {
 	_, err := rd.ReadN(msgLen)
 	return err
 }
 
-func logParameterStatus(rd *pool.ReaderContext, msgLen int) error {
+func logParameterStatus(rd *pool.BufReader, msgLen int) error {
 	_, err := rd.ReadN(msgLen)
 	return err
 }
 
-func readInt16(rd *pool.ReaderContext) (int16, error) {
+func readInt16(rd *pool.BufReader) (int16, error) {
 	b, err := rd.ReadN(2)
 	if err != nil {
 		return 0, err
@@ -1295,7 +1287,7 @@ func readInt16(rd *pool.ReaderContext) (int16, error) {
 	return int16(binary.BigEndian.Uint16(b)), nil
 }
 
-func readInt32(rd *pool.ReaderContext) (int32, error) {
+func readInt32(rd *pool.BufReader) (int32, error) {
 	b, err := rd.ReadN(4)
 	if err != nil {
 		return 0, err
@@ -1303,7 +1295,7 @@ func readInt32(rd *pool.ReaderContext) (int32, error) {
 	return int32(binary.BigEndian.Uint32(b)), nil
 }
 
-func readString(rd *pool.ReaderContext) (string, error) {
+func readString(rd *pool.BufReader) (string, error) {
 	b, err := rd.ReadSlice(0)
 	if err != nil {
 		return "", err
@@ -1311,7 +1303,7 @@ func readString(rd *pool.ReaderContext) (string, error) {
 	return string(b[:len(b)-1]), nil
 }
 
-func readError(rd *pool.ReaderContext) (error, error) {
+func readError(rd *pool.BufReader) (error, error) {
 	m := make(map[byte]string)
 	for {
 		c, err := rd.ReadByte()
@@ -1330,7 +1322,7 @@ func readError(rd *pool.ReaderContext) (error, error) {
 	return internal.NewPGError(m), nil
 }
 
-func readMessageType(rd *pool.ReaderContext) (byte, int, error) {
+func readMessageType(rd *pool.BufReader) (byte, int, error) {
 	c, err := rd.ReadByte()
 	if err != nil {
 		return 0, 0, err

@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"strconv"
 	"time"
-	"unicode/utf8"
 
 	"github.com/tmthrgd/go-hex"
 )
@@ -106,7 +105,9 @@ func AppendString(b []byte, s string, flags int) []byte {
 
 	if hasFlag(flags, quoteFlag) {
 		b = append(b, '\'')
-		for _, c := range s {
+		for i := 0; i < len(s); i++ {
+			c := s[i]
+
 			if c == '\000' {
 				continue
 			}
@@ -114,16 +115,17 @@ func AppendString(b []byte, s string, flags int) []byte {
 			if c == '\'' {
 				b = append(b, '\'', '\'')
 			} else {
-				b = appendRune(b, c)
+				b = append(b, c)
 			}
 		}
 		b = append(b, '\'')
 		return b
 	}
 
-	for _, c := range s {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
 		if c != '\000' {
-			b = appendRune(b, c)
+			b = append(b, c)
 		}
 	}
 	return b
@@ -131,7 +133,9 @@ func AppendString(b []byte, s string, flags int) []byte {
 
 func appendString2(b []byte, s string, flags int) []byte {
 	b = append(b, '"')
-	for _, c := range s {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+
 		if c == '\000' {
 			continue
 		}
@@ -147,23 +151,11 @@ func appendString2(b []byte, s string, flags int) []byte {
 		case '\\':
 			b = append(b, '\\', '\\')
 		default:
-			b = appendRune(b, c)
+			b = append(b, c)
 		}
 	}
 	b = append(b, '"')
 	return b
-}
-
-func appendRune(b []byte, r rune) []byte {
-	if r < utf8.RuneSelf {
-		return append(b, byte(r))
-	}
-	l := len(b)
-	if cap(b)-l < utf8.UTFMax {
-		b = append(b, make([]byte, utf8.UTFMax)...)
-	}
-	n := utf8.EncodeRune(b[l:l+utf8.UTFMax], r)
-	return b[:l+n]
 }
 
 func AppendBytes(b []byte, bytes []byte, flags int) []byte {

@@ -26,10 +26,8 @@ type SafeQueryAppender struct {
 	params []interface{}
 }
 
-var (
-	_ QueryAppender       = (*SafeQueryAppender)(nil)
-	_ types.ValueAppender = (*SafeQueryAppender)(nil)
-)
+var _ QueryAppender = (*SafeQueryAppender)(nil)
+var _ types.ValueAppender = (*SafeQueryAppender)(nil)
 
 //nolint
 func SafeQuery(query string, params ...interface{}) *SafeQueryAppender {
@@ -59,10 +57,8 @@ type condGroupAppender struct {
 	cond []queryWithSepAppender
 }
 
-var (
-	_ QueryAppender        = (*condAppender)(nil)
-	_ queryWithSepAppender = (*condAppender)(nil)
-)
+var _ QueryAppender = (*condAppender)(nil)
+var _ queryWithSepAppender = (*condAppender)(nil)
 
 func (q *condGroupAppender) AppendSep(b []byte) []byte {
 	return append(b, q.sep...)
@@ -91,10 +87,8 @@ type condAppender struct {
 	params []interface{}
 }
 
-var (
-	_ QueryAppender        = (*condAppender)(nil)
-	_ queryWithSepAppender = (*condAppender)(nil)
-)
+var _ QueryAppender = (*condAppender)(nil)
+var _ queryWithSepAppender = (*condAppender)(nil)
 
 func (q *condAppender) AppendSep(b []byte) []byte {
 	return append(b, q.sep...)
@@ -198,9 +192,9 @@ func (f *Formatter) WithModel(model interface{}) *Formatter {
 	case TableModel:
 		return f.WithTableModel(model)
 	case *Query:
-		return f.WithTableModel(model.tableModel)
-	case QueryCommand:
-		return f.WithTableModel(model.Query().tableModel)
+		return f.WithTableModel(model.model)
+	case queryCommand:
+		return f.WithTableModel(model.Query().model)
 	default:
 		panic(fmt.Errorf("pg: unsupported model %T", model))
 	}

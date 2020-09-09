@@ -31,10 +31,6 @@ type Options struct {
 	// Network and Addr options.
 	Dialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
-	// Hook that is called after new connection is established
-	// and user is authenticated.
-	OnConnect func(ctx context.Context, cn *Conn) error
-
 	User     string
 	Password string
 	Database string
@@ -56,6 +52,10 @@ type Options struct {
 	// Timeout for socket writes. If reached, commands will fail
 	// with a timeout instead of blocking.
 	WriteTimeout time.Duration
+
+	// Hook that is called after new connection is established
+	// and user is authenticated.
+	OnConnect func(*Conn) error
 
 	// Maximum number of retries before giving up.
 	// Default is to not retry failed queries.
@@ -110,10 +110,6 @@ func (opt *Options) init() {
 			opt.Addr = "/var/run/postgresql/.s.PGSQL.5432"
 		}
 	}
-
-	if opt.DialTimeout == 0 {
-		opt.DialTimeout = 5 * time.Second
-	}
 	if opt.Dialer == nil {
 		opt.Dialer = func(ctx context.Context, network, addr string) (net.Conn, error) {
 			netDialer := &net.Dialer{
@@ -142,6 +138,10 @@ func (opt *Options) init() {
 		} else {
 			opt.PoolTimeout = 30 * time.Second
 		}
+	}
+
+	if opt.DialTimeout == 0 {
+		opt.DialTimeout = 5 * time.Second
 	}
 
 	if opt.IdleTimeout == 0 {

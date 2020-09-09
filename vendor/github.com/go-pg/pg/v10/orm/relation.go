@@ -7,8 +7,7 @@ import (
 )
 
 const (
-	InvalidRelation = iota
-	HasOneRelation
+	HasOneRelation = 1 << iota
 	BelongsToRelation
 	HasManyRelation
 	Many2ManyRelation
@@ -18,14 +17,14 @@ type Relation struct {
 	Type        int
 	Field       *Field
 	JoinTable   *Table
-	BaseFKs     []*Field
-	JoinFKs     []*Field
+	FKs         []*Field
 	Polymorphic *Field
+	FKValues    []*Field
 
 	M2MTableName  types.Safe
 	M2MTableAlias types.Safe
-	M2MBaseFKs    []string
-	M2MJoinFKs    []string
+	BaseFKs       []string
+	JoinFKs       []string
 }
 
 func (r *Relation) String() string {

@@ -1,6 +1,7 @@
 package pg
 
 import (
+	"io"
 	"net"
 
 	"github.com/go-pg/pg/v10/internal"
@@ -21,10 +22,10 @@ var ErrMultiRows = internal.ErrMultiRows
 type Error interface {
 	error
 
-	// Field returns a string value associated with an error field.
+	// Field returns a string value associated with an error code.
 	//
 	// https://www.postgresql.org/docs/10/static/protocol-error-fields.html
-	Field(field byte) string
+	Field(byte) string
 
 	// IntegrityViolation reports whether an error is a part of
 	// Integrity Constraint Violation class of errors.
@@ -42,19 +43,21 @@ func isBadConn(err error, allowTimeout bool) bool {
 	if _, ok := err.(internal.Error); ok {
 		return false
 	}
-	if pgErr, ok := err.(Error); ok {
-		return pgErr.Field('S') == "FATAL"
+	if pgErr, ok := err.(Error); ok && pgErr.Field('S') != "FATAL" {
+		return false
 	}
 	if allowTimeout {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-			return !netErr.Temporary()
+			return false
 		}
 	}
 	return true
 }
 
-//------------------------------------------------------------------------------
-
-type timeoutError interface {
-	Timeout() bool
+func isNetworkError(err error) bool {
+	if err == io.EOF {
+		return true
+	}
+	_, ok := err.(net.Error)
+	return ok
 }

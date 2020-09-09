@@ -18,41 +18,30 @@ import (
 	"context"
 	"time"
 
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/label"
+	"google.golang.org/grpc/codes"
+
+	"go.opentelemetry.io/otel/api/kv"
 )
 
 type Provider interface {
-	// Tracer creates an implementation of the Tracer interface.
-	// The instrumentationName must be the name of the library providing
-	// instrumentation. This name may be the same as the instrumented code
-	// only if that code provides built-in instrumentation. If the
-	// instrumentationName is empty, then a implementation defined default
-	// name will be used instead.
-	Tracer(instrumentationName string, opts ...TracerOption) Tracer
-}
-
-// TODO (MrAlias): unify this API option design:
-// https://github.com/open-telemetry/opentelemetry-go/issues/536
-
-// TracerConfig contains options for a Tracer.
-type TracerConfig struct {
-	InstrumentationVersion string
-}
-
-// TracerOption configures a TracerConfig option.
-type TracerOption func(*TracerConfig)
-
-// WithInstrumentationVersion sets the instrumentation version for a Tracer.
-func WithInstrumentationVersion(version string) TracerOption {
-	return func(c *TracerConfig) {
-		c.InstrumentationVersion = version
-	}
+	// Tracer creates a named tracer that implements Tracer interface.
+	// If the name is an empty string then provider uses default name.
+	Tracer(name string) Tracer
 }
 
 type Tracer interface {
 	// Start a span.
 	Start(ctx context.Context, spanName string, opts ...StartOption) (context.Context, Span)
+
+	// WithSpan wraps the execution of the fn function with a span.
+	// It starts a new span, sets it as an active span in the context,
+	// executes the fn function and closes the span before returning the result of fn.
+	WithSpan(
+		ctx context.Context,
+		spanName string,
+		fn func(ctx context.Context) error,
+		opts ...StartOption,
+	) error
 }
 
 // EndConfig provides options to set properties of span at the time of ending
@@ -103,10 +92,10 @@ type Span interface {
 	End(options ...EndOption)
 
 	// AddEvent adds an event to the span.
-	AddEvent(ctx context.Context, name string, attrs ...label.KeyValue)
+	AddEvent(ctx context.Context, name string, attrs ...kv.KeyValue)
 	// AddEventWithTimestamp adds an event with a custom timestamp
 	// to the span.
-	AddEventWithTimestamp(ctx context.Context, timestamp time.Time, name string, attrs ...label.KeyValue)
+	AddEventWithTimestamp(ctx context.Context, timestamp time.Time, name string, attrs ...kv.KeyValue)
 
 	// IsRecording returns true if the span is active and recording events is enabled.
 	IsRecording() bool
@@ -131,7 +120,7 @@ type Span interface {
 	SetName(name string)
 
 	// Set span attributes
-	SetAttributes(...label.KeyValue)
+	SetAttributes(...kv.KeyValue)
 
 	// Set singular span attribute, with type inference.
 	SetAttribute(string, interface{})
@@ -143,7 +132,7 @@ type StartOption func(*StartConfig)
 // StartConfig provides options to set properties of span at the time of starting
 // a new span.
 type StartConfig struct {
-	Attributes []label.KeyValue
+	Attributes []kv.KeyValue
 	StartTime  time.Time
 	Links      []Link
 	Record     bool
@@ -164,7 +153,7 @@ type StartConfig struct {
 //      be correlated.
 type Link struct {
 	SpanContext
-	Attributes []label.KeyValue
+	Attributes []kv.KeyValue
 }
 
 // SpanKind represents the role of a Span inside a Trace. Often, this defines how a Span
@@ -232,7 +221,7 @@ func WithStartTime(t time.Time) StartOption {
 // WithAttributes sets attributes to span. These attributes provides additional
 // data about the span.
 // Multiple `WithAttributes` options appends the attributes preserving the order.
-func WithAttributes(attrs ...label.KeyValue) StartOption {
+func WithAttributes(attrs ...kv.KeyValue) StartOption {
 	return func(c *StartConfig) {
 		c.Attributes = append(c.Attributes, attrs...)
 	}
@@ -259,7 +248,7 @@ func WithNewRoot() StartOption {
 }
 
 // LinkedTo allows instantiating a Span with initial Links.
-func LinkedTo(sc SpanContext, attrs ...label.KeyValue) StartOption {
+func LinkedTo(sc SpanContext, attrs ...kv.KeyValue) StartOption {
 	return func(c *StartConfig) {
 		c.Links = append(c.Links, Link{sc, attrs})
 	}

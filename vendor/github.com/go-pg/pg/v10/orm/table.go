@@ -2,7 +2,6 @@ package orm
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"net"
 	"reflect"
@@ -10,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/segmentio/encoding/json"
 
 	"github.com/jinzhu/inflection"
 	"github.com/vmihailenco/tagparser"
@@ -36,7 +37,6 @@ const (
 var (
 	timeType           = reflect.TypeOf((*time.Time)(nil)).Elem()
 	nullTimeType       = reflect.TypeOf((*types.NullTime)(nil)).Elem()
-	sqlNullTimeType    = reflect.TypeOf((*sql.NullTime)(nil)).Elem()
 	ipType             = reflect.TypeOf((*net.IP)(nil)).Elem()
 	ipNetType          = reflect.TypeOf((*net.IPNet)(nil)).Elem()
 	scannerType        = reflect.TypeOf((*sql.Scanner)(nil)).Elem()
@@ -64,8 +64,9 @@ type Table struct {
 	Alias     types.Safe
 	ModelName string
 
-	SQLName           types.Safe
-	SQLNameForSelects types.Safe
+	Name               string
+	FullName           types.Safe
+	FullNameForSelects types.Safe
 
 	Tablespace types.Safe
 
@@ -96,8 +97,8 @@ func newTable(typ reflect.Type) *Table {
 	t.zeroStruct = reflect.New(t.Type).Elem()
 	t.TypeName = internal.ToExported(t.Type.Name())
 	t.ModelName = internal.Underscore(t.Type.Name())
-	tableName := tableNameInflector(t.ModelName)
-	t.setName(quoteIdent(tableName))
+	t.Name = tableNameInflector(t.ModelName)
+	t.setName(quoteIdent(t.Name))
 	t.Alias = quoteIdent(t.ModelName)
 
 	typ = reflect.PtrTo(t.Type)
@@ -144,8 +145,8 @@ func (t *Table) init2() {
 }
 
 func (t *Table) setName(name types.Safe) {
-	t.SQLName = name
-	t.SQLNameForSelects = name
+	t.FullName = name
+	t.FullNameForSelects = name
 	if t.Alias == "" {
 		t.Alias = name
 	}
@@ -271,11 +272,12 @@ func (t *Table) addFields(typ reflect.Type, baseIndex []int) {
 			t.addFields(fieldType, append(index, f.Index...))
 
 			pgTag := tagparser.Parse(f.Tag.Get("pg"))
-			if _, inherit := pgTag.Options["inherit"]; inherit {
+			_, inherit := pgTag.Options["inherit"]
+			if inherit {
 				embeddedTable := _tables.get(fieldType, true)
 				t.TypeName = embeddedTable.TypeName
-				t.SQLName = embeddedTable.SQLName
-				t.SQLNameForSelects = embeddedTable.SQLNameForSelects
+				t.FullName = embeddedTable.FullName
+				t.FullNameForSelects = embeddedTable.FullNameForSelects
 				t.Alias = embeddedTable.Alias
 				t.ModelName = embeddedTable.ModelName
 			}
@@ -300,33 +302,15 @@ func (t *Table) newField(f reflect.StructField, index []int) *Field {
 			return nil
 		}
 
-		if isKnownTableOption(pgTag.Name) {
-			internal.Warn.Printf(
-				"%s.%s tag name %q is also an option name; is it a mistake?",
-				t.TypeName, f.Name, pgTag.Name,
-			)
-		}
-
-		for name := range pgTag.Options {
-			if !isKnownTableOption(name) {
-				internal.Warn.Printf("%s.%s has unknown tag option: %q", t.TypeName, f.Name, name)
-			}
-		}
-
-		if tableSpace, ok := pgTag.Options["tablespace"]; ok {
+		tableSpace, ok := pgTag.Options["tablespace"]
+		if ok {
 			s, _ := tagparser.Unquote(tableSpace)
 			t.Tablespace = quoteIdent(s)
 		}
 
-		partitionBy, ok := pgTag.Options["partition_by"]
-		if !ok {
-			partitionBy, ok = pgTag.Options["partitionBy"]
-			if ok {
-				internal.Deprecated.Printf("partitionBy is renamed to partition_by")
-			}
-		}
+		partitionType, ok := pgTag.Options["partitionBy"]
 		if ok {
-			s, _ := tagparser.Unquote(partitionBy)
+			s, _ := tagparser.Unquote(partitionType)
 			t.PartitionBy = s
 		}
 
@@ -339,7 +323,7 @@ func (t *Table) newField(f reflect.StructField, index []int) *Field {
 
 		if s, ok := pgTag.Options["select"]; ok {
 			s, _ = tagparser.Unquote(s)
-			t.SQLNameForSelects = types.Safe(quoteTableName(s))
+			t.FullNameForSelects = types.Safe(quoteTableName(s))
 		}
 
 		if v, ok := pgTag.Options["alias"]; ok {
@@ -357,19 +341,6 @@ func (t *Table) newField(f reflect.StructField, index []int) *Field {
 
 	if f.PkgPath != "" {
 		return nil
-	}
-
-	if isKnownFieldOption(pgTag.Name) {
-		internal.Warn.Printf(
-			"%s.%s tag name %q is also an option name; is it a mistake?",
-			t.TypeName, f.Name, pgTag.Name,
-		)
-	}
-
-	for name := range pgTag.Options {
-		if !isKnownFieldOption(name) {
-			internal.Warn.Printf("%s.%s has unknown tag option: %q", t.TypeName, f.Name, name)
-		}
 	}
 
 	skip := pgTag.Name == "-"
@@ -552,23 +523,10 @@ func (t *Table) initRelations() {
 		} else {
 			i++
 		}
-
-		if f.Type.Kind() == reflect.Struct {
-			t.inlineFields(f, nil)
-		}
 	}
 }
 
 func (t *Table) tryRelation(field *Field) bool {
-	pgTag := tagparser.Parse(field.Field.Tag.Get("pg"))
-
-	if rel, ok := pgTag.Options["rel"]; ok {
-		return t.tryRelationType(field, rel)
-	}
-	if _, ok := pgTag.Options["many2many"]; ok {
-		return t.tryRelationType(field, "many2many")
-	}
-
 	if field.UserSQLType != "" || isScanner(field.Type) {
 		return false
 	}
@@ -582,332 +540,8 @@ func (t *Table) tryRelation(field *Field) bool {
 	return false
 }
 
-func (t *Table) tryRelationType(field *Field, rel string) bool {
-	pgTag := tagparser.Parse(field.Field.Tag.Get("pg"))
-	switch rel {
-	case "has-one":
-		return t.mustHasOneRelation(field, pgTag)
-	case "belongs-to":
-		return t.mustBelongsToRelation(field, pgTag)
-	case "has-many":
-		return t.mustHasManyRelation(field, pgTag)
-	case "many2many":
-		return t.mustM2MRelation(field, pgTag)
-	default:
-		panic(fmt.Errorf("pg: unknown relation=%s on field=%s", rel, field.GoName))
-	}
-}
-
-func (t *Table) mustHasOneRelation(field *Field, pgTag *tagparser.Tag) bool {
-	joinTable := _tables.get(field.Type, true)
-	if err := joinTable.checkPKs(); err != nil {
-		panic(err)
-	}
-	fkPrefix, fkOK := pgTag.Options["fk"]
-
-	if fkOK && len(t.PKs) == 1 {
-		fk := t.getField(fkPrefix)
-		if fk == nil {
-			panic(fmt.Errorf(
-				"pg: %s has-one %s: %s must have column %s "+
-					"(use fk:custom_column tag on %s field to specify custom column)",
-				t.TypeName, field.GoName, t.TypeName, fkPrefix, field.GoName,
-			))
-		}
-
-		t.addRelation(&Relation{
-			Type:      HasOneRelation,
-			Field:     field,
-			JoinTable: joinTable,
-			BaseFKs:   []*Field{fk},
-			JoinFKs:   joinTable.PKs,
-		})
-		return true
-	}
-
-	if !fkOK {
-		fkPrefix = internal.Underscore(field.GoName) + "_"
-	}
-	fks := make([]*Field, 0, len(joinTable.PKs))
-
-	for _, joinPK := range joinTable.PKs {
-		fkName := fkPrefix + joinPK.SQLName
-		if fk := t.getField(fkName); fk != nil {
-			fks = append(fks, fk)
-			continue
-		}
-
-		panic(fmt.Errorf(
-			"pg: %s has-one %s: %s must have column %s "+
-				"(use fk:custom_column tag on %s field to specify custom column)",
-			t.TypeName, field.GoName, t.TypeName, fkName, field.GoName,
-		))
-	}
-
-	t.addRelation(&Relation{
-		Type:      HasOneRelation,
-		Field:     field,
-		JoinTable: joinTable,
-		BaseFKs:   fks,
-		JoinFKs:   joinTable.PKs,
-	})
-	return true
-}
-
-func (t *Table) mustBelongsToRelation(field *Field, pgTag *tagparser.Tag) bool {
-	if err := t.checkPKs(); err != nil {
-		panic(err)
-	}
-	joinTable := _tables.get(field.Type, true)
-	fkPrefix, fkOK := pgTag.Options["join_fk"]
-
-	if fkOK && len(t.PKs) == 1 {
-		fk := joinTable.getField(fkPrefix)
-		if fk == nil {
-			panic(fmt.Errorf(
-				"pg: %s belongs-to %s: %s must have column %s "+
-					"(use join_fk:custom_column tag on %s field to specify custom column)",
-				field.GoName, t.TypeName, joinTable.TypeName, fkPrefix, field.GoName,
-			))
-		}
-
-		t.addRelation(&Relation{
-			Type:      BelongsToRelation,
-			Field:     field,
-			JoinTable: joinTable,
-			BaseFKs:   t.PKs,
-			JoinFKs:   []*Field{fk},
-		})
-		return true
-	}
-
-	if !fkOK {
-		fkPrefix = internal.Underscore(t.ModelName) + "_"
-	}
-	fks := make([]*Field, 0, len(t.PKs))
-
-	for _, pk := range t.PKs {
-		fkName := fkPrefix + pk.SQLName
-		if fk := joinTable.getField(fkName); fk != nil {
-			fks = append(fks, fk)
-			continue
-		}
-
-		panic(fmt.Errorf(
-			"pg: %s belongs-to %s: %s must have column %s "+
-				"(use join_fk:custom_column tag on %s field to specify custom column)",
-			field.GoName, t.TypeName, joinTable.TypeName, fkName, field.GoName,
-		))
-	}
-
-	t.addRelation(&Relation{
-		Type:      BelongsToRelation,
-		Field:     field,
-		JoinTable: joinTable,
-		BaseFKs:   t.PKs,
-		JoinFKs:   fks,
-	})
-	return true
-}
-
-func (t *Table) mustHasManyRelation(field *Field, pgTag *tagparser.Tag) bool {
-	if err := t.checkPKs(); err != nil {
-		panic(err)
-	}
-	if field.Type.Kind() != reflect.Slice {
-		panic(fmt.Errorf(
-			"pg: %s.%s has-many relation requires slice, got %q",
-			t.TypeName, field.GoName, field.Type.Kind(),
-		))
-	}
-
-	joinTable := _tables.get(indirectType(field.Type.Elem()), true)
-	fkPrefix, fkOK := pgTag.Options["join_fk"]
-	_, polymorphic := pgTag.Options["polymorphic"]
-
-	if fkOK && !polymorphic && len(t.PKs) == 1 {
-		fk := joinTable.getField(fkPrefix)
-		if fk == nil {
-			panic(fmt.Errorf(
-				"pg: %s has-many %s: %s must have column %s "+
-					"(use join_fk:custom_column tag on %s field to specify custom column)",
-				t.TypeName, field.GoName, joinTable.TypeName, fkPrefix, field.GoName,
-			))
-		}
-
-		t.addRelation(&Relation{
-			Type:      HasManyRelation,
-			Field:     field,
-			JoinTable: joinTable,
-			BaseFKs:   t.PKs,
-			JoinFKs:   []*Field{fk},
-		})
-		return true
-	}
-
-	if !fkOK {
-		fkPrefix = internal.Underscore(t.ModelName) + "_"
-	}
-	fks := make([]*Field, 0, len(t.PKs))
-
-	for _, pk := range t.PKs {
-		fkName := fkPrefix + pk.SQLName
-		if fk := joinTable.getField(fkName); fk != nil {
-			fks = append(fks, fk)
-			continue
-		}
-
-		panic(fmt.Errorf(
-			"pg: %s has-many %s: %s must have column %s "+
-				"(use join_fk:custom_column tag on %s field to specify custom column)",
-			t.TypeName, field.GoName, joinTable.TypeName, fkName, field.GoName,
-		))
-	}
-
-	var typeField *Field
-	if polymorphic {
-		typeFieldName := fkPrefix + "type"
-		typeField = joinTable.getField(typeFieldName)
-		if typeField == nil {
-			panic(fmt.Errorf(
-				"pg: %s has-many %s: %s must have polymorphic column %s",
-				t.TypeName, field.GoName, joinTable.TypeName, typeFieldName,
-			))
-		}
-	}
-
-	t.addRelation(&Relation{
-		Type:        HasManyRelation,
-		Field:       field,
-		JoinTable:   joinTable,
-		BaseFKs:     t.PKs,
-		JoinFKs:     fks,
-		Polymorphic: typeField,
-	})
-	return true
-}
-
-func (t *Table) mustM2MRelation(field *Field, pgTag *tagparser.Tag) bool {
-	if field.Type.Kind() != reflect.Slice {
-		panic(fmt.Errorf(
-			"pg: %s.%s many2many relation requires slice, got %q",
-			t.TypeName, field.GoName, field.Type.Kind(),
-		))
-	}
-	joinTable := _tables.get(indirectType(field.Type.Elem()), true)
-
-	if err := t.checkPKs(); err != nil {
-		panic(err)
-	}
-	if err := joinTable.checkPKs(); err != nil {
-		panic(err)
-	}
-
-	m2mTableNameString, ok := pgTag.Options["many2many"]
-	if !ok {
-		panic(fmt.Errorf("pg: %s must have many2many tag option", field.GoName))
-	}
-	m2mTableName := quoteIdent(m2mTableNameString)
-
-	m2mTable := _tables.getByName(m2mTableName)
-	if m2mTable == nil {
-		panic(fmt.Errorf(
-			"pg: can't find %s table (use orm.RegisterTable to register the model)",
-			m2mTableName,
-		))
-	}
-
-	var baseFKs []string
-	var joinFKs []string
-
-	{
-		fkPrefix, ok := pgTag.Options["fk"]
-		if !ok {
-			fkPrefix = internal.Underscore(t.ModelName) + "_"
-		}
-
-		if ok && len(t.PKs) == 1 {
-			if m2mTable.getField(fkPrefix) == nil {
-				panic(fmt.Errorf(
-					"pg: %s many2many %s: %s must have column %s "+
-						"(use fk:custom_column tag on %s field to specify custom column)",
-					t.TypeName, field.GoName, m2mTable.TypeName, fkPrefix, field.GoName,
-				))
-			}
-			baseFKs = []string{fkPrefix}
-		} else {
-			for _, pk := range t.PKs {
-				fkName := fkPrefix + pk.SQLName
-				if m2mTable.getField(fkName) == nil {
-					panic(fmt.Errorf(
-						"pg: %s many2many %s: %s must have column %s "+
-							"(use fk:custom_column tag on %s field to specify custom column)",
-						t.TypeName, field.GoName, m2mTable.TypeName, fkName, field.GoName,
-					))
-				}
-				baseFKs = append(baseFKs, fkName)
-			}
-		}
-	}
-
-	{
-		joinFKPrefix, ok := pgTag.Options["join_fk"]
-		if !ok {
-			joinFKPrefix = internal.Underscore(joinTable.ModelName) + "_"
-		}
-
-		if ok && len(joinTable.PKs) == 1 {
-			if m2mTable.getField(joinFKPrefix) == nil {
-				panic(fmt.Errorf(
-					"pg: %s many2many %s: %s must have column %s "+
-						"(use join_fk:custom_column tag on %s field to specify custom column)",
-					joinTable.TypeName, field.GoName, m2mTable.TypeName, joinFKPrefix, field.GoName,
-				))
-			}
-			joinFKs = []string{joinFKPrefix}
-		} else {
-			for _, joinPK := range joinTable.PKs {
-				fkName := joinFKPrefix + joinPK.SQLName
-				if m2mTable.getField(fkName) == nil {
-					panic(fmt.Errorf(
-						"pg: %s many2many %s: %s must have column %s "+
-							"(use join_fk:custom_column tag on %s field to specify custom column)",
-						t.TypeName, field.GoName, m2mTable.TypeName, fkName, field.GoName,
-					))
-				}
-				joinFKs = append(joinFKs, fkName)
-			}
-		}
-	}
-
-	t.addRelation(&Relation{
-		Type:          Many2ManyRelation,
-		Field:         field,
-		JoinTable:     joinTable,
-		M2MTableName:  m2mTableName,
-		M2MTableAlias: m2mTable.Alias,
-		M2MBaseFKs:    baseFKs,
-		M2MJoinFKs:    joinFKs,
-	})
-	return true
-}
-
 //nolint
 func (t *Table) tryRelationSlice(field *Field) bool {
-	if t.tryM2MRelation(field) {
-		internal.Deprecated.Printf(
-			`add pg:"rel:many2many" to %s.%s field tag`, t.TypeName, field.GoName)
-		return true
-	}
-	if t.tryHasManyRelation(field) {
-		internal.Deprecated.Printf(
-			`add pg:"rel:has-many" to %s.%s field tag`, t.TypeName, field.GoName)
-		return true
-	}
-	return false
-}
-
-func (t *Table) tryM2MRelation(field *Field) bool {
 	elemType := indirectType(field.Type.Elem())
 	if elemType.Kind() != reflect.Struct {
 		return false
@@ -924,103 +558,75 @@ func (t *Table) tryM2MRelation(field *Field) bool {
 		fk = tryUnderscorePrefix(fk)
 	}
 
-	m2mTableName := pgTag.Options["many2many"]
-	if m2mTableName == "" {
-		return false
-	}
+	if m2mTableName := pgTag.Options["many2many"]; m2mTableName != "" {
+		m2mTable := _tables.getByName(m2mTableName)
 
-	m2mTable := _tables.getByName(quoteIdent(m2mTableName))
-
-	var m2mTableAlias types.Safe
-	if m2mTable != nil {
-		m2mTableAlias = m2mTable.Alias
-	} else if ind := strings.IndexByte(m2mTableName, '.'); ind >= 0 {
-		m2mTableAlias = quoteIdent(m2mTableName[ind+1:])
-	} else {
-		m2mTableAlias = quoteIdent(m2mTableName)
-	}
-
-	var fks []string
-	if !fkOK {
-		fk = t.ModelName + "_"
-	}
-	if m2mTable != nil {
-		keys := foreignKeys(t, m2mTable, fk, fkOK)
-		if len(keys) == 0 {
-			return false
-		}
-		for _, fk := range keys {
-			fks = append(fks, fk.SQLName)
-		}
-	} else {
-		if fkOK && len(t.PKs) == 1 {
-			fks = append(fks, fk)
+		var m2mTableAlias types.Safe
+		if m2mTable != nil {
+			m2mTableAlias = m2mTable.Alias
+		} else if ind := strings.IndexByte(m2mTableName, '.'); ind >= 0 {
+			m2mTableAlias = quoteIdent(m2mTableName[ind+1:])
 		} else {
-			for _, pk := range t.PKs {
-				fks = append(fks, fk+pk.SQLName)
+			m2mTableAlias = quoteIdent(m2mTableName)
+		}
+
+		var fks []string
+		if !fkOK {
+			fk = t.ModelName + "_"
+		}
+		if m2mTable != nil {
+			keys := foreignKeys(t, m2mTable, fk, fkOK)
+			if len(keys) == 0 {
+				return false
+			}
+			for _, fk := range keys {
+				fks = append(fks, fk.SQLName)
+			}
+		} else {
+			if fkOK && len(t.PKs) == 1 {
+				fks = append(fks, fk)
+			} else {
+				for _, pk := range t.PKs {
+					fks = append(fks, fk+pk.SQLName)
+				}
 			}
 		}
-	}
 
-	joinFK, joinFKOk := pgTag.Options["join_fk"]
-	if !joinFKOk {
-		joinFK, joinFKOk = pgTag.Options["joinFK"]
-		if joinFKOk {
-			internal.Deprecated.Printf("joinFK is renamed to join_fk")
-		}
-	}
-	if joinFKOk {
-		joinFK = tryUnderscorePrefix(joinFK)
-	} else {
-		joinFK = joinTable.ModelName + "_"
-	}
-
-	var joinFKs []string
-	if m2mTable != nil {
-		keys := foreignKeys(joinTable, m2mTable, joinFK, joinFKOk)
-		if len(keys) == 0 {
-			return false
-		}
-		for _, fk := range keys {
-			joinFKs = append(joinFKs, fk.SQLName)
-		}
-	} else {
-		if joinFKOk && len(joinTable.PKs) == 1 {
-			joinFKs = append(joinFKs, joinFK)
+		joinFK, joinFKOK := pgTag.Options["joinFK"]
+		if joinFKOK {
+			joinFK = tryUnderscorePrefix(joinFK)
 		} else {
-			for _, pk := range joinTable.PKs {
-				joinFKs = append(joinFKs, joinFK+pk.SQLName)
+			joinFK = joinTable.ModelName + "_"
+		}
+		var joinFKs []string
+		if m2mTable != nil {
+			keys := foreignKeys(joinTable, m2mTable, joinFK, joinFKOK)
+			if len(keys) == 0 {
+				return false
+			}
+			for _, fk := range keys {
+				joinFKs = append(joinFKs, fk.SQLName)
+			}
+		} else {
+			if joinFKOK && len(joinTable.PKs) == 1 {
+				joinFKs = append(joinFKs, joinFK)
+			} else {
+				for _, pk := range joinTable.PKs {
+					joinFKs = append(joinFKs, joinFK+pk.SQLName)
+				}
 			}
 		}
-	}
 
-	t.addRelation(&Relation{
-		Type:          Many2ManyRelation,
-		Field:         field,
-		JoinTable:     joinTable,
-		M2MTableName:  quoteIdent(m2mTableName),
-		M2MTableAlias: m2mTableAlias,
-		M2MBaseFKs:    fks,
-		M2MJoinFKs:    joinFKs,
-	})
-	return true
-}
-
-func (t *Table) tryHasManyRelation(field *Field) bool {
-	elemType := indirectType(field.Type.Elem())
-	if elemType.Kind() != reflect.Struct {
-		return false
-	}
-
-	pgTag := tagparser.Parse(field.Field.Tag.Get("pg"))
-	joinTable := _tables.get(elemType, true)
-
-	fk, fkOK := pgTag.Options["fk"]
-	if fkOK {
-		if fk == "-" {
-			return false
-		}
-		fk = tryUnderscorePrefix(fk)
+		t.addRelation(&Relation{
+			Type:          Many2ManyRelation,
+			Field:         field,
+			JoinTable:     joinTable,
+			M2MTableName:  quoteIdent(m2mTableName),
+			M2MTableAlias: m2mTableAlias,
+			BaseFKs:       fks,
+			JoinFKs:       joinFKs,
+		})
+		return true
 	}
 
 	s, polymorphic := pgTag.Options["polymorphic"]
@@ -1066,9 +672,9 @@ func (t *Table) tryHasManyRelation(field *Field) bool {
 			Type:        HasManyRelation,
 			Field:       field,
 			JoinTable:   joinTable,
-			BaseFKs:     fkValues,
-			JoinFKs:     fks,
+			FKs:         fks,
 			Polymorphic: typeField,
+			FKValues:    fkValues,
 		})
 		return true
 	}
@@ -1079,27 +685,14 @@ func (t *Table) tryHasManyRelation(field *Field) bool {
 func (t *Table) tryRelationStruct(field *Field) bool {
 	pgTag := tagparser.Parse(field.Field.Tag.Get("pg"))
 	joinTable := _tables.get(field.Type, true)
-
 	if len(joinTable.allFields) == 0 {
 		return false
 	}
 
-	if t.tryHasOne(joinTable, field, pgTag) {
-		internal.Deprecated.Printf(
-			`add pg:"rel:has-one" to %s.%s field tag`, t.TypeName, field.GoName)
-		t.inlineFields(field, nil)
-		return true
-	}
-
-	if t.tryBelongsToOne(joinTable, field, pgTag) {
-		internal.Deprecated.Printf(
-			`add pg:"rel:belongs-to" to %s.%s field tag`, t.TypeName, field.GoName)
-		t.inlineFields(field, nil)
-		return true
-	}
-
+	res := t.tryHasOne(joinTable, field, pgTag) ||
+		t.tryBelongsToOne(joinTable, field, pgTag)
 	t.inlineFields(field, nil)
-	return false
+	return res
 }
 
 func (t *Table) inlineFields(strct *Field, path map[reflect.Type]struct{}) {
@@ -1182,7 +775,7 @@ func fieldSQLType(field *Field, pgTag *tagparser.Tag) string {
 
 func sqlType(typ reflect.Type) string {
 	switch typ {
-	case timeType, nullTimeType, sqlNullTimeType:
+	case timeType:
 		return pgTypeTimestampTz
 	case ipType:
 		return pgTypeInet
@@ -1266,9 +859,8 @@ func (t *Table) tryHasOne(joinTable *Table, field *Field, pgTag *tagparser.Tag) 
 		t.addRelation(&Relation{
 			Type:      HasOneRelation,
 			Field:     field,
+			FKs:       fks,
 			JoinTable: joinTable,
-			BaseFKs:   fks,
-			JoinFKs:   joinTable.PKs,
 		})
 		return true
 	}
@@ -1291,9 +883,8 @@ func (t *Table) tryBelongsToOne(joinTable *Table, field *Field, pgTag *tagparser
 		t.addRelation(&Relation{
 			Type:      BelongsToRelation,
 			Field:     field,
+			FKs:       fks,
 			JoinTable: joinTable,
-			BaseFKs:   t.PKs,
-			JoinFKs:   fks,
 		})
 		return true
 	}
@@ -1374,7 +965,7 @@ func foreignKeys(base, join *Table, fk string, tryFK bool) []*Field {
 
 func scanJSONValue(v reflect.Value, rd types.Reader, n int) error {
 	// Zero value so it works with SelectOrInsert.
-	// TODO: better handle slices
+	//TODO: better handle slices
 	v.Set(reflect.New(v.Type()).Elem())
 
 	if n == -1 {
@@ -1467,44 +1058,4 @@ func setSoftDeleteFieldFunc(typ reflect.Type) func(fv reflect.Value) {
 	}
 
 	return nil
-}
-
-func isKnownTableOption(name string) bool {
-	switch name {
-	case "alias",
-		"select",
-		"tablespace",
-		"partition_by",
-		"discard_unknown_columns":
-		return true
-	}
-	return false
-}
-
-func isKnownFieldOption(name string) bool {
-	switch name {
-	case "type",
-		"array",
-		"hstore",
-		"composite",
-		"json_use_number",
-		"msgpack",
-		"notnull",
-		"use_zero",
-		"default",
-		"unique",
-		"soft_delete",
-		"on_delete",
-		"on_update",
-
-		"pk",
-		"nopk",
-		"rel",
-		"fk",
-		"join_fk",
-		"many2many",
-		"polymorphic":
-		return true
-	}
-	return false
 }

@@ -1,57 +1,63 @@
 package orm
 
 import (
-	"reflect"
-
-	"github.com/go-pg/pg/v10/types"
+	"github.com/go-pg/pg/v10/internal"
 )
 
-type DeleteQuery struct {
+// Delete deletes a given model from the db
+func Delete(db DB, model interface{}) error {
+	res, err := NewQuery(db, model).WherePK().Delete()
+	if err != nil {
+		return err
+	}
+	return internal.AssertOneRow(res.RowsAffected())
+}
+
+// ForceDelete force deletes a given model from the db
+func ForceDelete(db DB, model interface{}) error {
+	res, err := NewQuery(db, model).WherePK().ForceDelete()
+	if err != nil {
+		return err
+	}
+	return internal.AssertOneRow(res.RowsAffected())
+}
+
+type deleteQuery struct {
 	q           *Query
 	placeholder bool
 }
 
-var (
-	_ QueryAppender = (*DeleteQuery)(nil)
-	_ QueryCommand  = (*DeleteQuery)(nil)
-)
+var _ QueryAppender = (*deleteQuery)(nil)
+var _ queryCommand = (*deleteQuery)(nil)
 
-func NewDeleteQuery(q *Query) *DeleteQuery {
-	return &DeleteQuery{
+func newDeleteQuery(q *Query) *deleteQuery {
+	return &deleteQuery{
 		q: q,
 	}
 }
 
-func (q *DeleteQuery) String() string {
-	b, err := q.AppendQuery(defaultFmter, nil)
-	if err != nil {
-		panic(err)
-	}
-	return string(b)
-}
-
-func (q *DeleteQuery) Operation() QueryOp {
+func (q *deleteQuery) Operation() string {
 	return DeleteOp
 }
 
-func (q *DeleteQuery) Clone() QueryCommand {
-	return &DeleteQuery{
+func (q *deleteQuery) Clone() queryCommand {
+	return &deleteQuery{
 		q:           q.q.Clone(),
 		placeholder: q.placeholder,
 	}
 }
 
-func (q *DeleteQuery) Query() *Query {
+func (q *deleteQuery) Query() *Query {
 	return q.q
 }
 
-func (q *DeleteQuery) AppendTemplate(b []byte) ([]byte, error) {
-	cp := q.Clone().(*DeleteQuery)
+func (q *deleteQuery) AppendTemplate(b []byte) ([]byte, error) {
+	cp := q.Clone().(*deleteQuery)
 	cp.placeholder = true
 	return cp.AppendQuery(dummyFormatter{}, b)
 }
 
-func (q *DeleteQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte, err error) {
+func (q *deleteQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte, err error) {
 	if q.q.stickyErr != nil {
 		return nil, q.q.stickyErr
 	}
@@ -78,8 +84,7 @@ func (q *DeleteQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte, err
 	}
 
 	b = append(b, " WHERE "...)
-	value := q.q.tableModel.Value()
-
+	value := q.q.model.Value()
 	if q.q.isSliceModelWithData() {
 		if len(q.q.where) > 0 {
 			b, err = q.q.appendWhere(fmter, b)
@@ -87,7 +92,7 @@ func (q *DeleteQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte, err
 				return nil, err
 			}
 		} else {
-			table := q.q.tableModel.Table()
+			table := q.q.model.Table()
 			err = table.checkPKs()
 			if err != nil {
 				return nil, err
@@ -110,49 +115,4 @@ func (q *DeleteQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte, err
 	}
 
 	return b, q.q.stickyErr
-}
-
-func appendColumnAndSliceValue(
-	fmter QueryFormatter, b []byte, slice reflect.Value, alias types.Safe, fields []*Field,
-) []byte {
-	if len(fields) > 1 {
-		b = append(b, '(')
-	}
-	b = appendColumns(b, alias, fields)
-	if len(fields) > 1 {
-		b = append(b, ')')
-	}
-
-	b = append(b, " IN ("...)
-
-	isPlaceholder := isPlaceholderFormatter(fmter)
-	sliceLen := slice.Len()
-	for i := 0; i < sliceLen; i++ {
-		if i > 0 {
-			b = append(b, ", "...)
-		}
-
-		el := indirect(slice.Index(i))
-
-		if len(fields) > 1 {
-			b = append(b, '(')
-		}
-		for i, f := range fields {
-			if i > 0 {
-				b = append(b, ", "...)
-			}
-			if isPlaceholder {
-				b = append(b, '?')
-			} else {
-				b = f.AppendValue(b, el, 1)
-			}
-		}
-		if len(fields) > 1 {
-			b = append(b, ')')
-		}
-	}
-
-	b = append(b, ')')
-
-	return b
 }

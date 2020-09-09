@@ -7,7 +7,6 @@ import (
 	"github.com/go-pg/pg/v10/internal"
 	"github.com/go-pg/pg/v10/internal/pool"
 	"github.com/go-pg/pg/v10/orm"
-	"github.com/go-pg/pg/v10/types"
 )
 
 var errStmtClosed = errors.New("pg: statement is closed")
@@ -20,7 +19,7 @@ type Stmt struct {
 
 	q       string
 	name    string
-	columns []types.ColumnInfo
+	columns [][]byte
 }
 
 func prepareStmt(db *baseDB, q string) (*Stmt, error) {
@@ -38,23 +37,23 @@ func prepareStmt(db *baseDB, q string) (*Stmt, error) {
 	return stmt, nil
 }
 
-func (stmt *Stmt) prepare(ctx context.Context, q string) error {
+func (stmt *Stmt) prepare(c context.Context, q string) error {
 	var lastErr error
 	for attempt := 0; attempt <= stmt.db.opt.MaxRetries; attempt++ {
 		if attempt > 0 {
-			if err := internal.Sleep(ctx, stmt.db.retryBackoff(attempt-1)); err != nil {
+			if err := internal.Sleep(c, stmt.db.retryBackoff(attempt-1)); err != nil {
 				return err
 			}
 
-			err := stmt.db.pool.(*pool.StickyConnPool).Reset(ctx)
+			err := stmt.db.pool.(*pool.SingleConnPool).Reset()
 			if err != nil {
 				return err
 			}
 		}
 
-		lastErr = stmt.withConn(ctx, func(ctx context.Context, cn *pool.Conn) error {
+		lastErr = stmt.withConn(c, func(c context.Context, cn *pool.Conn) error {
 			var err error
-			stmt.name, stmt.columns, err = stmt.db.prepare(ctx, cn, q)
+			stmt.name, stmt.columns, err = stmt.db.prepare(c, cn, q)
 			return err
 		})
 		if !stmt.db.shouldRetry(lastErr) {
@@ -85,8 +84,8 @@ func (stmt *Stmt) ExecContext(c context.Context, params ...interface{}) (Result,
 	return stmt.exec(c, params...)
 }
 
-func (stmt *Stmt) exec(ctx context.Context, params ...interface{}) (Result, error) {
-	ctx, evt, err := stmt.db.beforeQuery(ctx, stmt.db.db, nil, stmt.q, params, nil)
+func (stmt *Stmt) exec(c context.Context, params ...interface{}) (Result, error) {
+	c, evt, err := stmt.db.beforeQuery(c, stmt.db.db, nil, stmt.q, params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -95,14 +94,14 @@ func (stmt *Stmt) exec(ctx context.Context, params ...interface{}) (Result, erro
 	var lastErr error
 	for attempt := 0; attempt <= stmt.db.opt.MaxRetries; attempt++ {
 		if attempt > 0 {
-			lastErr = internal.Sleep(ctx, stmt.db.retryBackoff(attempt-1))
+			lastErr = internal.Sleep(c, stmt.db.retryBackoff(attempt-1))
 			if lastErr != nil {
 				break
 			}
 		}
 
-		lastErr = stmt.withConn(ctx, func(c context.Context, cn *pool.Conn) error {
-			res, err = stmt.extQuery(ctx, cn, stmt.name, params...)
+		lastErr = stmt.withConn(c, func(c context.Context, cn *pool.Conn) error {
+			res, err = stmt.extQuery(c, cn, stmt.name, params...)
 			return err
 		})
 		if !stmt.db.shouldRetry(lastErr) {
@@ -110,7 +109,7 @@ func (stmt *Stmt) exec(ctx context.Context, params ...interface{}) (Result, erro
 		}
 	}
 
-	if err := stmt.db.afterQuery(ctx, evt, res, lastErr); err != nil {
+	if err := stmt.db.afterQuery(c, evt, res, lastErr); err != nil {
 		return nil, err
 	}
 	return res, lastErr
@@ -123,7 +122,7 @@ func (stmt *Stmt) ExecOne(params ...interface{}) (Result, error) {
 	return stmt.execOne(context.Background(), params...)
 }
 
-// ExecOneContext acts like ExecOne but additionally receives a context.
+// ExecOneContext acts like ExecOne but additionally receives a context
 func (stmt *Stmt) ExecOneContext(c context.Context, params ...interface{}) (Result, error) {
 	return stmt.execOne(c, params...)
 }
@@ -145,13 +144,13 @@ func (stmt *Stmt) Query(model interface{}, params ...interface{}) (Result, error
 	return stmt.query(context.Background(), model, params...)
 }
 
-// QueryContext acts like Query but additionally receives a context.
+// QueryContext acts like Query but additionally receives a context
 func (stmt *Stmt) QueryContext(c context.Context, model interface{}, params ...interface{}) (Result, error) {
 	return stmt.query(c, model, params...)
 }
 
-func (stmt *Stmt) query(ctx context.Context, model interface{}, params ...interface{}) (Result, error) {
-	ctx, evt, err := stmt.db.beforeQuery(ctx, stmt.db.db, model, stmt.q, params, nil)
+func (stmt *Stmt) query(c context.Context, model interface{}, params ...interface{}) (Result, error) {
+	c, evt, err := stmt.db.beforeQuery(c, stmt.db.db, model, stmt.q, params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -160,14 +159,14 @@ func (stmt *Stmt) query(ctx context.Context, model interface{}, params ...interf
 	var lastErr error
 	for attempt := 0; attempt <= stmt.db.opt.MaxRetries; attempt++ {
 		if attempt > 0 {
-			lastErr = internal.Sleep(ctx, stmt.db.retryBackoff(attempt-1))
+			lastErr = internal.Sleep(c, stmt.db.retryBackoff(attempt-1))
 			if lastErr != nil {
 				break
 			}
 		}
 
-		lastErr = stmt.withConn(ctx, func(c context.Context, cn *pool.Conn) error {
-			res, err = stmt.extQueryData(ctx, cn, stmt.name, model, stmt.columns, params...)
+		lastErr = stmt.withConn(c, func(c context.Context, cn *pool.Conn) error {
+			res, err = stmt.extQueryData(c, cn, stmt.name, model, stmt.columns, params...)
 			return err
 		})
 		if !stmt.db.shouldRetry(lastErr) {
@@ -175,7 +174,7 @@ func (stmt *Stmt) query(ctx context.Context, model interface{}, params ...interf
 		}
 	}
 
-	if err := stmt.db.afterQuery(ctx, evt, res, lastErr); err != nil {
+	if err := stmt.db.afterQuery(c, evt, res, lastErr); err != nil {
 		return nil, err
 	}
 	return res, lastErr
@@ -188,7 +187,7 @@ func (stmt *Stmt) QueryOne(model interface{}, params ...interface{}) (Result, er
 	return stmt.queryOne(context.Background(), model, params...)
 }
 
-// QueryOneContext acts like QueryOne but additionally receives a context.
+// QueryOneContext acts like QueryOne but additionally receives a context
 func (stmt *Stmt) QueryOneContext(c context.Context, model interface{}, params ...interface{}) (Result, error) {
 	return stmt.queryOne(c, model, params...)
 }
@@ -237,7 +236,7 @@ func (stmt *Stmt) extQuery(
 	}
 
 	var res Result
-	err = cn.WithReader(c, stmt.db.opt.ReadTimeout, func(rd *pool.ReaderContext) error {
+	err = cn.WithReader(c, stmt.db.opt.ReadTimeout, func(rd *pool.BufReader) error {
 		res, err = readExtQuery(rd)
 		return err
 	})
@@ -253,7 +252,7 @@ func (stmt *Stmt) extQueryData(
 	cn *pool.Conn,
 	name string,
 	model interface{},
-	columns []types.ColumnInfo,
+	columns [][]byte,
 	params ...interface{},
 ) (Result, error) {
 	err := cn.WithWriter(c, stmt.db.opt.WriteTimeout, func(wb *pool.WriteBuffer) error {
@@ -264,7 +263,7 @@ func (stmt *Stmt) extQueryData(
 	}
 
 	var res *result
-	err = cn.WithReader(c, stmt.db.opt.ReadTimeout, func(rd *pool.ReaderContext) error {
+	err = cn.WithReader(c, stmt.db.opt.ReadTimeout, func(rd *pool.BufReader) error {
 		res, err = readExtQueryData(c, rd, model, columns)
 		return err
 	})

@@ -38,12 +38,12 @@ func newStructTableModelValue(v reflect.Value) *structTableModel {
 	}
 }
 
-func (*structTableModel) useQueryOne() bool {
-	return true
-}
-
 func (m *structTableModel) String() string {
 	return m.table.String()
+}
+
+func (*structTableModel) useQueryOne() bool {
+	return true
 }
 
 func (m *structTableModel) IsNil() bool {
@@ -65,8 +65,8 @@ func (m *structTableModel) AppendParam(fmter QueryFormatter, b []byte, name stri
 	}
 
 	switch name {
-	case "TableName":
-		b = fmter.FormatQuery(b, string(m.table.SQLName))
+	case "TableName": //nolint:goconst
+		b = fmter.FormatQuery(b, string(m.table.FullName))
 		return b, true
 	case "TableAlias":
 		b = append(b, m.table.Alias...)
@@ -165,106 +165,89 @@ func (m *structTableModel) AddColumnScanner(_ ColumnScanner) error {
 
 var _ BeforeScanHook = (*structTableModel)(nil)
 
-func (m *structTableModel) BeforeScan(ctx context.Context) error {
-	if !m.table.hasFlag(beforeScanHookFlag) {
-		return nil
+func (m *structTableModel) BeforeScan(c context.Context) error {
+	if m.table.hasFlag(beforeScanHookFlag) {
+		return callBeforeScanHook(c, m.strct.Addr())
 	}
-	return callBeforeScanHook(ctx, m.strct.Addr())
+	return nil
 }
 
 var _ AfterScanHook = (*structTableModel)(nil)
 
-func (m *structTableModel) AfterScan(ctx context.Context) error {
-	if !m.table.hasFlag(afterScanHookFlag) || !m.structInited {
-		return nil
+func (m *structTableModel) AfterScan(c context.Context) error {
+	if m.table.hasFlag(afterScanHookFlag) {
+		return callAfterScanHook(c, m.strct.Addr())
 	}
-
-	var firstErr error
-
-	if err := callAfterScanHook(ctx, m.strct.Addr()); err != nil && firstErr == nil {
-		firstErr = err
-	}
-
-	for _, j := range m.joins {
-		switch j.Rel.Type {
-		case HasOneRelation, BelongsToRelation:
-			if err := j.JoinModel.AfterScan(ctx); err != nil && firstErr == nil {
-				firstErr = err
-			}
-		}
-	}
-
-	return firstErr
+	return nil
 }
 
-func (m *structTableModel) AfterSelect(ctx context.Context) error {
+func (m *structTableModel) AfterSelect(c context.Context) error {
 	if m.table.hasFlag(afterSelectHookFlag) {
-		return callAfterSelectHook(ctx, m.strct.Addr())
+		return callAfterSelectHook(c, m.strct.Addr())
 	}
 	return nil
 }
 
-func (m *structTableModel) BeforeInsert(ctx context.Context) (context.Context, error) {
+func (m *structTableModel) BeforeInsert(c context.Context) (context.Context, error) {
 	if m.table.hasFlag(beforeInsertHookFlag) {
-		return callBeforeInsertHook(ctx, m.strct.Addr())
+		return callBeforeInsertHook(c, m.strct.Addr())
 	}
-	return ctx, nil
+	return c, nil
 }
 
-func (m *structTableModel) AfterInsert(ctx context.Context) error {
+func (m *structTableModel) AfterInsert(c context.Context) error {
 	if m.table.hasFlag(afterInsertHookFlag) {
-		return callAfterInsertHook(ctx, m.strct.Addr())
+		return callAfterInsertHook(c, m.strct.Addr())
 	}
 	return nil
 }
 
-func (m *structTableModel) BeforeUpdate(ctx context.Context) (context.Context, error) {
+func (m *structTableModel) BeforeUpdate(c context.Context) (context.Context, error) {
 	if m.table.hasFlag(beforeUpdateHookFlag) && !m.IsNil() {
-		return callBeforeUpdateHook(ctx, m.strct.Addr())
+		return callBeforeUpdateHook(c, m.strct.Addr())
 	}
-	return ctx, nil
+	return c, nil
 }
 
-func (m *structTableModel) AfterUpdate(ctx context.Context) error {
+func (m *structTableModel) AfterUpdate(c context.Context) error {
 	if m.table.hasFlag(afterUpdateHookFlag) && !m.IsNil() {
-		return callAfterUpdateHook(ctx, m.strct.Addr())
+		return callAfterUpdateHook(c, m.strct.Addr())
 	}
 	return nil
 }
 
-func (m *structTableModel) BeforeDelete(ctx context.Context) (context.Context, error) {
+func (m *structTableModel) BeforeDelete(c context.Context) (context.Context, error) {
 	if m.table.hasFlag(beforeDeleteHookFlag) && !m.IsNil() {
-		return callBeforeDeleteHook(ctx, m.strct.Addr())
+		return callBeforeDeleteHook(c, m.strct.Addr())
 	}
-	return ctx, nil
+	return c, nil
 }
 
-func (m *structTableModel) AfterDelete(ctx context.Context) error {
+func (m *structTableModel) AfterDelete(c context.Context) error {
 	if m.table.hasFlag(afterDeleteHookFlag) && !m.IsNil() {
-		return callAfterDeleteHook(ctx, m.strct.Addr())
+		return callAfterDeleteHook(c, m.strct.Addr())
 	}
 	return nil
 }
 
 func (m *structTableModel) ScanColumn(
-	col types.ColumnInfo, rd types.Reader, n int,
+	colIdx int, colName string, rd types.Reader, n int,
 ) error {
-	ok, err := m.scanColumn(col, rd, n)
+	ok, err := m.scanColumn(colIdx, colName, rd, n)
 	if ok {
 		return err
 	}
-	if m.table.hasFlag(discardUnknownColumnsFlag) || col.Name[0] == '_' {
+	if m.table.hasFlag(discardUnknownColumnsFlag) {
 		return nil
 	}
-	return fmt.Errorf(
-		"pg: can't find column=%s in %s "+
-			"(prefix the column with underscore or use discard_unknown_columns)",
-		col.Name, m.table,
-	)
+	return fmt.Errorf("pg: can't find column=%s in %s (try discard_unknown_columns)",
+		colName, m.table)
 }
 
-func (m *structTableModel) scanColumn(col types.ColumnInfo, rd types.Reader, n int) (bool, error) {
-	// Don't init nil struct if value is NULL.
+func (m *structTableModel) scanColumn(
+	colIdx int, colName string, rd types.Reader, n int,
+) (bool, error) {
+	// Don't init nil struct when value is NULL.
 	if n == -1 &&
 		!m.structInited &&
 		m.strct.Kind() == reflect.Ptr &&
@@ -272,25 +255,22 @@ func (m *structTableModel) scanColumn(col types.ColumnInfo, rd types.Reader, n i
 		return true, nil
 	}
 
-	if err := m.initStruct(); err != nil {
+	err := m.initStruct()
+	if err != nil {
 		return true, err
 	}
 
-	joinName, fieldName := splitColumn(col.Name)
+	joinName, fieldName := splitColumn(colName)
 	if joinName != "" {
 		if join := m.GetJoin(joinName); join != nil {
-			joinCol := col
-			joinCol.Name = fieldName
-			return join.JoinModel.scanColumn(joinCol, rd, n)
+			return join.JoinModel.scanColumn(colIdx, fieldName, rd, n)
 		}
 		if m.table.ModelName == joinName {
-			joinCol := col
-			joinCol.Name = fieldName
-			return m.scanColumn(joinCol, rd, n)
+			return m.scanColumn(colIdx, fieldName, rd, n)
 		}
 	}
 
-	field, ok := m.table.FieldsMap[col.Name]
+	field, ok := m.table.FieldsMap[colName]
 	if !ok {
 		return false, nil
 	}
@@ -340,7 +320,6 @@ func (m *structTableModel) join(
 			hasColumnName = true
 			break
 		}
-
 		currJoin.Rel = rel
 		index = append(index, rel.Field.Index...)
 

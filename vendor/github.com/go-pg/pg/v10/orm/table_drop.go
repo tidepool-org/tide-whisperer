@@ -5,55 +5,45 @@ type DropTableOptions struct {
 	Cascade  bool
 }
 
-type DropTableQuery struct {
+func DropTable(db DB, model interface{}, opt *DropTableOptions) error {
+	return NewQuery(db, model).DropTable(opt)
+}
+
+type dropTableQuery struct {
 	q   *Query
 	opt *DropTableOptions
 }
 
-var (
-	_ QueryAppender = (*DropTableQuery)(nil)
-	_ QueryCommand  = (*DropTableQuery)(nil)
-)
+var _ QueryAppender = (*dropTableQuery)(nil)
+var _ queryCommand = (*dropTableQuery)(nil)
 
-func NewDropTableQuery(q *Query, opt *DropTableOptions) *DropTableQuery {
-	return &DropTableQuery{
+func newDropTableQuery(q *Query, opt *DropTableOptions) *dropTableQuery { //nolint:deadcode
+	return &dropTableQuery{
 		q:   q,
 		opt: opt,
 	}
 }
 
-func (q *DropTableQuery) String() string {
-	b, err := q.AppendQuery(defaultFmter, nil)
-	if err != nil {
-		panic(err)
-	}
-	return string(b)
-}
-
-func (q *DropTableQuery) Operation() QueryOp {
-	return DropTableOp
-}
-
-func (q *DropTableQuery) Clone() QueryCommand {
-	return &DropTableQuery{
+func (q *dropTableQuery) Clone() queryCommand {
+	return &dropTableQuery{
 		q:   q.q.Clone(),
 		opt: q.opt,
 	}
 }
 
-func (q *DropTableQuery) Query() *Query {
+func (q *dropTableQuery) Query() *Query {
 	return q.q
 }
 
-func (q *DropTableQuery) AppendTemplate(b []byte) ([]byte, error) {
+func (q *dropTableQuery) AppendTemplate(b []byte) ([]byte, error) {
 	return q.AppendQuery(dummyFormatter{}, b)
 }
 
-func (q *DropTableQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte, err error) {
+func (q *dropTableQuery) AppendQuery(fmter QueryFormatter, b []byte) (_ []byte, err error) {
 	if q.q.stickyErr != nil {
 		return nil, q.q.stickyErr
 	}
-	if q.q.tableModel == nil {
+	if q.q.model == nil {
 		return nil, errModelNil
 	}
 

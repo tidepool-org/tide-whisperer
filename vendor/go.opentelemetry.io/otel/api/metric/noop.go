@@ -17,7 +17,7 @@ package metric
 import (
 	"context"
 
-	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/api/kv"
 )
 
 type NoopProvider struct{}
@@ -32,7 +32,7 @@ var _ SyncImpl = NoopSync{}
 var _ BoundSyncImpl = noopBoundInstrument{}
 var _ AsyncImpl = NoopAsync{}
 
-func (NoopProvider) Meter(_ string, _ ...MeterOption) Meter {
+func (NoopProvider) Meter(name string) Meter {
 	return Meter{}
 }
 
@@ -50,9 +50,9 @@ func (noopBoundInstrument) RecordOne(context.Context, Number) {
 func (noopBoundInstrument) Unbind() {
 }
 
-func (NoopSync) Bind([]label.KeyValue) BoundSyncImpl {
+func (NoopSync) Bind([]kv.KeyValue) BoundSyncImpl {
 	return noopBoundInstrument{}
 }
 
-func (NoopSync) RecordOne(context.Context, Number, []label.KeyValue) {
+func (NoopSync) RecordOne(context.Context, Number, []kv.KeyValue) {
 }

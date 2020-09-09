@@ -8,15 +8,16 @@ import (
 	"time"
 
 	"github.com/go-pg/pg/v10/internal"
+	"go.opentelemetry.io/otel/api/kv"
 	"go.opentelemetry.io/otel/api/trace"
-	"go.opentelemetry.io/otel/label"
 )
 
 var noDeadline = time.Time{}
 
 type Conn struct {
 	netConn net.Conn
-	rd      *ReaderContext
+
+	rd *BufReader
 
 	ProcessID int32
 	SecretKey int32
@@ -30,6 +31,8 @@ type Conn struct {
 
 func NewConn(netConn net.Conn) *Conn {
 	cn := &Conn{
+		rd: NewBufReader(netConn),
+
 		createdAt: time.Now(),
 	}
 	cn.SetNetConn(netConn)
@@ -52,17 +55,7 @@ func (cn *Conn) RemoteAddr() net.Addr {
 
 func (cn *Conn) SetNetConn(netConn net.Conn) {
 	cn.netConn = netConn
-	if cn.rd != nil {
-		cn.rd.Reset(netConn)
-	}
-}
-
-func (cn *Conn) LockReader() {
-	if cn.rd != nil {
-		panic("not reached")
-	}
-	cn.rd = NewReaderContext()
-	cn.rd.Reset(cn.netConn)
+	cn.rd.Reset(netConn)
 }
 
 func (cn *Conn) NetConn() net.Conn {
@@ -75,32 +68,19 @@ func (cn *Conn) NextID() string {
 }
 
 func (cn *Conn) WithReader(
-	ctx context.Context, timeout time.Duration, fn func(rd *ReaderContext) error,
+	ctx context.Context, timeout time.Duration, fn func(rd *BufReader) error,
 ) error {
 	return internal.WithSpan(ctx, "with_reader", func(ctx context.Context, span trace.Span) error {
-		if err := cn.netConn.SetReadDeadline(cn.deadline(ctx, timeout)); err != nil {
-			span.RecordError(ctx, err)
+		err := cn.netConn.SetReadDeadline(cn.deadline(ctx, timeout))
+		if err != nil {
 			return err
 		}
 
-		rd := cn.rd
-		if rd == nil {
-			rd = GetReaderContext()
-			defer PutReaderContext(rd)
+		cn.rd.bytesRead = 0
+		err = fn(cn.rd)
+		span.SetAttributes(kv.Int64("net.read_bytes", cn.rd.bytesRead))
 
-			rd.Reset(cn.netConn)
-		}
-
-		rd.bytesRead = 0
-
-		if err := fn(rd); err != nil {
-			span.RecordError(ctx, err)
-			return err
-		}
-
-		span.SetAttributes(label.Int64("net.read_bytes", rd.bytesRead))
-
-		return nil
+		return err
 	})
 }
 
@@ -112,7 +92,6 @@ func (cn *Conn) WithWriter(
 		defer PutWriteBuffer(wb)
 
 		if err := fn(wb); err != nil {
-			span.RecordError(ctx, err)
 			return err
 		}
 
@@ -132,19 +111,14 @@ func (cn *Conn) writeBuffer(
 	timeout time.Duration,
 	wb *WriteBuffer,
 ) error {
-	if err := cn.netConn.SetWriteDeadline(cn.deadline(ctx, timeout)); err != nil {
-		span.RecordError(ctx, err)
+	err := cn.netConn.SetWriteDeadline(cn.deadline(ctx, timeout))
+	if err != nil {
 		return err
 	}
 
-	span.SetAttributes(label.Int("net.wrote_bytes", len(wb.Bytes)))
-
-	if _, err := cn.netConn.Write(wb.Bytes); err != nil {
-		span.RecordError(ctx, err)
-		return err
-	}
-
-	return nil
+	span.SetAttributes(kv.Int("net.wrote_bytes", len(wb.Bytes)))
+	_, err = cn.netConn.Write(wb.Bytes)
+	return err
 }
 
 func (cn *Conn) Close() error {

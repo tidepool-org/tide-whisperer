@@ -11,8 +11,3 @@ linters:
     - wsl
     - funlen
     - godox
-    - goerr113
-    - exhaustive
-    - nestif
-    - gofumpt
-    - goconst

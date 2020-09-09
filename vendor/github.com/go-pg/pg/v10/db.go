@@ -75,12 +75,12 @@ func (db *DB) WithParam(param string, value interface{}) *DB {
 }
 
 // Listen listens for notifications sent with NOTIFY command.
-func (db *DB) Listen(ctx context.Context, channels ...string) *Listener {
+func (db *DB) Listen(channels ...string) *Listener {
 	ln := &Listener{
 		db: db,
 	}
 	ln.init()
-	_ = ln.Listen(ctx, channels...)
+	_ = ln.Listen(channels...)
 	return ln
 }
 
@@ -105,7 +105,7 @@ var _ orm.DB = (*Conn)(nil)
 // Every Conn must be returned to the database pool after use by
 // calling Conn.Close.
 func (db *DB) Conn() *Conn {
-	return newConn(db.ctx, db.baseDB.withPool(pool.NewStickyConnPool(db.pool)))
+	return newConn(db.ctx, db.baseDB.withPool(pool.NewSingleConnPool(db.pool)))
 }
 
 func newConn(ctx context.Context, baseDB *baseDB) *Conn {

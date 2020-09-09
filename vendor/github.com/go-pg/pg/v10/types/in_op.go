@@ -1,13 +1,11 @@
 package types
 
 import (
-	"fmt"
 	"reflect"
 )
 
 type inOp struct {
-	slice     reflect.Value
-	stickyErr error
+	slice reflect.Value
 }
 
 var _ ValueAppender = (*inOp)(nil)
@@ -19,28 +17,17 @@ func InMulti(values ...interface{}) ValueAppender {
 }
 
 func In(slice interface{}) ValueAppender {
-	v := reflect.ValueOf(slice)
-	if v.Kind() != reflect.Slice {
-		return &inOp{
-			stickyErr: fmt.Errorf("pg: In(non-slice %T)", slice),
-		}
-	}
-
 	return &inOp{
-		slice: v,
+		slice: reflect.ValueOf(slice),
 	}
 }
 
 func (in *inOp) AppendValue(b []byte, flags int) ([]byte, error) {
-	if in.stickyErr != nil {
-		return nil, in.stickyErr
-	}
 	return appendIn(b, in.slice, flags), nil
 }
 
 func appendIn(b []byte, slice reflect.Value, flags int) []byte {
-	sliceLen := slice.Len()
-	for i := 0; i < sliceLen; i++ {
+	for i := 0; i < slice.Len(); i++ {
 		if i > 0 {
 			b = append(b, ',')
 		}

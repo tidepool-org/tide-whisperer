@@ -5,55 +5,43 @@ type DropCompositeOptions struct {
 	Cascade  bool
 }
 
-type DropCompositeQuery struct {
+func DropComposite(db DB, model interface{}, opt *DropCompositeOptions) error {
+	q := NewQuery(db, model)
+	_, err := q.db.Exec(&dropCompositeQuery{
+		q:   q,
+		opt: opt,
+	})
+	return err
+}
+
+type dropCompositeQuery struct {
 	q   *Query
 	opt *DropCompositeOptions
 }
 
-var (
-	_ QueryAppender = (*DropCompositeQuery)(nil)
-	_ QueryCommand  = (*DropCompositeQuery)(nil)
-)
+var _ QueryAppender = (*dropCompositeQuery)(nil)
+var _ queryCommand = (*dropCompositeQuery)(nil)
 
-func NewDropCompositeQuery(q *Query, opt *DropCompositeOptions) *DropCompositeQuery {
-	return &DropCompositeQuery{
-		q:   q,
-		opt: opt,
-	}
-}
-
-func (q *DropCompositeQuery) String() string {
-	b, err := q.AppendQuery(defaultFmter, nil)
-	if err != nil {
-		panic(err)
-	}
-	return string(b)
-}
-
-func (q *DropCompositeQuery) Operation() QueryOp {
-	return DropCompositeOp
-}
-
-func (q *DropCompositeQuery) Clone() QueryCommand {
-	return &DropCompositeQuery{
+func (q *dropCompositeQuery) Clone() queryCommand {
+	return &dropCompositeQuery{
 		q:   q.q.Clone(),
 		opt: q.opt,
 	}
 }
 
-func (q *DropCompositeQuery) Query() *Query {
+func (q *dropCompositeQuery) Query() *Query {
 	return q.q
 }
 
-func (q *DropCompositeQuery) AppendTemplate(b []byte) ([]byte, error) {
+func (q *dropCompositeQuery) AppendTemplate(b []byte) ([]byte, error) {
 	return q.AppendQuery(dummyFormatter{}, b)
 }
 
-func (q *DropCompositeQuery) AppendQuery(fmter QueryFormatter, b []byte) ([]byte, error) {
+func (q *dropCompositeQuery) AppendQuery(fmter QueryFormatter, b []byte) ([]byte, error) {
 	if q.q.stickyErr != nil {
 		return nil, q.q.stickyErr
 	}
-	if q.q.tableModel == nil {
+	if q.q.model == nil {
 		return nil, errModelNil
 	}
 
@@ -61,7 +49,7 @@ func (q *DropCompositeQuery) AppendQuery(fmter QueryFormatter, b []byte) ([]byte
 	if q.opt != nil && q.opt.IfExists {
 		b = append(b, "IF EXISTS "...)
 	}
-	b = append(b, q.q.tableModel.Table().Alias...)
+	b = append(b, q.q.model.Table().Alias...)
 	if q.opt != nil && q.opt.Cascade {
 		b = append(b, " CASCADE"...)
 	}

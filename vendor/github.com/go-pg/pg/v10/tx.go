@@ -38,23 +38,19 @@ type Tx struct {
 
 var _ orm.DB = (*Tx)(nil)
 
-// Context returns the context.Context of the transaction.
+// Context returns the context.Context of the transaction
 func (tx *Tx) Context() context.Context {
 	return tx.ctx
 }
 
 // Begin starts a transaction. Most callers should use RunInTransaction instead.
 func (db *baseDB) Begin() (*Tx, error) {
-	return db.BeginContext(db.db.Context())
-}
-
-func (db *baseDB) BeginContext(ctx context.Context) (*Tx, error) {
 	tx := &Tx{
-		db:  db.withPool(pool.NewStickyConnPool(db.pool)),
-		ctx: ctx,
+		db:  db.withPool(pool.NewSingleConnPool(db.pool)),
+		ctx: db.db.Context(),
 	}
 
-	err := tx.begin(ctx)
+	err := tx.begin(tx.ctx)
 	if err != nil {
 		tx.close()
 		return nil, err
@@ -66,12 +62,12 @@ func (db *baseDB) BeginContext(ctx context.Context) (*Tx, error) {
 // RunInTransaction runs a function in a transaction. If function
 // returns an error transaction is rolled back, otherwise transaction
 // is committed.
-func (db *baseDB) RunInTransaction(ctx context.Context, fn func(*Tx) error) error {
-	tx, err := db.BeginContext(ctx)
+func (db *baseDB) RunInTransaction(fn func(*Tx) error) error {
+	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
-	return tx.RunInTransaction(ctx, fn)
+	return tx.RunInTransaction(fn)
 }
 
 // Begin returns current transaction. It does not start new transaction.
@@ -82,23 +78,23 @@ func (tx *Tx) Begin() (*Tx, error) {
 // RunInTransaction runs a function in the transaction. If function
 // returns an error transaction is rolled back, otherwise transaction
 // is committed.
-func (tx *Tx) RunInTransaction(ctx context.Context, fn func(*Tx) error) error {
+func (tx *Tx) RunInTransaction(fn func(*Tx) error) error {
 	defer func() {
 		if err := recover(); err != nil {
-			if err := tx.RollbackContext(ctx); err != nil {
-				internal.Logger.Printf(ctx, "tx.Rollback panicked: %s", err)
+			if err := tx.Rollback(); err != nil {
+				internal.Logger.Printf("tx.Rollback failed: %s", err)
 			}
 			panic(err)
 		}
 	}()
 
 	if err := fn(tx); err != nil {
-		if err := tx.RollbackContext(ctx); err != nil {
-			internal.Logger.Printf(ctx, "tx.Rollback failed: %s", err)
+		if err := tx.Rollback(); err != nil {
+			internal.Logger.Printf("tx.Rollback failed: %s", err)
 		}
 		return err
 	}
-	return tx.CommitContext(ctx)
+	return tx.Commit()
 }
 
 func (tx *Tx) withConn(c context.Context, fn func(context.Context, *pool.Conn) error) error {
@@ -129,7 +125,7 @@ func (tx *Tx) Prepare(q string) (*Stmt, error) {
 	tx.stmtsMu.Lock()
 	defer tx.stmtsMu.Unlock()
 
-	db := tx.db.withPool(pool.NewStickyConnPool(tx.db.pool))
+	db := tx.db.withPool(pool.NewSingleConnPool(tx.db.pool))
 	stmt, err := prepareStmt(db, q)
 	if err != nil {
 		return nil, err
@@ -144,7 +140,7 @@ func (tx *Tx) Exec(query interface{}, params ...interface{}) (Result, error) {
 	return tx.exec(tx.ctx, query, params...)
 }
 
-// ExecContext acts like Exec but additionally receives a context.
+// ExecContext acts like Exec but additionally receives a context
 func (tx *Tx) ExecContext(c context.Context, query interface{}, params ...interface{}) (Result, error) {
 	return tx.exec(c, query, params...)
 }
@@ -179,7 +175,7 @@ func (tx *Tx) ExecOne(query interface{}, params ...interface{}) (Result, error) 
 	return tx.execOne(tx.ctx, query, params...)
 }
 
-// ExecOneContext acts like ExecOne but additionally receives a context.
+// ExecOneContext acts like ExecOne but additionally receives a context
 func (tx *Tx) ExecOneContext(c context.Context, query interface{}, params ...interface{}) (Result, error) {
 	return tx.execOne(c, query, params...)
 }
@@ -201,7 +197,7 @@ func (tx *Tx) Query(model interface{}, query interface{}, params ...interface{})
 	return tx.query(tx.ctx, model, query, params...)
 }
 
-// QueryContext acts like Query but additionally receives a context.
+// QueryContext acts like Query but additionally receives a context
 func (tx *Tx) QueryContext(
 	c context.Context,
 	model interface{},
@@ -246,7 +242,7 @@ func (tx *Tx) QueryOne(model interface{}, query interface{}, params ...interface
 	return tx.queryOne(tx.ctx, model, query, params...)
 }
 
-// QueryOneContext acts like QueryOne but additionally receives a context.
+// QueryOneContext acts like QueryOne but additionally receives a context
 func (tx *Tx) QueryOneContext(
 	c context.Context,
 	model interface{},
@@ -283,9 +279,44 @@ func (tx *Tx) Model(model ...interface{}) *orm.Query {
 	return orm.NewQuery(tx, model...)
 }
 
-// ModelContext acts like Model but additionally receives a context.
+// ModelContext acts like Model but additionally receives a context
 func (tx *Tx) ModelContext(c context.Context, model ...interface{}) *orm.Query {
 	return orm.NewQueryContext(c, tx, model...)
+}
+
+// Select is an alias for DB.Select.
+func (tx *Tx) Select(model interface{}) error {
+	return orm.Select(tx, model)
+}
+
+// Insert is an alias for DB.Insert.
+func (tx *Tx) Insert(model ...interface{}) error {
+	return orm.Insert(tx, model...)
+}
+
+// Update is an alias for DB.Update.
+func (tx *Tx) Update(model interface{}) error {
+	return orm.Update(tx, model)
+}
+
+// Delete is an alias for DB.Delete.
+func (tx *Tx) Delete(model interface{}) error {
+	return orm.Delete(tx, model)
+}
+
+// ForceDelete forces the deletion of the model with deleted_at column.
+func (tx *Tx) ForceDelete(model interface{}) error {
+	return orm.ForceDelete(tx, model)
+}
+
+// CreateTable is an alias for DB.CreateTable.
+func (tx *Tx) CreateTable(model interface{}, opt *orm.CreateTableOptions) error {
+	return orm.CreateTable(tx, model, opt)
+}
+
+// DropTable is an alias for DB.DropTable.
+func (tx *Tx) DropTable(model interface{}, opt *orm.DropTableOptions) error {
+	return orm.DropTable(tx, model, opt)
 }
 
 // CopyFrom is an alias for DB.CopyFrom.
@@ -306,7 +337,7 @@ func (tx *Tx) CopyTo(w io.Writer, query interface{}, params ...interface{}) (res
 	return res, err
 }
 
-// Formatter is an alias for DB.Formatter.
+// Formatter is an alias for DB.Formatter
 func (tx *Tx) Formatter() orm.QueryFormatter {
 	return tx.db.Formatter()
 }
@@ -319,7 +350,7 @@ func (tx *Tx) begin(ctx context.Context) error {
 				return err
 			}
 
-			err := tx.db.pool.(*pool.StickyConnPool).Reset(ctx)
+			err := tx.db.pool.(*pool.SingleConnPool).Reset()
 			if err != nil {
 				return err
 			}
@@ -333,38 +364,26 @@ func (tx *Tx) begin(ctx context.Context) error {
 	return lastErr
 }
 
-func (tx *Tx) Commit() error {
-	return tx.CommitContext(tx.ctx)
-}
-
 // Commit commits the transaction.
-func (tx *Tx) CommitContext(ctx context.Context) error {
-	_, err := tx.ExecContext(ctx, "COMMIT")
+func (tx *Tx) Commit() error {
+	_, err := tx.Exec("COMMIT")
 	tx.close()
 	return err
-}
-
-func (tx *Tx) Rollback() error {
-	return tx.RollbackContext(tx.ctx)
 }
 
 // Rollback aborts the transaction.
-func (tx *Tx) RollbackContext(ctx context.Context) error {
-	_, err := tx.ExecContext(ctx, "ROLLBACK")
+func (tx *Tx) Rollback() error {
+	_, err := tx.Exec("ROLLBACK")
 	tx.close()
 	return err
 }
 
-func (tx *Tx) Close() error {
-	return tx.CloseContext(tx.ctx)
-}
-
 // Close calls Rollback if the tx has not already been committed or rolled back.
-func (tx *Tx) CloseContext(ctx context.Context) error {
+func (tx *Tx) Close() error {
 	if tx.closed() {
 		return nil
 	}
-	return tx.RollbackContext(ctx)
+	return tx.Rollback()
 }
 
 func (tx *Tx) close() {
