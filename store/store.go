@@ -27,7 +27,8 @@ type (
 	// StorageIterator - Interface for the query iterator
 	StorageIterator interface {
 		Next(context.Context) bool
-		Decode(interface{}) error
+		//Decode(interface{}) error
+		Retrieve() (interface{}, error)
 		Close(context.Context) error
 	}
 	// Storage - Interface for our storage layer
@@ -76,6 +77,9 @@ type (
 	latestIterator struct {
 		results []bson.Raw
 		pos     int
+	}
+	mongoIterator struct {
+		c       *mongo.Cursor
 	}
 )
 
@@ -513,8 +517,9 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 	}
 
 	opts := options.Find().SetProjection(removeFieldsForReturn)
-	return dataCollection(c).
-		Find(c.context, generateMongoQuery(p), opts)
+	cursor, err := dataCollection(c).Find(c.context, generateMongoQuery(p), opts)
+	m := &mongoIterator{c: cursor}
+	return m, err
 }
 
 func (l *latestIterator) Next(context.Context) bool {
@@ -522,10 +527,27 @@ func (l *latestIterator) Next(context.Context) bool {
 	return l.pos < len(l.results)
 }
 
-func (l *latestIterator) Decode(result interface{}) error {
-	return bson.Unmarshal(l.results[l.pos], result)
+//func (l *latestIterator) Decode(result interface{}) error {
+//	return bson.Unmarshal(l.results[l.pos], result)
+//}
+func (l *latestIterator) Retrieve() (interface{}, error) {
+	var result map[string]interface{}
+	err := bson.Unmarshal(l.results[l.pos], result)
+	return result, err
 }
 
 func (l *latestIterator) Close(context.Context) error {
 	return nil
+}
+
+func (m *mongoIterator) Next(c context.Context) bool {
+	return m.c.Next(c)
+}
+func (m *mongoIterator) Retrieve() (interface{}, error) {
+	var result map[string]interface{}
+	err := m.c.Decode(&result)
+	return result, err
+}
+func (m *mongoIterator) Close(c context.Context) error {
+	return m.c.Close(c)
 }

@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/tidepool-org/go-common/clients/hakken"
+	"github.com/tidepool-org/go-common/clients/shoreline"
 	"log"
 	"net/http"
 	"os"
@@ -20,10 +22,7 @@ import (
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
 	"github.com/tidepool-org/go-common/clients/disc"
-	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
-	"github.com/tidepool-org/go-common/clients/shoreline"
-
 	"github.com/tidepool-org/tide-whisperer/auth"
 	"github.com/tidepool-org/tide-whisperer/store"
 
@@ -185,7 +184,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	storage := store.NewMongoStoreClient(&config.Mongo)
+	storage := store.NewTimeseriesStoreClient()
 	defer storage.Disconnect()
 	storage.EnsureIndexes()
 
@@ -245,6 +244,7 @@ func main() {
 
 		requestID := NewRequestID()
 		queryStart := time.Now()
+		/*
 		if _, ok := req.URL.Query()["carelink"]; !ok {
 			if hasMedtronicDirectData, medtronicErr := storageWithCtx.HasMedtronicDirectData(queryParams.UserID); medtronicErr != nil {
 				log.Printf("%s request %s user %s HasMedtronicDirectData returned error: %s", dataAPIPrefix, requestID, userID, medtronicErr)
@@ -307,10 +307,16 @@ func main() {
 			queryStart = time.Now()
 		}
 
+		 */
+
 		iter, err := storageWithCtx.GetDeviceData(queryParams)
 		if err != nil {
 			mongoErrorCount.WithLabelValues(err.Error()).Inc()
 			log.Printf("%s request %s user %s Mongo Query returned error: %s", dataAPIPrefix, requestID, userID, err)
+		}
+		if iter == nil {
+			log.Printf("Problem creating iterator\n ")
+			return
 		}
 
 		defer iter.Close(req.Context())
@@ -322,14 +328,14 @@ func main() {
 		res.Write([]byte("["))
 
 		for iter.Next(req.Context()) {
-			var results map[string]interface{}
-			err := iter.Decode(&results)
+			//var results map[string]interface{}
+			results, err := iter.Retrieve()
 			if err != nil {
 				mongoErrorCount.WithLabelValues("decode").Inc()
 				log.Printf("%s request %s user %s Mongo Decode returned error: %s", dataAPIPrefix, requestID, userID, err)
 			}
 
-			if len(results) > 0 {
+			//if len(results) > 0 {
 				if bytes, err := json.Marshal(results); err != nil {
 					mongoErrorCount.WithLabelValues("marshal").Inc()
 					log.Printf("%s request %s user %s Marshal returned error: %s", dataAPIPrefix, requestID, userID, err)
@@ -341,7 +347,7 @@ func main() {
 					res.Write(bytes)
 					writeCount++
 				}
-			}
+			//}
 		}
 
 		if writeCount > 0 {
@@ -390,7 +396,7 @@ func main() {
 	if err := start(); err != nil {
 		log.Fatal(dataAPIPrefix, err)
 	}
-	hakkenClient.Publish(&config.Service)
+	//hakkenClient.Publish(&config.Service)
 
 	signals := make(chan os.Signal, 40)
 	signal.Notify(signals)
