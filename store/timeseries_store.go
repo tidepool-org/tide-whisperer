@@ -347,7 +347,7 @@ func (t *TimeseriesStoreClient) generateTimeseriesQuery(q *orm.Query, p *Params)
 
 
 	if len(p.SubTypes) > 0 && p.SubTypes[0] != "" {
-		q = q.WhereIn("subType", p.SubTypes)
+		q = q.WhereIn("sub_type", p.SubTypes)
 	}
 
 	if p.Date.Start != "" && p.Date.End != "" {
@@ -363,13 +363,13 @@ func (t *TimeseriesStoreClient) generateTimeseriesQuery(q *orm.Query, p *Params)
 	}
 
 	if p.DeviceID != "" {
-		q = q.Where("deviceId = ?", p.DeviceID)
+		q = q.Where("device_id = ?", p.DeviceID)
 	}
 
 	// If we have an explicit upload ID to filter by, we don't need or want to apply any further
 	// data source-based filtering
 	if p.UploadID != "" {
-		q = q.Where("uploadId = ?", p.UploadID)
+		q = q.Where("upload_id = ?", p.UploadID)
 	} else {
 		/*
 		andQuery := []bson.M{}
