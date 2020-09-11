@@ -286,10 +286,13 @@ func (t *TimeseriesStoreClient) GetDeviceData(p *Params) (StorageIterator, error
 		typeRanges = []string{"physicalActivity", "basal", "cbg", "smbg", "bloodKetone", "bolus", "wizard", "deviceEvent", "food", "insulin", "cgmSettings", "pumpSettings", "reportedState", "upload"}
 	}
 
+	fmt.Println("Type Ranges: ", typeRanges)
+
 	var err error
 
 	for _, theType := range typeRanges {
 
+		count := 0
 		fmt.Println("Type:", theType)
 		model, err := t.getModelType(theType);
 		if err != nil  || model == nil{
@@ -328,9 +331,11 @@ func (t *TimeseriesStoreClient) GetDeviceData(p *Params) (StorageIterator, error
 						v.SetString(theType)
 					}
 					latest.results = append(latest.results, item.Interface())
+					count = count + 1
 				}
 			}
 		}
+		fmt.Println("Count:", count)
 	}
 	return latest, err
 
