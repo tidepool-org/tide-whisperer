@@ -10,8 +10,8 @@ import (
 type CgmSettings struct {
 	Base                                             `mapstructure:",squash"`
 
-	TransmitterId      string                        `mapstructure:"transmitterId" pg:"transmitter_id"`
-	Units             string                         `mapstructure:"units" pg:"units"`
+	TransmitterId      string                        `mapstructure:"transmitterId" pg:"transmitter_id" json:"transmitterId,omitempty"`
+	Units             string                         `mapstructure:"units" pg:"units" json:"units,omitempty"`
 
 	LowAlertsMap    map[string]interface{}           `mapstructure:"lowAlerts" pg:"-"`
 	LowAlertsJson   string                           `pg:"low_alerts"`

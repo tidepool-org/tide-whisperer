@@ -10,11 +10,11 @@ import (
 type Wizard struct {
 	Base                                             `mapstructure:",squash"`
 
-	Bolus             string                         `mapstructure:"bolus" pg:"bolus"`
-	Units             string                         `mapstructure:"units" pg:"units"`
+	Bolus             string                         `mapstructure:"bolus" pg:"bolus" json:"bolus,omitempty"`
+	Units             string                         `mapstructure:"units" pg:"units" json:"units,omitempty"`
 
 	RecommendedMap    map[string]interface{}         `mapstructure:"recommended" pg:"-"`
-	RecommendedJson   string                         `pg:"recommended"`
+	RecommendedJson   string                         `pg:"recommended" json:"recommended,omitempty"`
 
 }
 

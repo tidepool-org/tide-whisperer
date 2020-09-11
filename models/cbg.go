@@ -9,9 +9,9 @@ import (
 type Cbg struct {
 	Base                    `mapstructure:",squash"`
 
-	Value          float64    `mapstructure:"value" pg:"value"`
+	Value          float64    `mapstructure:"value" pg:"value" json:"value,omitempty"`
 
-	Units          string    `mapstructure:"units" pg:"units"`
+	Units          string    `mapstructure:"units" pg:"units" json:"units,omitempty"`
 }
 
 func DecodeCbg(data interface{}) (*Cbg, error) {

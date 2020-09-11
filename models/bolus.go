@@ -9,9 +9,9 @@ import (
 type Bolus struct {
 	Base                    `mapstructure:",squash"`
 
-	Normal         float64   `mapstructure:"normal" pg:"normal"`
+	Normal         float64   `mapstructure:"normal" pg:"normal" json:"normal,omitempty"`
 
-	SubType        string    `mapstructure:"subType" pg:"sub_type"`
+	SubType        string    `mapstructure:"subType" pg:"sub_type" json:"subType,omitempty"`
 }
 
 func DecodeBolus(data interface{}) (*Bolus, error) {

@@ -9,12 +9,12 @@ import (
 type Upload struct {
 	Base                    `mapstructure:",squash"`
 
-	DataSetType    string    `mapstructure:"dataSetType" pg:"data_set_type"`
-	DataState      string    `mapstructure:"_dataState" pg:"data_state"`
+	DataSetType    string    `mapstructure:"dataSetType" pg:"data_set_type" json:"dataSetType,omitempty"`
+	DataState      string    `mapstructure:"_dataState" pg:"data_state" json:"_dataState,omitempty"`
 
-	DeviceSerialNumber string `mapstructure:"deviceSerialNumber" pg:"device_serial_number"`
-	State          string    `mapstructure:"_state" pg:"state"`
-	Version        string    `mapstructure:"version" pg:"version"`
+	DeviceSerialNumber string `mapstructure:"deviceSerialNumber" pg:"device_serial_number" json:"deviceSerialNumber,omitempty"`
+	State          string    `mapstructure:"_state" pg:"state" json:"_state,omitempty"`
+	Version        string    `mapstructure:"version" pg:"version" json:"version,omitempty"`
 }
 
 func DecodeUpload(data interface{}) (*Upload, error) {

@@ -10,12 +10,12 @@ import (
 type DeviceMeta struct {
 	Base                                             `mapstructure:",squash"`
 
-	Status             string                        `mapstructure:"status" pg:"status"`
-	SubType            string                        `mapstructure:"subType" pg:"sub_type"`
-	Duration           int64                         `mapstructure:"duration" pg:"duration"`
+	Status             string                        `mapstructure:"status" pg:"status" json:"status,omitempty"`
+	SubType            string                        `mapstructure:"subType" pg:"sub_type" json:"subType,omitempty"`
+	Duration           int64                         `mapstructure:"duration" pg:"duration" json:"duration,omitempty"`
 
 	ReasonMap    map[string]interface{}              `mapstructure:"reason" pg:"-"`
-	ReasonJson   string                              `pg:"reason"`
+	ReasonJson   string                              `pg:"reason" json:"reason,omitempty"`
 
 }
 

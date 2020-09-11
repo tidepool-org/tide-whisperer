@@ -11,7 +11,7 @@ type Food struct {
 	Base                                           `mapstructure:",squash"`
 
 	NutritionMap    map[string]interface{}         `mapstructure:"nutrition" pg:"-"`
-	NutritionJson   string                         `pg:"nutrition"`
+	NutritionJson   string                         `pg:"nutrition" json:"nutrition"`
 
 }
 

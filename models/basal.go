@@ -9,12 +9,12 @@ import (
 type Basal struct {
 	Base                      `mapstructure:",squash"`
 
-	DeliveryType      string   `mapstructure:"deliveryType,omitempty" pg:"delivery_type"`
-	Duration          int64    `mapstructure:"duration,omitempty" pg:"duration"`
-	ExpectedDuration  int64    `mapstructure:"expectedDuration,omitempty" pg:"expected_duration"`
-	Rate              float64  `mapstructure:"rate,omitempty" pg:"rate"`
-	Percent           float64  `mapstructure:"percent,omitempty" pg:"percent"`
-	ScheduleName      string   `mapstructure:"scheduleName,omitempty" pg:"schedule_name"`
+	DeliveryType      string   `mapstructure:"deliveryType,omitempty" pg:"delivery_type" json:"deliveryType,omitempty"`
+	Duration          int64    `mapstructure:"duration,omitempty" pg:"duration" json:"duration,omitempty"`
+	ExpectedDuration  int64    `mapstructure:"expectedDuration,omitempty" pg:"expected_duration" json:"expectedDuration,omitempty"`
+	Rate              float64  `mapstructure:"rate,omitempty" pg:"rate" json:"rate,omitempty"`
+	Percent           float64  `mapstructure:"percent,omitempty" pg:"percent" json:"percent,omitempty"`
+	ScheduleName      string   `mapstructure:"scheduleName,omitempty" pg:"schedule_name" json:"scheduleName,omitempty"`
 	Active            bool    `mapstructure:"_active" pg:"-"`
 }
 

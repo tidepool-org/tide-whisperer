@@ -10,22 +10,22 @@ import (
 type PumpSettings struct {
 	Base                                             `mapstructure:",squash"`
 
-	ActiveSchedule          string                      `mapstructure:"activeSchedule" pg:"active_schedule"`
+	ActiveSchedule          string                      `mapstructure:"activeSchedule" pg:"active_schedule" json:"activeSchedule,omitempty"`
 
 	BasalSchedulesMap       map[string]interface{}      `mapstructure:"basalSchedules" pg:"-"`
-	BasalSchedulesJson      string                      `pg:"basal_schedules"`
+	BasalSchedulesJson      string                      `pg:"basal_schedules" json:"basalSchedules,omitempty"`
 
 	BgTargetMap             []interface{}      `mapstructure:"bgTarget" pg:"-"`
-	BgTargetJson            string                      `pg:"bg_target"`
+	BgTargetJson            string                      `pg:"bg_target" json:"bgTarget,omitempty"`
 
 	CarbRatioMap            []interface{}      `mapstructure:"carbRatio" pg:"-"`
-	CarbRatioJson           string                      `pg:"carb_ratio"`
+	CarbRatioJson           string                      `pg:"carb_ratio" json:"carbRatio,omitempty"`
 
 	InsulinSensitivityMap   []interface{}      `mapstructure:"insulinSensitivity" pg:"-"`
-	InsulinSensitivityJson  string                      `pg:"insulin_sensitivity"`
+	InsulinSensitivityJson  string                      `pg:"insulin_sensitivity" json:"insulinSensitivity,omitempty"`
 
 	unitsMap                map[string]interface{}      `mapstructure:"units" pg:"-"`
-	unitsJson               string                      `pg:"units"`
+	unitsJson               string                      `pg:"units" json:"units,omitempty"`
 }
 
 func DecodePumpSettings(data interface{}) (*PumpSettings, error) {
