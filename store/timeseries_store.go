@@ -42,6 +42,19 @@ func NewDbContext() context.Context {
 	return ctx
 }
 
+type dbLogger struct { }
+
+func (d dbLogger) BeforeQuery(c context.Context, q *pg.QueryEvent) (context.Context, error) {
+	return c, nil
+}
+
+func (d dbLogger) AfterQuery(c context.Context, q *pg.QueryEvent) error {
+	b, _ := q.FormattedQuery()
+	s := string(b)
+	fmt.Println("Query: ", s)
+	return nil
+}
+
 // NewTimeseriesStoreClient creates a new TimeseriesStoreClient
 func NewTimeseriesStoreClient() *TimeseriesStoreClient {
 
@@ -64,7 +77,7 @@ func NewTimeseriesStoreClient() *TimeseriesStoreClient {
 
 	ctx := NewDbContext()
 
-	//db.AddQueryHook(dbLogger{})
+	db.AddQueryHook(dbLogger{})
 
 
 	// Check if connection credentials are valid and PostgreSQL is up and running.
