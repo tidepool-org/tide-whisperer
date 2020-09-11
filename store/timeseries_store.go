@@ -345,11 +345,20 @@ func (t *TimeseriesStoreClient) GetDeviceData(p *Params) (StorageIterator, error
 					}
 					latest.results = append(latest.results, item.Interface())
 					count = count + 1
+					if (items.Len() == 4) {
+						fmt.Printf("item: %v\n", item.Interface())
+					}
 				}
 			}
 		}
 		fmt.Println("Count:", count)
 	}
+	var m []models.Upload
+	t.db.Model(m).Where("user_id = ?", "dd7d1aa328" ).
+		Where("upload_id = ?", "14812342adb5fc30e952ab8a43781ac6").Select()
+	fmt.Println("Count2:", len(m))
+	fmt.Printf("val: %v\n", m)
+
 	return latest, err
 
 	//opts := options.Find().SetProjection(removeFieldsForReturn)
