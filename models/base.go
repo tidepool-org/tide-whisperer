@@ -13,8 +13,8 @@ type Base struct {
 
 	Type              string     `mapstructure:"type" pg:"-" json:"type,omitempty"`
 
-	CreatedTime       time.Time  `mapstructure:"createdTime" pg:"created_time,type:timestamptz" json:"createdTime,omitempty"`
-	ModifiedTime      time.Time  `mapstructure:"modifiedTime" pg:"modified_time,type:timestamptz" json:"modifiedTime,omitempty"`
+	CreatedTime       time.Time  `mapstructure:"createdTime" pg:"created_time,type:timestamptz" json:"-"`
+	ModifiedTime      time.Time  `mapstructure:"modifiedTime" pg:"modified_time,type:timestamptz" json:"-"`
 	DeviceTime        time.Time  `mapstructure:"deviceTime" pg:"device_time,type:timestamptz" json:"deviceTime,omitempty"`
 
 	DeviceId          string   `mapstructure:"deviceId,omitempty" pg:"device_id" json:"deviceId,omitempty"`
@@ -26,7 +26,7 @@ type Base struct {
 	ConversionOffset  int64    `mapstructure:"conversionOffset,omitempty" pg:"conversion_offset" json:"conversionOffset,omitempty"`
 
 	UploadId          string   `mapstructure:"uploadId,omitempty" pg:"upload_id" json:"uploadId,omitempty"`
-	UserId            string   `mapstructure:"_userId,omitempty" pg:"user_id" json:"_userId,omitempty""`
+	UserId            string   `mapstructure:"_userId,omitempty" pg:"user_id" json:"-"`
 
 	Revision          int64   `mapstructure:"revision,omitempty" pg:"revision" json:"revision,omitempty"`
 }
