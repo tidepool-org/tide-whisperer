@@ -97,9 +97,9 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 }
 func initTracer() {
 
-	agentAddress, exists := os.LookupEnv("TIDEPOOL_TIDE_WHISPERER_OTEL_AGENT")
+	agentAddress, exists := os.LookupEnv("TIDEPOOL_TIDE_WHISPERER_OTLP_AGENT_ADDRESS")
 	if !exists {
-		agentAddress = "localhost:55600"
+		agentAddress = "localhost:55680"
 	}
 
 	exp, err := otlp.NewExporter(
@@ -109,12 +109,14 @@ func initTracer() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	tp, err := sdktrace.NewProvider(sdktrace.WithConfig(sdktrace.Config{DefaultSampler: sdktrace.AlwaysSample()}),
 		sdktrace.WithSyncer(exp),
 		sdktrace.WithResource(resource.New(semconv.ServiceNameKey.String("shoreline"))))
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	global.SetTraceProvider(tp)
 }
 
