@@ -3,6 +3,7 @@ github.com/beorn7/perks/quantile
 # github.com/cespare/xxhash/v2 v2.1.1
 github.com/cespare/xxhash/v2
 # github.com/daaku/go.httpgzip v0.0.0-20180202095102-86d27ccd810b
+## explicit
 github.com/daaku/go.httpgzip
 # github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8
 github.com/globalsign/mgo
@@ -12,6 +13,8 @@ github.com/globalsign/mgo/internal/sasl
 github.com/globalsign/mgo/internal/scram
 # github.com/go-stack/stack v1.8.0
 github.com/go-stack/stack
+# github.com/gogo/protobuf v1.3.1
+github.com/gogo/protobuf/proto
 # github.com/golang/protobuf v1.4.2
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes
@@ -21,14 +24,19 @@ github.com/golang/protobuf/ptypes/timestamp
 # github.com/golang/snappy v0.0.1
 github.com/golang/snappy
 # github.com/google/uuid v1.1.1
+## explicit
 github.com/google/uuid
 # github.com/gorilla/context v1.1.1
+## explicit
 github.com/gorilla/context
 # github.com/gorilla/mux v1.7.4
+## explicit
 github.com/gorilla/mux
 # github.com/gorilla/pat v1.0.1
+## explicit
 github.com/gorilla/pat
 # github.com/klauspost/compress v1.10.4
+## explicit
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
 github.com/klauspost/compress/snappy
@@ -37,14 +45,14 @@ github.com/klauspost/compress/zstd/internal/xxhash
 # github.com/matttproud/golang_protobuf_extensions v1.0.1
 github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/pkg/errors v0.9.1
+## explicit
 github.com/pkg/errors
 # github.com/prometheus/client_golang v1.7.1
+## explicit
 github.com/prometheus/client_golang/prometheus
 github.com/prometheus/client_golang/prometheus/internal
 github.com/prometheus/client_golang/prometheus/promauto
 github.com/prometheus/client_golang/prometheus/promhttp
-github.com/prometheus/client_golang/prometheus/testutil
-github.com/prometheus/client_golang/prometheus/testutil/promlint
 # github.com/prometheus/client_model v0.2.0
 github.com/prometheus/client_model/go
 # github.com/prometheus/common v0.10.0
@@ -56,6 +64,7 @@ github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
 # github.com/tidepool-org/go-common v0.5.0
+## explicit
 github.com/tidepool-org/go-common
 github.com/tidepool-org/go-common/clients
 github.com/tidepool-org/go-common/clients/disc
@@ -69,8 +78,10 @@ github.com/tidepool-org/go-common/jepson
 # github.com/xdg/scram v0.0.0-20180814205039-7eeb5667e42c
 github.com/xdg/scram
 # github.com/xdg/stringprep v1.0.0
+## explicit
 github.com/xdg/stringprep
 # go.mongodb.org/mongo-driver v1.3.2
+## explicit
 go.mongodb.org/mongo-driver/bson
 go.mongodb.org/mongo-driver/bson/bsoncodec
 go.mongodb.org/mongo-driver/bson/bsonoptions
@@ -102,18 +113,114 @@ go.mongodb.org/mongo-driver/x/mongo/driver/session
 go.mongodb.org/mongo-driver/x/mongo/driver/topology
 go.mongodb.org/mongo-driver/x/mongo/driver/uuid
 go.mongodb.org/mongo-driver/x/mongo/driver/wiremessage
-# golang.org/x/crypto v0.0.0-20200414173820-0848c9571904
+# go.opentelemetry.io/otel v0.11.0
+## explicit
+go.opentelemetry.io/otel
+go.opentelemetry.io/otel/api/correlation
+go.opentelemetry.io/otel/api/global
+go.opentelemetry.io/otel/api/global/internal
+go.opentelemetry.io/otel/api/metric
+go.opentelemetry.io/otel/api/metric/registry
+go.opentelemetry.io/otel/api/propagation
+go.opentelemetry.io/otel/api/trace
+go.opentelemetry.io/otel/api/unit
+go.opentelemetry.io/otel/codes
+go.opentelemetry.io/otel/internal
+go.opentelemetry.io/otel/internal/trace/parent
+go.opentelemetry.io/otel/label
+go.opentelemetry.io/otel/semconv
+# go.opentelemetry.io/otel/exporters/otlp v0.11.0
+## explicit
+go.opentelemetry.io/otel/exporters/otlp
+go.opentelemetry.io/otel/exporters/otlp/internal/opentelemetry-proto-gen/collector/metrics/v1
+go.opentelemetry.io/otel/exporters/otlp/internal/opentelemetry-proto-gen/collector/trace/v1
+go.opentelemetry.io/otel/exporters/otlp/internal/opentelemetry-proto-gen/common/v1
+go.opentelemetry.io/otel/exporters/otlp/internal/opentelemetry-proto-gen/metrics/v1
+go.opentelemetry.io/otel/exporters/otlp/internal/opentelemetry-proto-gen/resource/v1
+go.opentelemetry.io/otel/exporters/otlp/internal/opentelemetry-proto-gen/trace/v1
+go.opentelemetry.io/otel/exporters/otlp/internal/transform
+# go.opentelemetry.io/otel/sdk v0.11.0
+## explicit
+go.opentelemetry.io/otel/sdk
+go.opentelemetry.io/otel/sdk/export/metric
+go.opentelemetry.io/otel/sdk/export/metric/aggregation
+go.opentelemetry.io/otel/sdk/export/trace
+go.opentelemetry.io/otel/sdk/instrumentation
+go.opentelemetry.io/otel/sdk/internal
+go.opentelemetry.io/otel/sdk/resource
+go.opentelemetry.io/otel/sdk/trace
+go.opentelemetry.io/otel/sdk/trace/internal
+# golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 golang.org/x/crypto/pbkdf2
+# golang.org/x/net v0.0.0-20200904194848-62affa334b73
+## explicit
+golang.org/x/net/http/httpguts
+golang.org/x/net/http2
+golang.org/x/net/http2/hpack
+golang.org/x/net/idna
+golang.org/x/net/internal/timeseries
+golang.org/x/net/trace
 # golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a
+## explicit
 golang.org/x/sync/semaphore
-# golang.org/x/sys v0.0.0-20200615200032-f1bc736245b1
+# golang.org/x/sys v0.0.0-20200917073148-efd3b9a0ff20
+## explicit
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
 golang.org/x/sys/windows
-# golang.org/x/text v0.3.2
+# golang.org/x/text v0.3.3
+## explicit
+golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
+golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# google.golang.org/protobuf v1.23.0
+# google.golang.org/genproto v0.0.0-20200917134801-bb4cff56e0d0
+## explicit
+google.golang.org/genproto/googleapis/rpc/status
+# google.golang.org/grpc v1.32.0
+## explicit
+google.golang.org/grpc
+google.golang.org/grpc/attributes
+google.golang.org/grpc/backoff
+google.golang.org/grpc/balancer
+google.golang.org/grpc/balancer/base
+google.golang.org/grpc/balancer/grpclb/state
+google.golang.org/grpc/balancer/roundrobin
+google.golang.org/grpc/binarylog/grpc_binarylog_v1
+google.golang.org/grpc/codes
+google.golang.org/grpc/connectivity
+google.golang.org/grpc/credentials
+google.golang.org/grpc/encoding
+google.golang.org/grpc/encoding/proto
+google.golang.org/grpc/grpclog
+google.golang.org/grpc/internal
+google.golang.org/grpc/internal/backoff
+google.golang.org/grpc/internal/balancerload
+google.golang.org/grpc/internal/binarylog
+google.golang.org/grpc/internal/buffer
+google.golang.org/grpc/internal/channelz
+google.golang.org/grpc/internal/credentials
+google.golang.org/grpc/internal/envconfig
+google.golang.org/grpc/internal/grpclog
+google.golang.org/grpc/internal/grpcrand
+google.golang.org/grpc/internal/grpcsync
+google.golang.org/grpc/internal/grpcutil
+google.golang.org/grpc/internal/resolver/dns
+google.golang.org/grpc/internal/resolver/passthrough
+google.golang.org/grpc/internal/serviceconfig
+google.golang.org/grpc/internal/status
+google.golang.org/grpc/internal/syscall
+google.golang.org/grpc/internal/transport
+google.golang.org/grpc/keepalive
+google.golang.org/grpc/metadata
+google.golang.org/grpc/peer
+google.golang.org/grpc/resolver
+google.golang.org/grpc/serviceconfig
+google.golang.org/grpc/stats
+google.golang.org/grpc/status
+google.golang.org/grpc/tap
+# google.golang.org/protobuf v1.25.0
+## explicit
 google.golang.org/protobuf/encoding/prototext
 google.golang.org/protobuf/encoding/protowire
 google.golang.org/protobuf/internal/descfmt
@@ -124,12 +231,11 @@ google.golang.org/protobuf/internal/encoding/messageset
 google.golang.org/protobuf/internal/encoding/tag
 google.golang.org/protobuf/internal/encoding/text
 google.golang.org/protobuf/internal/errors
-google.golang.org/protobuf/internal/fieldnum
 google.golang.org/protobuf/internal/fieldsort
 google.golang.org/protobuf/internal/filedesc
 google.golang.org/protobuf/internal/filetype
 google.golang.org/protobuf/internal/flags
-google.golang.org/protobuf/internal/genname
+google.golang.org/protobuf/internal/genid
 google.golang.org/protobuf/internal/impl
 google.golang.org/protobuf/internal/mapsort
 google.golang.org/protobuf/internal/pragma
@@ -144,3 +250,5 @@ google.golang.org/protobuf/runtime/protoimpl
 google.golang.org/protobuf/types/known/anypb
 google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/timestamppb
+# gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15
+## explicit
