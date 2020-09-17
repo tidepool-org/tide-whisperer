@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
@@ -96,19 +95,21 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 	d.InternalMessage = internal.Error()
 	return d
 }
-func initProvider() *otlp.Exporter {
+func initTracer() *otlp.Exporter {
 
 	exp, err := otlp.NewExporter(
 		otlp.WithInsecure(),
 		otlp.WithAddress("localhost:30080"),
 	)
-	log.Fatalf("failed to create exporter: %v", err)
+	if err != nil {
+		log.Fatalf("failed to create exporter: %v", err)
+	}
 
 	tracerProvider := sdktrace.NewProvider(
 		sdktrace.WithConfig(sdktrace.Config{DefaultSampler: sdktrace.AlwaysSample()}),
 		sdktrace.WithResource(resource.New(
 			// the service name used to display traces in backends
-			semconv.ServiceNameKey.String("test-service"),
+			semconv.ServiceNameKey.String("shoreline"),
 		)),
 		sdktrace.WithBatcher(exp),
 	)
@@ -121,12 +122,15 @@ func initProvider() *otlp.Exporter {
 func main() {
 	var config Config
 
-	exp := initProvider()
+	exp := initTracer()
 	defer func() {
-		handleErr(exp.Shutdown(context.Background()), "failed to stop exporter")
+		_, err := exp.Stop()
+		if err != nil {
+			log.Fatalf("failed to stop exporter")
+		}
 	}()
 
-	tracer := global.Tracer("test-tracer")
+	tracer := global.Tracer("shoreline")
 
 	commonLabels := []label.KeyValue{
 		label.String("labelA", "chocolate"),
@@ -254,9 +258,9 @@ func main() {
 	}))
 
 	f := httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
-		ctx, span := tracer.Start(
+		_, span := tracer.Start(
 			req.Context(),
-			"CollectorExporter-Example",
+			"shoreline-data",
 			apitrace.WithAttributes(commonLabels...))
 
 		defer span.End()
