@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/hex"
@@ -30,6 +31,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"go.opentelemetry.io/otel/api/global"
+	apitrace "go.opentelemetry.io/otel/api/trace"
+	"go.opentelemetry.io/otel/exporters/otlp"
+	"go.opentelemetry.io/otel/label"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/semconv"
 )
 
 type (
@@ -87,12 +96,43 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 	d.InternalMessage = internal.Error()
 	return d
 }
+func initProvider() *otlp.Exporter {
+
+	exp, err := otlp.NewExporter(
+		otlp.WithInsecure(),
+		otlp.WithAddress("localhost:30080"),
+	)
+	log.Fatalf("failed to create exporter: %v", err)
+
+	tracerProvider := sdktrace.NewProvider(
+		sdktrace.WithConfig(sdktrace.Config{DefaultSampler: sdktrace.AlwaysSample()}),
+		sdktrace.WithResource(resource.New(
+			// the service name used to display traces in backends
+			semconv.ServiceNameKey.String("test-service"),
+		)),
+		sdktrace.WithBatcher(exp),
+	)
+
+	global.SetTracerProvider(tracerProvider)
+
+	return exp
+}
 
 func main() {
 	var config Config
 
-	log.SetPrefix(dataAPIPrefix)
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	exp := initProvider()
+	defer func() {
+		handleErr(exp.Shutdown(context.Background()), "failed to stop exporter")
+	}()
+
+	tracer := global.Tracer("test-tracer")
+
+	commonLabels := []label.KeyValue{
+		label.String("labelA", "chocolate"),
+		label.String("labelB", "raspberry"),
+		label.String("labelC", "vanilla"),
+	}
 
 	if err := common.LoadEnvironmentConfig(
 		[]string{"TIDEPOOL_TIDE_WHISPERER_SERVICE", "TIDEPOOL_TIDE_WHISPERER_ENV"},
@@ -214,6 +254,13 @@ func main() {
 	}))
 
 	f := httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		ctx, span := tracer.Start(
+			req.Context(),
+			"CollectorExporter-Example",
+			apitrace.WithAttributes(commonLabels...))
+
+		defer span.End()
+
 		start := time.Now()
 
 		storageWithCtx := storage.WithContext(req.Context())
