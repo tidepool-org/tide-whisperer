@@ -95,47 +95,38 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 	d.InternalMessage = internal.Error()
 	return d
 }
-func initTracer() *otlp.Exporter {
+func initTracer() {
+
+	agentAddress, exists := os.LookupEnv("TIDEPOOL_TIDE_WHISPERER_OTEL_AGENT")
+	if !exists {
+		agentAddress = "localhost:55600"
+	}
 
 	exp, err := otlp.NewExporter(
 		otlp.WithInsecure(),
-		otlp.WithAddress("localhost:30080"),
+		otlp.WithAddress(agentAddress),
 	)
 	if err != nil {
-		log.Fatalf("failed to create exporter: %v", err)
+		log.Fatal(err)
 	}
-
-	tracerProvider := sdktrace.NewProvider(
-		sdktrace.WithConfig(sdktrace.Config{DefaultSampler: sdktrace.AlwaysSample()}),
-		sdktrace.WithResource(resource.New(
-			// the service name used to display traces in backends
-			semconv.ServiceNameKey.String("shoreline"),
-		)),
-		sdktrace.WithBatcher(exp),
-	)
-
-	global.SetTracerProvider(tracerProvider)
-
-	return exp
+	tp, err := sdktrace.NewProvider(sdktrace.WithConfig(sdktrace.Config{DefaultSampler: sdktrace.AlwaysSample()}),
+		sdktrace.WithSyncer(exp),
+		sdktrace.WithResource(resource.New(semconv.ServiceNameKey.String("shoreline"))))
+	if err != nil {
+		log.Fatal(err)
+	}
+	global.SetTraceProvider(tp)
 }
 
 func main() {
 	var config Config
 
-	exp := initTracer()
-	defer func() {
-		_, err := exp.Stop()
-		if err != nil {
-			log.Fatalf("failed to stop exporter")
-		}
-	}()
+	initTracer()
 
 	tracer := global.Tracer("shoreline")
 
 	commonLabels := []label.KeyValue{
-		label.String("labelA", "chocolate"),
-		label.String("labelB", "raspberry"),
-		label.String("labelC", "vanilla"),
+		label.String("application", "shoreline"),
 	}
 
 	if err := common.LoadEnvironmentConfig(
@@ -260,7 +251,7 @@ func main() {
 	f := httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		_, span := tracer.Start(
 			req.Context(),
-			"shoreline-data",
+			"device-data",
 			apitrace.WithAttributes(commonLabels...))
 
 		defer span.End()
