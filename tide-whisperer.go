@@ -123,6 +123,9 @@ func initTracer() {
 func main() {
 	var config Config
 
+	log.SetPrefix(dataAPIPrefix)
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
 	initTracer()
 
 	tracer := global.Tracer("shoreline")
