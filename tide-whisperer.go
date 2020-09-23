@@ -51,15 +51,13 @@ type (
 
 func main() {
 	var config Config
-
-	log.SetPrefix(data.DataAPIPrefix)
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	logger := log.New(os.Stdout, data.DataAPIPrefix, log.LstdFlags|log.Lshortfile)
 
 	if err := common.LoadEnvironmentConfig(
 		[]string{"TIDEPOOL_TIDE_WHISPERER_SERVICE", "TIDEPOOL_TIDE_WHISPERER_ENV"},
 		&config,
 	); err != nil {
-		log.Fatal("Problem loading config: ", err)
+		logger.Fatal("Problem loading config: ", err)
 	}
 
 	// server secret may be passed via a separate env variable to accommodate easy secrets injection via Kubernetes
@@ -81,7 +79,7 @@ func main() {
 
 	authClient, err := auth.NewClient(config.Auth, httpClient)
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 
 	hakkenClient := hakken.NewHakkenBuilder().
@@ -90,15 +88,15 @@ func main() {
 
 	if !config.HakkenConfig.SkipHakken {
 		if err := hakkenClient.Start(); err != nil {
-			log.Fatal(err)
+			logger.Fatal(err)
 		}
 		defer func() {
 			if err := hakkenClient.Close(); err != nil {
-				log.Panic("Error closing hakkenClient, panicing to get stacks: ", err)
+				logger.Panic("Error closing hakkenClient, panicing to get stacks: ", err)
 			}
 		}()
 	} else {
-		log.Print("skipping hakken service")
+		logger.Print("skipping hakken service")
 	}
 
 	shorelineClient := shoreline.NewShorelineClientBuilder().
@@ -114,9 +112,14 @@ func main() {
 		Build()
 
 	if err := shorelineClient.Start(); err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
-	storage := store.NewMongoStoreClient(&config.Mongo)
+	storage, err := store.NewStore(&config.Mongo, logger)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	defer storage.Close()
+	storage.Start()
 	rtr := mux.NewRouter()
 
 	/*
@@ -145,7 +148,7 @@ func main() {
 		start = func() error { return server.ListenAndServe() }
 	}
 	if err := start(); err != nil {
-		log.Fatal(err)
+		logger.Fatal(err)
 	}
 	hakkenClient.Publish(&config.Service)
 
@@ -154,9 +157,10 @@ func main() {
 	go func() {
 		for {
 			sig := <-signals
-			log.Printf("Got signal [%s]", sig)
+			logger.Printf("Got signal [%s]", sig)
 
 			if sig == syscall.SIGINT || sig == syscall.SIGTERM {
+				storage.Close()
 				server.Close()
 				done <- true
 			}

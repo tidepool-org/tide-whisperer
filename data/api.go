@@ -65,7 +65,6 @@ var (
 )
 
 func InitApi(storage store.Storage, shoreline shoreline.Client, auth auth.ClientInterface, permsClient clients.Gatekeeper, schemaV store.SchemaVersion) *API {
-	storage.EnsureIndexes()
 	return &API{
 		store:           storage,
 		shorelineClient: shoreline,

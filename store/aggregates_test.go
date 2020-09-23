@@ -2,10 +2,11 @@ package store
 
 import (
 	"encoding/json"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"testing"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 func basicTirParams() *AggParams {
@@ -98,7 +99,7 @@ func TestStore_GetTimeInRangeData(t *testing.T) {
 	}
 
 	resultCount := 0
-	for iter.Next(store.context) {
+	for iter.Next(store.Context) {
 		var result map[string]interface{}
 		err := iter.Decode(&result)
 		if err != nil {

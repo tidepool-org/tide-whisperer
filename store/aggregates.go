@@ -6,6 +6,8 @@ import (
 	// For debug only pretty printing requests
 	"encoding/json"
 	"log"
+
+	"github.com/tidepool-org/go-common/clients/mongo"
 )
 
 type (
@@ -263,7 +265,7 @@ func generateTirAggregateQuery(p *AggParams) []bson.M {
 	return finalQuery
 }
 
-func (c *MongoStoreClient) GetTimeInRangeData(p *AggParams, logQuery bool) (StorageIterator, error) {
+func (c *Client) GetTimeInRangeData(p *AggParams, logQuery bool) (mongo.StorageIterator, error) {
 	query := generateTirAggregateQuery(p)
 	// For debug purpose pretty printing mongo requests:
 	if logQuery {
@@ -273,6 +275,6 @@ func (c *MongoStoreClient) GetTimeInRangeData(p *AggParams, logQuery bool) (Stor
 			log.Printf("TIR aggregate request : %s", bytes)
 		}
 	}
-	cursor, err := dataCollection(c).Aggregate(c.context, query)
+	cursor, err := dataCollection(c).Aggregate(c.Context, query)
 	return cursor, err
 }

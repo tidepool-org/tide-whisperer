@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"log"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,26 +12,33 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 
-	tpMongo "github.com/tidepool-org/go-common/clients/mongo"
+	goComMgo "github.com/tidepool-org/go-common/clients/mongo"
 )
 
-var testingConfig = &tpMongo.Config{ConnectionString: "mongodb://127.0.0.1/data_test", Database: "data_test"}
+var testingConfig = &goComMgo.Config{
+	Database:               "data_test",
+	Timeout:                2 * time.Second,
+	WaitConnectionInterval: 5 * time.Second,
+	MaxConnectionAttempts:  0,
+}
 
-func before(t *testing.T, docs ...interface{}) *MongoStoreClient {
+func before(t *testing.T, docs ...interface{}) *Client {
 
-	store := NewMongoStoreClient(testingConfig)
-
+	logger := log.New(os.Stdout, "mongo-test ", log.LstdFlags|log.LUTC|log.Lshortfile)
+	store, _ := NewStore(testingConfig, logger)
+	store.Start()
+	store.WaitUntilStarted()
 	//INIT THE TEST - we use a clean copy of the collection before we start
 	//just drop and don't worry about any errors
 	dataCollection(store).Drop(context.TODO())
 
 	if len(docs) > 0 {
-		if _, err := dataCollection(store).InsertMany(store.context, docs); err != nil {
+		if _, err := dataCollection(store).InsertMany(store.Context, docs); err != nil {
 			t.Error("Unable to insert documents", err)
 		}
 	}
-
-	return NewMongoStoreClient(testingConfig)
+	store2, _ := NewStore(testingConfig, logger)
+	return store2
 }
 
 func getErrString(mongoQuery, expectedQuery bson.M) string {
@@ -1081,7 +1090,7 @@ func TestStore_LatestNoFilter(t *testing.T) {
 
 	resultCount := 0
 	processedResultCount := 0
-	for iter.Next(store.context) {
+	for iter.Next(store.Context) {
 		var result bson.M
 		err := iter.Decode(&result)
 		if err != nil {
@@ -1131,7 +1140,7 @@ func TestStore_LatestTypeFilter(t *testing.T) {
 
 	resultCount := 0
 	processedResultCount := 0
-	for iter.Next(store.context) {
+	for iter.Next(store.Context) {
 		var result bson.M
 		err := iter.Decode(&result)
 		if err != nil {
@@ -1175,7 +1184,7 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 
 	resultCount := 0
 	processedResultCount := 0
-	for iter.Next(store.context) {
+	for iter.Next(store.Context) {
 		var result bson.M
 		err := iter.Decode(&result)
 		if err != nil {
@@ -1225,7 +1234,7 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 
 	resultCount := 0
 	processedResultCount := 0
-	for iter.Next(store.context) {
+	for iter.Next(store.Context) {
 		var result bson.M
 		err := iter.Decode(&result)
 		if err != nil {

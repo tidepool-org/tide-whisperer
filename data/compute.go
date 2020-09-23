@@ -2,12 +2,14 @@ package data
 
 import (
 	"encoding/json"
-	"github.com/tidepool-org/tide-whisperer/store"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/tidepool-org/go-common/clients/mongo"
+	"github.com/tidepool-org/tide-whisperer/store"
 )
 
 type (
@@ -66,7 +68,7 @@ const (
 	slowAggregateQueryDuration = 0.5 // seconds
 )
 
-func writeMongoJSONResponse(res http.ResponseWriter, req *http.Request, cursor store.StorageIterator, logData *LoggerInfo) {
+func writeMongoJSONResponse(res http.ResponseWriter, req *http.Request, cursor mongo.StorageIterator, logData *LoggerInfo) {
 	res.Header().Add("Content-Type", "application/json")
 	res.Write([]byte("["))
 

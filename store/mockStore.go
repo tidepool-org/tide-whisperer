@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+
+	goComMgo "github.com/tidepool-org/go-common/clients/mongo"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type MockStoreIterator struct {
@@ -56,9 +59,6 @@ func (c *MockStoreClient) DisablePingError() {
 	c.PingError = false
 }
 
-func (c *MockStoreClient) EnsureIndexes() error {
-	return nil
-}
 func (c *MockStoreClient) WithContext(ctx context.Context) Storage {
 	return c
 }
@@ -71,7 +71,16 @@ func (c *MockStoreClient) Ping() error {
 	}
 	return nil
 }
-func (c *MockStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
+func (c *MockStoreClient) PingOK() bool {
+	return !c.PingError
+}
+func (c *MockStoreClient) Collection(collectionName string, databaseName ...string) *mongo.Collection {
+	return nil
+}
+func (c *MockStoreClient) WaitUntilStarted() {}
+func (c *MockStoreClient) Start()            {}
+
+func (c *MockStoreClient) GetDeviceData(p *Params) (goComMgo.StorageIterator, error) {
 	c.GetDeviceDataCall = *p
 	c.GetDeviceDataCalled = true
 	if c.DeviceData != nil {
@@ -99,7 +108,7 @@ func (c *MockStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID string
 func (c *MockStoreClient) GetDeviceModel(userID string) (string, error) {
 	return c.DeviceModel, nil
 }
-func (c *MockStoreClient) GetTimeInRangeData(p *AggParams, logQuery bool) (StorageIterator, error) {
+func (c *MockStoreClient) GetTimeInRangeData(p *AggParams, logQuery bool) (goComMgo.StorageIterator, error) {
 	c.GetTimeInRangeDataCall = *p
 	c.GetTimeInRangeDataCalled = true
 	if c.TimeInRangeData != nil {

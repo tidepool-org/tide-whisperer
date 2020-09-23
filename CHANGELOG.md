@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## 0.7.0 - 2020-09-16
+### Changed
+- PT-1441 Tide-Whisperer should be able to start without MongoDb
+
 ## 0.6.1 - 2020-08-04
 ### Engineering
 - PT-1446 Generate SOUP document
