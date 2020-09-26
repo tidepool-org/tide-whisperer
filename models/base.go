@@ -19,6 +19,8 @@ type Base struct {
 
 	DeviceId          string   `mapstructure:"deviceId,omitempty" pg:"device_id" json:"deviceId,omitempty"`
 	Id                string   `mapstructure:"id,omitempty" pg:"id" json:"id,omitempty"`
+	Guid              string     `mapstructure:"guid,omitempty" pg:"guid" json:"guid,omitempty"`
+
 
 	Timezone          string   `mapstructure:"timezone,omitempty" pg:"timezone" json:"timezone,omitempty"`
 	TimezoneOffset    int64    `mapstructure:"timezoneOffset,omitempty" pg:"timezone_offset" json:"timezoneOffset,omitempty"`
