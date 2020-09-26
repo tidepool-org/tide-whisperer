@@ -15,7 +15,7 @@ type Base struct {
 
 	CreatedTime       time.Time  `mapstructure:"createdTime" pg:"created_time,type:timestamptz" json:"-"`
 	ModifiedTime      time.Time  `mapstructure:"modifiedTime" pg:"modified_time,type:timestamptz" json:"-"`
-	DeviceTime        time.Time  `mapstructure:"deviceTime" pg:"device_time,type:timestamptz" json:"-"`
+	DeviceTime        time.Time  `mapstructure:"deviceTime" pg:"device_time,type:timestamptz" json:"deviceTime,omitempty"`
 
 	DeviceId          string   `mapstructure:"deviceId,omitempty" pg:"device_id" json:"deviceId,omitempty"`
 	Id                string   `mapstructure:"id,omitempty" pg:"id" json:"id,omitempty"`
@@ -28,7 +28,9 @@ type Base struct {
 	UploadId          string   `mapstructure:"uploadId,omitempty" pg:"upload_id" json:"uploadId,omitempty"`
 	UserId            string   `mapstructure:"_userId,omitempty" pg:"user_id" json:"-"`
 
-	Revision          int64   `mapstructure:"revision,omitempty" pg:"revision" json:"revision,omitempty"`
+	PayloadJson       string     `pg:"payload" json:"payload"`
+
+	Revision          int64   `mapstructure:"revision,omitempty" pg:"revision" json:"-"`
 }
 
 func (b *Base) GetType() string {
