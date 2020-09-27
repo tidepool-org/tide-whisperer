@@ -35,7 +35,7 @@ type Base struct {
 
 	CreatedTime  time.Time `mapstructure:"createdTime" pg:"created_time,type:timestamptz" json:"-"`
 	ModifiedTime time.Time `mapstructure:"modifiedTime" pg:"modified_time,type:timestamptz" json:"-"`
-	DeviceTime   time.Time      `mapstructure:"deviceTime" pg:"device_time,type:timestamptz" json:"deviceTime,omitempty"`
+	DeviceTime   time.Time      `mapstructure:"deviceTime" pg:"device_time,type:timestamptz" json:""`
 
 	DeviceId          string   `mapstructure:"deviceId,omitempty" pg:"device_id" json:"deviceId,omitempty"`
 	Id                string   `mapstructure:"id,omitempty" pg:"id" json:"id,omitempty"`

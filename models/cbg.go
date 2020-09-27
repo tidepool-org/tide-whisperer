@@ -52,6 +52,6 @@ func NewJSONCbg(cbg Cbg) JSONCbg {
 
 type JSONCbg struct {
 	CbgAlias
-	DeviceTime string `json:"device_time"`
+	DeviceTime string `json:"deviceTime"`
 }
 
