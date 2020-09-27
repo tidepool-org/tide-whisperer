@@ -20,7 +20,7 @@ func (t DeviceTime) MarshalJSON() ([]byte, error) {
 func (t *DeviceTime) UnmarshalJSON(data []byte) error {
 	var ti time.Time
 	if err := json.Unmarshal(data, &ti); err != nil {
-		fmt.Println("Time unmarshall error: ", err)
+		fmt.Println("Time unmarshall error - data: ", data)
 		return err
 	}
 	t.Time = ti
