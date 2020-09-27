@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 	"encoding/json"
+	"fmt"
 )
 
 type Model interface {
@@ -14,7 +15,17 @@ type DeviceTime struct {
 	time.Time
 }
 func (t DeviceTime) MarshalJSON() ([]byte, error) {
-	return json.Marshal(strings.Trim(t.Format(time.RFC3339), "Z"))
+	return json.Marshal(strings.Trim(t.Time.Format(time.RFC3339), "Z"))
+}
+func (t *DeviceTime) UnmarshalJSON(data []byte) error {
+	var ti time.Time
+	if err := json.Unmarshal(data, &ti); err != nil {
+		fmt.Println("Time unmarshall error: ", err)
+		return err
+	}
+	t.Time = ti
+	fmt.Println("Unmarshall time: ", ti)
+	return nil
 }
 
 type Base struct {
@@ -24,7 +35,7 @@ type Base struct {
 
 	CreatedTime       time.Time  `mapstructure:"createdTime" pg:"created_time,type:timestamptz" json:"-"`
 	ModifiedTime      time.Time  `mapstructure:"modifiedTime" pg:"modified_time,type:timestamptz" json:"-"`
-	DeviceTime        DeviceTime  `mapstructure:"deviceTime" pg:"device_time,type:time" json:"deviceTime,omitempty"`
+	DeviceTime        DeviceTime  `mapstructure:"deviceTime" pg:"device_time,type:timestamptz" json:"deviceTime,omitempty"`
 
 	DeviceId          string   `mapstructure:"deviceId,omitempty" pg:"device_id" json:"deviceId,omitempty"`
 	Id                string   `mapstructure:"id,omitempty" pg:"id" json:"id,omitempty"`
