@@ -11,13 +11,13 @@ type Model interface {
 	GetType() string
 }
 
-type DeviceTime struct {
+type Time struct {
 	time.Time
 }
-func (t DeviceTime) MarshalJSON() ([]byte, error) {
+func (t Time) MarshalJSON() ([]byte, error) {
 	return json.Marshal(strings.Trim(t.Time.Format(time.RFC3339), "Z"))
 }
-func (t *DeviceTime) UnmarshalJSON(data []byte) error {
+func (t *Time) UnmarshalJSON(data []byte) error {
 	var ti time.Time
 	if err := json.Unmarshal(data, &ti); err != nil {
 		fmt.Println("Time unmarshall error - data: ", data)
@@ -33,9 +33,9 @@ type Base struct {
 
 	Type              string     `mapstructure:"type" pg:"-" json:"type,omitempty"`
 
-	CreatedTime       time.Time  `mapstructure:"createdTime" pg:"created_time,type:timestamptz" json:"-"`
-	ModifiedTime      time.Time  `mapstructure:"modifiedTime" pg:"modified_time,type:timestamptz" json:"-"`
-	DeviceTime        DeviceTime  `mapstructure:"deviceTime" pg:"device_time,type:timestamptz" json:"deviceTime,omitempty"`
+	CreatedTime  time.Time `mapstructure:"createdTime" pg:"created_time,type:timestamptz" json:"-"`
+	ModifiedTime time.Time `mapstructure:"modifiedTime" pg:"modified_time,type:timestamptz" json:"-"`
+	DeviceTime   Time      `mapstructure:"deviceTime" pg:"device_time,type:timestamptz" json:"deviceTime,omitempty"`
 
 	DeviceId          string   `mapstructure:"deviceId,omitempty" pg:"device_id" json:"deviceId,omitempty"`
 	Id                string   `mapstructure:"id,omitempty" pg:"id" json:"id,omitempty"`
@@ -71,7 +71,7 @@ func (b Base) MarshalJSON() ([]byte, error) {
 
 		Type              string     `mapstructure:"type" pg:"-" json:"type,omitempty"`
 
-		DeviceTime        string  `mapstructure:"deviceTime" pg:"device_time,type:timestamptz" json:"deviceTime,omitempty"`
+		Time        string  `mapstructure:"deviceTime" pg:"device_time,type:timestamptz" json:"deviceTime,omitempty"`
 
 		DeviceId          string   `mapstructure:"deviceId,omitempty" pg:"device_id" json:"deviceId,omitempty"`
 		Id                string   `mapstructure:"id,omitempty" pg:"id" json:"id,omitempty"`
@@ -92,7 +92,7 @@ func (b Base) MarshalJSON() ([]byte, error) {
 	}{
 		Time: b.Time,
 		Type: b.Type,
-		DeviceTime: strings.Trim(b.DeviceTime.Format(time.RFC3339), "Z"),
+		Time: strings.Trim(b.Time.Format(time.RFC3339), "Z"),
 		DeviceId: b.DeviceId,
 		Id: b.Id,
 		Guid: b.Guid,
