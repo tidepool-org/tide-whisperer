@@ -2,8 +2,10 @@ package models
 
 import (
 	"github.com/mitchellh/mapstructure"
+	"strings"
 	"time"
 	"fmt"
+	"encoding/json"
 )
 
 type Cbg struct {
@@ -33,3 +35,23 @@ func DecodeCbg(data interface{}) (*Cbg, error) {
 		return nil, err
 	}
 }
+
+type CbgAlias Cbg
+
+func (c Cbg) MarshalJSON() ([]byte, error) {
+	return json.Marshal(NewJSONCbg(c))
+}
+
+
+func NewJSONCbg(cbg Cbg) JSONCbg {
+	return JSONCbg{
+		CbgAlias(cbg),
+		strings.Trim(cbg.DeviceTime.Format(time.RFC3339), "Z"),
+	}
+}
+
+type JSONCbg struct {
+	CbgAlias
+	DeviceTime string `json:"device_time"`
+}
+
