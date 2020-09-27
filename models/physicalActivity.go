@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"github.com/mitchellh/mapstructure"
+	"strings"
 	"time"
 	"fmt"
 )
@@ -63,4 +64,24 @@ func DecodePhysicalActivity(data interface{}) (*PhysicalActivity, error) {
 		fmt.Println("Can not create decoder: ", err)
 		return nil, nil
 	}
+}
+
+
+type PhysicalActivityAlias PhysicalActivity
+
+func (p PhysicalActivity) MarshalJSON() ([]byte, error) {
+	return json.Marshal(NewJSONPhysicalActivity(p))
+}
+
+
+func NewJSONPhysicalActivity(physicalActivity PhysicalActivity) JSONPhysicalActivity {
+	return JSONPhysicalActivity{
+		PhysicalActivityAlias(physicalActivity),
+		strings.Trim(physicalActivity.DeviceTime.Format(time.RFC3339), "Z"),
+	}
+}
+
+type JSONPhysicalActivity struct {
+	PhysicalActivityAlias
+	DeviceTime string `json:"deviceTime"`
 }

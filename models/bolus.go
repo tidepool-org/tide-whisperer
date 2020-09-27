@@ -2,8 +2,10 @@ package models
 
 import (
 	"github.com/mitchellh/mapstructure"
+	"strings"
 	"time"
 	"fmt"
+	"encoding/json"
 )
 
 type Bolus struct {
@@ -32,4 +34,23 @@ func DecodeBolus(data interface{}) (*Bolus, error) {
 		fmt.Println("Can not create decoder: ", err)
 		return nil, nil
 	}
+}
+
+type BolusAlias Bolus
+
+func (b Bolus) MarshalJSON() ([]byte, error) {
+	return json.Marshal(NewJSONBolus(b))
+}
+
+
+func NewJSONBolus(bolus Bolus) JSONBolus {
+	return JSONBolus{
+		BolusAlias(bolus),
+		strings.Trim(bolus.DeviceTime.Format(time.RFC3339), "Z"),
+	}
+}
+
+type JSONBolus struct {
+	BolusAlias
+	DeviceTime string `json:"deviceTime"`
 }

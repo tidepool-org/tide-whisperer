@@ -2,8 +2,10 @@ package models
 
 import (
 	"github.com/mitchellh/mapstructure"
+	"strings"
 	"time"
 	"fmt"
+	"encoding/json"
 )
 
 type Upload struct {
@@ -35,4 +37,23 @@ func DecodeUpload(data interface{}) (*Upload, error) {
 		fmt.Println("Can not create decoder: ", err)
 		return nil, nil
 	}
+}
+
+type UploadAlias Upload
+
+func (u Upload) MarshalJSON() ([]byte, error) {
+	return json.Marshal(NewJSONUpload(u))
+}
+
+
+func NewJSONUpload(smbg Upload) JSONUpload {
+	return JSONUpload{
+		UploadAlias(smbg),
+		strings.Trim(smbg.DeviceTime.Format(time.RFC3339), "Z"),
+	}
+}
+
+type JSONUpload struct {
+	UploadAlias
+	DeviceTime string `json:"deviceTime"`
 }

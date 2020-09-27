@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"github.com/mitchellh/mapstructure"
+	"strings"
 	"time"
 	"fmt"
 )
@@ -49,4 +50,24 @@ func DecodeDeviceEvent(data interface{}) (*DeviceEvent, error) {
 		fmt.Println("Can not create decoder: ", err)
 		return nil, nil
 	}
+}
+
+
+type DeviceEventAlias DeviceEvent
+
+func (d DeviceEvent) MarshalJSON() ([]byte, error) {
+	return json.Marshal(NewJSONDeviceEvent(d))
+}
+
+
+func NewJSONDeviceEvent(deviceEvent DeviceEvent) JSONDeviceEvent {
+	return JSONDeviceEvent{
+		DeviceEventAlias(deviceEvent),
+		strings.Trim(deviceEvent.DeviceTime.Format(time.RFC3339), "Z"),
+	}
+}
+
+type JSONDeviceEvent struct {
+	DeviceEventAlias
+	DeviceTime string `json:"deviceTime"`
 }

@@ -2,8 +2,10 @@ package models
 
 import (
 	"github.com/mitchellh/mapstructure"
+	"strings"
 	"time"
 	"fmt"
+	"encoding/json"
 )
 
 type Basal struct {
@@ -36,5 +38,24 @@ func DecodeBasal(data interface{}) (*Basal, error)  {
 		fmt.Println("Can not create decoder: ", err)
 		return nil, err
 	}
+}
+
+type BasalAlias Basal
+
+func (b Basal) MarshalJSON() ([]byte, error) {
+	return json.Marshal(NewJSONBasal(b))
+}
+
+
+func NewJSONBasal(basal Basal) JSONBasal {
+	return JSONBasal{
+		BasalAlias(basal),
+		strings.Trim(basal.DeviceTime.Format(time.RFC3339), "Z"),
+	}
+}
+
+type JSONBasal struct {
+	BasalAlias
+	DeviceTime string `json:"deviceTime"`
 }
 

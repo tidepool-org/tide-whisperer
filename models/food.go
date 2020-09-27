@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"github.com/mitchellh/mapstructure"
+	"strings"
 	"time"
 	"fmt"
 )
@@ -40,4 +41,23 @@ func DecodeFood(data interface{}) (*Food, error) {
 		fmt.Println("Can not create decoder: ", err)
 		return nil, nil
 	}
+}
+
+type FoodAlias Food
+
+func (f Food) MarshalJSON() ([]byte, error) {
+	return json.Marshal(NewJSONFood(f))
+}
+
+
+func NewJSONFood(food Food) JSONFood {
+	return JSONFood{
+		FoodAlias(food),
+		strings.Trim(food.DeviceTime.Format(time.RFC3339), "Z"),
+	}
+}
+
+type JSONFood struct {
+	FoodAlias
+	DeviceTime string `json:"deviceTime"`
 }

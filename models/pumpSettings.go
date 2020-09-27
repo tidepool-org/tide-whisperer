@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"github.com/mitchellh/mapstructure"
+	"strings"
 	"time"
 	"fmt"
 )
@@ -81,4 +82,23 @@ func DecodePumpSettings(data interface{}) (*PumpSettings, error) {
 		fmt.Println("Can not create decoder: ", err)
 		return nil, err
 	}
+}
+
+type PumpSettingsAlias PumpSettings
+
+func (p PumpSettings) MarshalJSON() ([]byte, error) {
+	return json.Marshal(NewJSONPumpSettings(p))
+}
+
+
+func NewJSONPumpSettings(pumpSettings PumpSettings) JSONPumpSettings {
+	return JSONPumpSettings{
+		PumpSettingsAlias(pumpSettings),
+		strings.Trim(pumpSettings.DeviceTime.Format(time.RFC3339), "Z"),
+	}
+}
+
+type JSONPumpSettings struct {
+	PumpSettingsAlias
+	DeviceTime string `json:"deviceTime"`
 }

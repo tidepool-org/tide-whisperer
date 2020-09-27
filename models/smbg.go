@@ -2,8 +2,10 @@ package models
 
 import (
 	"github.com/mitchellh/mapstructure"
+	"strings"
 	"time"
 	"fmt"
+	"encoding/json"
 )
 
 type Smbg struct {
@@ -32,4 +34,23 @@ func DecodeSmbg(data interface{}) (*Smbg, error) {
 		fmt.Println("Can not create decoder: ", err)
 		return nil, nil
 	}
+}
+
+type SmbgAlias Smbg
+
+func (s Smbg) MarshalJSON() ([]byte, error) {
+	return json.Marshal(NewJSONSmbg(s))
+}
+
+
+func NewJSONSmbg(smbg Smbg) JSONSmbg {
+	return JSONSmbg{
+		SmbgAlias(smbg),
+		strings.Trim(smbg.DeviceTime.Format(time.RFC3339), "Z"),
+	}
+}
+
+type JSONSmbg struct {
+	SmbgAlias
+	DeviceTime string `json:"deviceTime"`
 }

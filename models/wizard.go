@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"github.com/mitchellh/mapstructure"
+	"strings"
 	"time"
 	"fmt"
 )
@@ -43,4 +44,23 @@ func DecodeWizard(data interface{}) (*Wizard, error) {
 		fmt.Println("Can not create decoder: ", err)
 		return nil, nil
 	}
+}
+
+type WizardAlias Wizard
+
+func (w Wizard) MarshalJSON() ([]byte, error) {
+	return json.Marshal(NewJSONWizard(w))
+}
+
+
+func NewJSONWizard(wizard Wizard) JSONWizard {
+	return JSONWizard{
+		WizardAlias(wizard),
+		strings.Trim(wizard.DeviceTime.Format(time.RFC3339), "Z"),
+	}
+}
+
+type JSONWizard struct {
+	WizardAlias
+	DeviceTime string `json:"deviceTime"`
 }

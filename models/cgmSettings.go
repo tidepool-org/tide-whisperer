@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"github.com/mitchellh/mapstructure"
+	"strings"
 	"time"
 	"fmt"
 )
@@ -61,4 +62,23 @@ func DecodeCgmSettings(data interface{}) (*CgmSettings, error) {
 		fmt.Println("Can not create decoder: ", err)
 		return nil, nil
 	}
+}
+
+type CgmSettingsAlias CgmSettings
+
+func (c CgmSettings) MarshalJSON() ([]byte, error) {
+	return json.Marshal(NewJSONCgmSettings(c))
+}
+
+
+func NewJSONCgmSettings(cgbmSettings CgmSettings) JSONCgmSettings {
+	return JSONCgmSettings{
+		CgmSettingsAlias(cgbmSettings),
+		strings.Trim(cgbmSettings.DeviceTime.Format(time.RFC3339), "Z"),
+	}
+}
+
+type JSONCgmSettings struct {
+	CgmSettingsAlias
+	DeviceTime string `json:"deviceTime"`
 }
