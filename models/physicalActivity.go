@@ -22,6 +22,8 @@ type PhysicalActivity struct {
 	Name           string                         `mapstructure:"name" pg:"name" json:"name,omitempty"`
 }
 
+
+
 func DecodePhysicalActivity(data interface{}) (*PhysicalActivity, error) {
 	var physicalActivity = PhysicalActivity{}
 

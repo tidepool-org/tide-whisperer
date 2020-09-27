@@ -66,7 +66,7 @@ func NewTimeseriesStoreClient() *TimeseriesStoreClient {
 
 
 	url := fmt.Sprintf("postgres://%s:%s@%s:5432/%s?sslmode=allow", user, password, host, db_name)
-	//url := fmt.Sprintf("postgres://%s:%s@%s:5432/%s?sslmode=disable", user, password, host, db_name)
+	//url = fmt.Sprintf("postgres://%s:%s@%s:5432/%s?sslmode=disable", user, password, host, db_name)
 	opt, err := pg.ParseURL(url)
 	if err != nil {
 		panic(err)

@@ -1,9 +1,9 @@
 package models
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
-	"encoding/json"
 )
 
 type Model interface {
@@ -45,7 +45,7 @@ func (b *Base) GetUserId() string {
 	return b.UserId
 }
 
-func (b *Base) MarshalJSON() ([]byte, error) {
+func (b Base) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		Time              time.Time  `mapstructure:"time" pg:"time,type:timestamptz" json:"time,omitempty"`
 

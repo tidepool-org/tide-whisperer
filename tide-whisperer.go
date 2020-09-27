@@ -3,11 +3,15 @@ package main
 import (
 	"crypto/rand"
 	"crypto/tls"
+	"github.com/tidepool-org/go-common/clients/hakken"
+	"github.com/tidepool-org/go-common/clients/shoreline"
+
+	//"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/tidepool-org/go-common/clients/hakken"
-	"github.com/tidepool-org/go-common/clients/shoreline"
+	//"github.com/tidepool-org/go-common/clients/hakken"
+	//"github.com/tidepool-org/go-common/clients/shoreline"
 	"log"
 	"net/http"
 	"os"
@@ -166,6 +170,7 @@ func main() {
 		return !(perms["root"] == nil && perms["view"] == nil)
 	}
 
+
 	//log error detail and write as application/json
 	jsonError := func(res http.ResponseWriter, err detailedError, startedAt time.Time) {
 
@@ -179,10 +184,10 @@ func main() {
 		res.WriteHeader(err.Status)
 		res.Write(jsonErr)
 	}
-
 	if err := shorelineClient.Start(); err != nil {
 		log.Fatal(err)
 	}
+
 
 	storage := store.NewTimeseriesStoreClient()
 	defer storage.Disconnect()
@@ -224,7 +229,6 @@ func main() {
 			jsonError(res, errorInvalidParameters, start)
 			return
 		}
-
 		var td *shoreline.TokenData
 		if sessionToken := req.Header.Get("x-tidepool-session-token"); sessionToken != "" {
 			td = shorelineClient.CheckToken(sessionToken)
@@ -241,6 +245,7 @@ func main() {
 			jsonError(res, errorNoViewPermission, start)
 			return
 		}
+
 
 		requestID := NewRequestID()
 		queryStart := time.Now()
