@@ -1,13 +1,20 @@
 package models
 
 import (
-	"encoding/json"
 	"strings"
 	"time"
+	"encoding/json"
 )
 
 type Model interface {
 	GetType() string
+}
+
+type DeviceTime struct {
+	time.Time
+}
+func (t DeviceTime) MarshalJSON() ([]byte, error) {
+	return json.Marshal(strings.Trim(t.Time.Format(time.RFC3339), "Z"))
 }
 
 type Base struct {
@@ -17,7 +24,7 @@ type Base struct {
 
 	CreatedTime       time.Time  `mapstructure:"createdTime" pg:"created_time,type:timestamptz" json:"-"`
 	ModifiedTime      time.Time  `mapstructure:"modifiedTime" pg:"modified_time,type:timestamptz" json:"-"`
-	DeviceTime        time.Time  `mapstructure:"deviceTime" pg:"device_time,type:timestamptz" json:"deviceTime,omitempty"`
+	DeviceTime        DeviceTime  `mapstructure:"deviceTime" pg:"device_time,type:timestamptz" json:"deviceTime,omitempty"`
 
 	DeviceId          string   `mapstructure:"deviceId,omitempty" pg:"device_id" json:"deviceId,omitempty"`
 	Id                string   `mapstructure:"id,omitempty" pg:"id" json:"id,omitempty"`
@@ -45,6 +52,8 @@ func (b *Base) GetUserId() string {
 	return b.UserId
 }
 
+
+/*
 func (b Base) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		Time              time.Time  `mapstructure:"time" pg:"time,type:timestamptz" json:"time,omitempty"`
@@ -85,3 +94,4 @@ func (b Base) MarshalJSON() ([]byte, error) {
 		Revision: b.Revision,
 	})
 }
+ */
