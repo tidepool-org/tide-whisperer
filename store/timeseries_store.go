@@ -325,7 +325,7 @@ func (t *TimeseriesStoreClient) GetDeviceData(p *Params) (StorageIterator, error
 		}
 		resultErr := query.Select()
 		if resultErr != nil {
-			fmt.Println("Query error: ", err)
+			fmt.Println("Query error: ", resultErr)
 			err = resultErr
 			break
 		}
