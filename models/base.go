@@ -14,7 +14,7 @@ type DeviceTime struct {
 	time.Time
 }
 func (t DeviceTime) MarshalJSON() ([]byte, error) {
-	return json.Marshal(strings.Trim(t.Time.Format(time.RFC3339), "Z"))
+	return json.Marshal(strings.Trim(t.Format(time.RFC3339), "Z"))
 }
 
 type Base struct {
