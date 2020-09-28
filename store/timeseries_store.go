@@ -308,7 +308,7 @@ func (t *TimeseriesStoreClient) GetDeviceData(p *Params) (StorageIterator, error
 		count := 0
 		fmt.Println("Type:", theType)
 		model, err := t.getModelType(theType);
-		if !(theType == "cbg" || theType == "upload" || theType =="smbg" || theType == "bolus" || theType == "basal") {
+		if !(theType == "cbg" || theType == "upload" || theType =="smbg" || theType == "bolus" || theType == "basal" || theType == "wizard") {
 			continue
 		}
 		if err != nil  || model == nil{
@@ -349,9 +349,6 @@ func (t *TimeseriesStoreClient) GetDeviceData(p *Params) (StorageIterator, error
 					}
 					latest.results = append(latest.results, item.Interface())
 					count = count + 1
-					if count >= 10 {
-						break
-					}
 				}
 			}
 		}
