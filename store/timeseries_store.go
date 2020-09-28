@@ -346,6 +346,9 @@ func (t *TimeseriesStoreClient) GetDeviceData(p *Params) (StorageIterator, error
 					}
 					latest.results = append(latest.results, item.Interface())
 					count = count + 1
+					if count >= 10 {
+						break
+					}
 				}
 			}
 		}
