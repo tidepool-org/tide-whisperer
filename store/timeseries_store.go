@@ -308,6 +308,9 @@ func (t *TimeseriesStoreClient) GetDeviceData(p *Params) (StorageIterator, error
 		count := 0
 		fmt.Println("Type:", theType)
 		model, err := t.getModelType(theType);
+		if !(theType == "cbg" || theType == "upload") {
+			continue
+		}
 		if err != nil  || model == nil{
 			continue
 			//return nil, nil
