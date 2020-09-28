@@ -13,7 +13,7 @@ type Smbg struct {
 
 	Units          string    `mapstructure:"units" pg:"units" json:"units,omitempty"`
 
-	value          float64    `mapstructure:"value" pg:"value" json:"value,omitempty"`
+	Value          float64    `mapstructure:"value" pg:"value" json:"value,omitempty"`
 }
 
 func DecodeSmbg(data interface{}) (*Smbg, error) {
