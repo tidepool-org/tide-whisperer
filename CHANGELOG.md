@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## 0.7.1 - 2020-09-25
+### Fixed
+- Fix S3 deployment
+
 ## 0.7.0 - 2020-09-16
 ### Changed
 - PT-1441 Tide-Whisperer should be able to start without MongoDb

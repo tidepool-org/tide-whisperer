@@ -28,6 +28,7 @@ install:
 deploy:
   # Deploy dist
   - provider: s3
+    edge: true
     on:
       tags: true
     # You can refer to environment variables from Travis repo settings!
@@ -46,6 +47,7 @@ deploy:
     cache_control: "max-age=21600"
   # Deploy doc
   - provider: s3
+    edge: true
     on:
       tags: true
       condition: $BUILD_OPENAPI_DOC=true
@@ -59,6 +61,7 @@ deploy:
     cache_control: "max-age=21600"
   # Deploy SOUP
   - provider: s3
+    edge: true
     on:
       tags: true
       condition: $BUILD_SOUP = true
