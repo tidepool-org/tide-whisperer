@@ -51,7 +51,7 @@ type Base struct {
 	UploadId          string   `mapstructure:"uploadId,omitempty" pg:"upload_id" json:"uploadId,omitempty"`
 	UserId            string   `mapstructure:"_userId,omitempty" pg:"user_id" json:"-"`
 
-	Payload        map[string]interface{}      `mapstructure:"payload" pg:"payload" json:"uploadId,omitempty"`
+	Payload        map[string]interface{}      `mapstructure:"payload" pg:"payload" json:"payload,omitempty"`
 	Origin         map[string]interface{}      `mapstructure:"origin" pg:"origin" json:"-"`
 
 	Active            bool       `mapstructure:"_active" pg:"active"`
