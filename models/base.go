@@ -54,7 +54,7 @@ type Base struct {
 	Payload        map[string]interface{}      `mapstructure:"payload" pg:"payload" json:"payload,omitempty"`
 	Origin         map[string]interface{}      `mapstructure:"origin" pg:"origin" json:"-"`
 
-	Active            bool       `mapstructure:"_active" pg:"active"`
+	Active            bool       `mapstructure:"_active" pg:"active" json:"-"`
 
 	Revision          int64   `mapstructure:"revision,omitempty" pg:"revision" json:"revision"`
 }
