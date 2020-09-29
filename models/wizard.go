@@ -14,8 +14,7 @@ type Wizard struct {
 	Bolus             string                         `mapstructure:"bolus" pg:"bolus" json:"bolus,omitempty"`
 	Units             string                         `mapstructure:"units" pg:"units" json:"units,omitempty"`
 
-	RecommendedMap    map[string]interface{}         `mapstructure:"recommended" pg:"-"`
-	RecommendedJson   string                         `pg:"recommended" json:"recommended,omitempty"`
+	Recommended    map[string]interface{}         `mapstructure:"recommended" pg:"recommended" json:"recommended"`
 
 }
 
@@ -28,13 +27,6 @@ func DecodeWizard(data interface{}) (*Wizard, error) {
 	   } ); err == nil {
 		if err := decoder.Decode(data); err != nil {
 			//fmt.Println("Error decoding wizard: ", err)
-			return nil, err
-		}
-
-		recommendedByteArray, err := json.Marshal(wizard.RecommendedMap)
-		wizard.RecommendedJson = string(recommendedByteArray)
-		if err != nil {
-			fmt.Println("Error encoding recommended json: ", err)
 			return nil, err
 		}
 

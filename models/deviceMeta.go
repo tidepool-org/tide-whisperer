@@ -15,9 +15,7 @@ type DeviceMeta struct {
 	SubType            string                        `mapstructure:"subType" pg:"sub_type" json:"subType,omitempty"`
 	Duration           int64                         `mapstructure:"duration" pg:"duration" json:"duration,omitempty"`
 
-	ReasonMap    map[string]interface{}              `mapstructure:"reason" pg:"-"`
-	ReasonJson   string                              `pg:"reason" json:"reason,omitempty"`
-
+	Reason    map[string]interface{}              `mapstructure:"reason" pg:"reason" json:"reason"`
 }
 
 func DecodeDeviceMeta(data interface{}) (*DeviceMeta, error) {
@@ -29,13 +27,6 @@ func DecodeDeviceMeta(data interface{}) (*DeviceMeta, error) {
 	   } ); err == nil {
 		if err := decoder.Decode(data); err != nil {
 			//fmt.Println("Error decoding device meta: ", err)
-			return nil, err
-		}
-
-		reasonByteArray, err := json.Marshal(deviceMeta.ReasonMap)
-		deviceMeta.ReasonJson = string(reasonByteArray)
-		if err != nil {
-			fmt.Println("Error encoding reason json: ", err)
 			return nil, err
 		}
 

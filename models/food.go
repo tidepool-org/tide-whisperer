@@ -11,9 +11,7 @@ import (
 type Food struct {
 	Base                                           `mapstructure:",squash"`
 
-	NutritionMap    map[string]interface{}         `mapstructure:"nutrition" pg:"-"`
-	NutritionJson   string                         `pg:"nutrition" json:"nutrition"`
-
+        Nutrition    map[string]interface{}         `mapstructure:"nutrition" pg:"nutrition" json:"nutrition"`
 }
 
 func DecodeFood(data interface{}) (*Food, error) {

@@ -33,6 +33,7 @@ type Base struct {
 
 	Type              string     `mapstructure:"type" pg:"-" json:"type,omitempty"`
 
+        ArchivedTime      time.Time  `mapstructure:"archivedTime" pg:"archived_time type:timestamptz" json:"-"`
 	CreatedTime  time.Time `mapstructure:"createdTime" pg:"created_time,type:timestamptz" json:"-"`
 	ModifiedTime time.Time `mapstructure:"modifiedTime" pg:"modified_time,type:timestamptz" json:"-"`
 	DeviceTime   time.Time      `mapstructure:"deviceTime" pg:"device_time,type:timestamptz" json:"-"`
@@ -50,9 +51,16 @@ type Base struct {
 	UploadId          string   `mapstructure:"uploadId,omitempty" pg:"upload_id" json:"uploadId,omitempty"`
 	UserId            string   `mapstructure:"_userId,omitempty" pg:"user_id" json:"-"`
 
-	PayloadJson       string     `pg:"payload" json:"payload"`
+	Payload        map[string]interface{}      `mapstructure:"payload" pg:"payload" json:"uploadId,omitempty"`
+	Origin         map[string]interface{}      `mapstructure:"origin" pg:"origin" json:"-"`
+
+	Active            bool       `mapstructure:"_active" pg:"active"`
 
 	Revision          int64   `mapstructure:"revision,omitempty" pg:"revision" json:"revision"`
+}
+
+func (b *Base) DecodeBase() error {
+        return nil
 }
 
 func (b *Base) GetType() string {

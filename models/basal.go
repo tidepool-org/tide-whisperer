@@ -17,7 +17,6 @@ type Basal struct {
 	Rate              float64  `mapstructure:"rate,omitempty" pg:"rate" json:"rate,omitempty"`
 	Percent           float64  `mapstructure:"percent,omitempty" pg:"percent" json:"percent,omitempty"`
 	ScheduleName      string   `mapstructure:"scheduleName,omitempty" pg:"schedule_name" json:"scheduleName,omitempty"`
-	Active            bool    `mapstructure:"_active" pg:"-" json:"-"`
 }
 
 func DecodeBasal(data interface{}) (*Basal, error)  {

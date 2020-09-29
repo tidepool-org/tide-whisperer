@@ -18,10 +18,9 @@ type DeviceEvent struct {
 
 	duration     int64                           `mapstructure:"duration" pg:"duration" json:"duration,omitempty"`
 
-	ReasonMap    map[string]interface{}          `mapstructure:"reason" pg:"-"`
-	ReasonJson   string                          `pg:"reason" json:"reason,omitempty"`
+	Reason       map[string]interface{}          `mapstructure:"reason" pg:"reason" json:"reason,omitempty"`
 
-	PrimeTarget  string                          `mapstructure:"primeTarget" pg:"prime_target" json:"primeTarget"`
+	PrimeTarget  string                          `mapstructure:"primeTarget" pg:"prime_target" json:"primeTarget,omitempty"`
 	Volume       float64                         `mapstructure:"volume" pg:"volume" json:"volume,omitempty"`
 }
 
@@ -34,13 +33,6 @@ func DecodeDeviceEvent(data interface{}) (*DeviceEvent, error) {
 	   } ); err == nil {
 		if err := decoder.Decode(data); err != nil {
 			//fmt.Println("Error decoding device event: ", err)
-			return nil, err
-		}
-
-		nutritionByteArray, err := json.Marshal(deviceEvent.ReasonMap)
-		deviceEvent.ReasonJson = string(nutritionByteArray)
-		if err != nil {
-			fmt.Println("Error encoding nutrition json: ", err)
 			return nil, err
 		}
 
