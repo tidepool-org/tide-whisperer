@@ -2,3 +2,10 @@ language: go
 
 go:
  - 1.11.4
+
+before_install:
+  npm install -g snyk
+
+script:
+  - snyk test --dev --org=tidepool
+  - snyk monitor --org=tidepool

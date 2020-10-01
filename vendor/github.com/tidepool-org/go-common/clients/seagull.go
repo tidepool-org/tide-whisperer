@@ -28,7 +28,7 @@ type (
 		GetCollection(userID, collectionName, token string, v interface{}) error
 	}
 
-	seagullClient struct {
+	SeagullClient struct {
 		httpClient *http.Client    // store a reference to the http client so we can reuse it
 		hostGetter disc.HostGetter // The getter that provides the host to talk to for the client
 	}
@@ -58,20 +58,20 @@ func (b *seagullClientBuilder) WithHostGetter(hostGetter disc.HostGetter) *seagu
 	return b
 }
 
-func (b *seagullClientBuilder) Build() *seagullClient {
+func (b *seagullClientBuilder) Build() *SeagullClient {
 	if b.httpClient == nil {
 		panic("seagullClient requires an httpClient to be set")
 	}
 	if b.hostGetter == nil {
 		panic("seagullClient requires a hostGetter to be set")
 	}
-	return &seagullClient{
+	return &SeagullClient{
 		httpClient: b.httpClient,
 		hostGetter: b.hostGetter,
 	}
 }
 
-func (client *seagullClient) GetPrivatePair(userID, hashName, token string) *PrivatePair {
+func (client *SeagullClient) GetPrivatePair(userID, hashName, token string) *PrivatePair {
 	host := client.getHost()
 	if host == nil {
 		return nil
@@ -102,7 +102,7 @@ func (client *seagullClient) GetPrivatePair(userID, hashName, token string) *Pri
 	return &retVal
 }
 
-func (client *seagullClient) GetCollection(userID, collectionName, token string, v interface{}) error {
+func (client *SeagullClient) GetCollection(userID, collectionName, token string, v interface{}) error {
 	host := client.getHost()
 	if host == nil {
 		return nil
@@ -112,7 +112,6 @@ func (client *seagullClient) GetCollection(userID, collectionName, token string,
 	req, _ := http.NewRequest("GET", host.String(), nil)
 	req.Header.Add("x-tidepool-session-token", token)
 
-	log.Println(req)
 	res, err := client.httpClient.Do(req)
 	if err != nil {
 		log.Printf("Problem when looking up collection for userID[%s]. %s", userID, err)
@@ -136,7 +135,7 @@ func (client *seagullClient) GetCollection(userID, collectionName, token string,
 
 }
 
-func (client *seagullClient) getHost() *url.URL {
+func (client *SeagullClient) getHost() *url.URL {
 	if hostArr := client.hostGetter.HostGet(); len(hostArr) > 0 {
 		cpy := new(url.URL)
 		*cpy = hostArr[0]

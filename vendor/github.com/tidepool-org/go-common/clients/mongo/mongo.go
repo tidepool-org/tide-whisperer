@@ -2,8 +2,8 @@ package mongo
 
 import (
 	"crypto/tls"
-	"os"
 	"net"
+	"os"
 	"time"
 
 	"github.com/globalsign/mgo"
@@ -14,16 +14,16 @@ import (
 type Config struct {
 	ConnectionString string           `json:"connectionString"`
 	Timeout          *jepson.Duration `json:"timeout"`
-	Scheme           string           `json:"scheme"`
-	User             string           `json:"user"`
-	Password         string           `json:"password"`
-	Database         string           `json:"database"`
-	Ssl              bool             `json:"ssl"`
-	Hosts            string           `json:"hosts"`
-	OptParams        string           `json:"optParams"`
+	Scheme           string           `json:"scheme" envconfig:"TIDEPOOL_STORE_SCHEME" default:"mongodb"`
+	User             string           `json:"user" envconfig:"TIDEPOOL_STORE_USERNAME" required:"true"`
+	Password         string           `json:"password" envconfig:"TIDEPOOL_STORE_PASSWORD" required:"true"`
+	Database         string           `json:"database" envconfig:"TIDEPOOL_STORE_DATABASE" required:"true"`
+	Ssl              bool             `json:"ssl" envconfig:"TIDEPOOL_STORE_TLS" default:"true"`
+	Hosts            string           `json:"hosts" envconfig:"TIDEPOOL_STORE_ADDRESSES" required:"true"`
+	OptParams        string           `json:"optParams" envconfig:"TIDEPOOL_STORE_OPT_PARAMS" default:"`
 }
 
-func(config *Config) FromEnv() {
+func (config *Config) FromEnv() {
 	config.Scheme, _ = os.LookupEnv("TIDEPOOL_STORE_SCHEME")
 	config.Hosts, _ = os.LookupEnv("TIDEPOOL_STORE_ADDRESSES")
 	config.User, _ = os.LookupEnv("TIDEPOOL_STORE_USERNAME")
@@ -44,10 +44,10 @@ func (config *Config) ToConnectionString() (string, error) {
 
 	var cs string
 	if config.Scheme != "" {
-	  cs = config.Scheme + "://"
+		cs = config.Scheme + "://"
 	} else {
-	  cs = "mongodb://"
-        }
+		cs = "mongodb://"
+	}
 
 	if config.User != "" {
 		cs += config.User
@@ -106,4 +106,3 @@ func Connect(config *Config) (*mgo.Session, error) {
 	}
 	return mgo.DialWithInfo(dialInfo)
 }
-
