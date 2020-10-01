@@ -33,7 +33,7 @@ type (
 		SetPermissions(userID, groupID string, permissions Permissions) (Permissions, error)
 	}
 
-	gatekeeperClient struct {
+	GatekeeperClient struct {
 		httpClient    *http.Client    // store a reference to the http client so we can reuse it
 		hostGetter    disc.HostGetter // The getter that provides the host to talk to for the client
 		tokenProvider TokenProvider   // An object that provides tokens for communicating with gatekeeper
@@ -73,7 +73,7 @@ func (b *gatekeeperClientBuilder) WithTokenProvider(tokenProvider TokenProvider)
 	return b
 }
 
-func (b *gatekeeperClientBuilder) Build() *gatekeeperClient {
+func (b *gatekeeperClientBuilder) Build() *GatekeeperClient {
 	if b.hostGetter == nil {
 		panic("gatekeeperClient requires a hostGetter to be set")
 	}
@@ -85,14 +85,14 @@ func (b *gatekeeperClientBuilder) Build() *gatekeeperClient {
 		b.httpClient = http.DefaultClient
 	}
 
-	return &gatekeeperClient{
+	return &GatekeeperClient{
 		httpClient:    b.httpClient,
 		hostGetter:    b.hostGetter,
 		tokenProvider: b.tokenProvider,
 	}
 }
 
-func (client *gatekeeperClient) UserInGroup(userID, groupID string) (Permissions, error) {
+func (client *GatekeeperClient) UserInGroup(userID, groupID string) (Permissions, error) {
 	host := client.getHost()
 	if host == nil {
 		return nil, errors.New("No known gatekeeper hosts")
@@ -122,7 +122,7 @@ func (client *gatekeeperClient) UserInGroup(userID, groupID string) (Permissions
 	}
 }
 
-func (client *gatekeeperClient) UsersInGroup(groupID string) (UsersPermissions, error) {
+func (client *GatekeeperClient) UsersInGroup(groupID string) (UsersPermissions, error) {
 	host := client.getHost()
 	if host == nil {
 		return nil, errors.New("No known gatekeeper hosts")
@@ -152,7 +152,7 @@ func (client *gatekeeperClient) UsersInGroup(groupID string) (UsersPermissions, 
 	}
 }
 
-func (client *gatekeeperClient) SetPermissions(userID, groupID string, permissions Permissions) (Permissions, error) {
+func (client *GatekeeperClient) SetPermissions(userID, groupID string, permissions Permissions) (Permissions, error) {
 	host := client.getHost()
 	if host == nil {
 		return nil, errors.New("No known gatekeeper hosts")
@@ -188,7 +188,7 @@ func (client *gatekeeperClient) SetPermissions(userID, groupID string, permissio
 	}
 }
 
-func (client *gatekeeperClient) getHost() *url.URL {
+func (client *GatekeeperClient) getHost() *url.URL {
 	if hostArr := client.hostGetter.HostGet(); len(hostArr) > 0 {
 		cpy := new(url.URL)
 		*cpy = hostArr[0]
