@@ -21,7 +21,7 @@ type PumpSettings struct {
 
 	InsulinSensitivities   map[string]interface{}      `mapstructure:"insulinSensitivities" pg:"insulin_sensitivities" json:"insulinSensitivities,omitempty"`
 
-	units                interface{}      `mapstructure:"units" pg:"units" json:"units,omitempty"`
+	Units                interface{}      `mapstructure:"units" pg:"units" json:"units,omitempty"`
 
 	Manufacturers        []string                     `mapstructure:"manufacturers" pg:"manufacturers,array" json:"manufacturers,omitempty"`
 	Model                string                       `mapstructure:"model" pg:"model" json:"model,omitempty"`
