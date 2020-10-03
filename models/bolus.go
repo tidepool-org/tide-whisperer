@@ -11,7 +11,7 @@ import (
 type Bolus struct {
 	Base                    `mapstructure:",squash"`
 
-	Normal         float64   `mapstructure:"normal" pg:"normal" json:"normal,omitempty"`
+	Normal         float64   `mapstructure:"normal" pg:"normal" json:"normal"`
 	ExpectedNormal         float64   `mapstructure:"expectedNormal" pg:"expected_normal" json:"expectedNormal,omitempty"`
 
 	Duration                 float64   `mapstructure:"duration" pg:"duration" json:"duration,omitempty"`
