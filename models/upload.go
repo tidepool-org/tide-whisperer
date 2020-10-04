@@ -18,7 +18,7 @@ type Upload struct {
 	DeviceModel          string    `mapstructure:"deviceModel" pg:"device_model" json:"deviceModel,omitempty"`
 	DeviceSerialNumber string `mapstructure:"deviceSerialNumber" pg:"device_serial_number" json:"deviceSerialNumber,omitempty"`
 
-	DeviceTags           map[string]interface{}      `mapstructure:"deviceTags" pg:"device_tags" json:"deviceTags,omitempty"`
+	DeviceTags           []string      `mapstructure:"deviceTags" pg:"device_tags,array" json:"deviceTags,omitempty"`
 
 	State          string    `mapstructure:"_state" pg:"state" json:"_state,omitempty"`
 	Version        string    `mapstructure:"version" pg:"version" json:"version,omitempty"`
