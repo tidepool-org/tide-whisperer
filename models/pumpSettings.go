@@ -26,6 +26,8 @@ type PumpSettings struct {
 	Manufacturers        []string                     `mapstructure:"manufacturers" pg:"manufacturers,array" json:"manufacturers,omitempty"`
 	Model                string                       `mapstructure:"model" pg:"model" json:"model,omitempty"`
 	SerialNumber         string                       `mapstructure:"serialNumber" pg:"serial_number" json:"serialNumber,omitempty"`
+
+	DeviceTags           map[string]interface{}      `mapstructure:"deviceTags" pg:"device_tags" json:"deviceTags,omitempty"`
 }
 
 func DecodePumpSettings(data interface{}) (*PumpSettings, error) {
