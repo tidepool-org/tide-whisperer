@@ -16,6 +16,16 @@ type Wizard struct {
 
 	Recommended    map[string]interface{}         `mapstructure:"recommended" pg:"recommended" json:"recommended"`
 
+	BgInput           float64                         `mapstructure:"bgInput" pg:"bg_input,notnull" json:"bgInput,omitempty"`
+	BgTarget          map[string]interface{}         `mapstructure:"bgTarget" pg:"bg_target" json:"bgTarget"`
+
+	CarbInput         int64                          `mapstructure:"carbInput" pg:"carb_input,notnull" json:"carbInput,omitempty"`
+	InsulinCarbRatio  int64                          `mapstructure:"insulinCarbRatio" pg:"insulin_carb_ratio,notnull" json:"insulinCarbRatio,omitempty"`
+
+	InsulinOnBoard    float64                        `mapstructure:"insulinOnBoard" pg:"insulin_on_board,notnull" json:"insulinOnBoard,omitempty"`
+	InsulinSensitivity    float64                    `mapstructure:"insulinSensitivity" pg:"insulin_sensitivity,notnull" json:"insulinSensitivity,omitempty"`
+
+
 }
 
 func DecodeWizard(data interface{}) (*Wizard, error) {
