@@ -53,7 +53,7 @@ github.com/gorilla/mux
 github.com/gorilla/pat
 # github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af
 github.com/jmespath/go-jmespath
-# github.com/klauspost/compress v1.11.0
+# github.com/klauspost/compress v1.11.1
 ## explicit
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
@@ -131,7 +131,7 @@ go.mongodb.org/mongo-driver/x/mongo/driver/session
 go.mongodb.org/mongo-driver/x/mongo/driver/topology
 go.mongodb.org/mongo-driver/x/mongo/driver/uuid
 go.mongodb.org/mongo-driver/x/mongo/driver/wiremessage
-# golang.org/x/crypto v0.0.0-20200930160638-afb6bcd081ae
+# golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0
 ## explicit
 golang.org/x/crypto/ocsp
 golang.org/x/crypto/pbkdf2
