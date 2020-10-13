@@ -53,6 +53,7 @@ type Base struct {
 
 	Payload        map[string]interface{}      `mapstructure:"payload" pg:"payload" json:"payload,omitempty"`
 	Origin         map[string]interface{}      `mapstructure:"origin" pg:"origin" json:"-"`
+	Annotations    []interface{}      `mapstructure:"annotations" pg:"annotations" json:"annotations,omitempty"`
 
 	Active            bool       `mapstructure:"_active" pg:"active" json:"-"`
 
