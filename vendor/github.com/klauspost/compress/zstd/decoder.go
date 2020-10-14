@@ -66,7 +66,7 @@ var (
 // A Decoder can be used in two modes:
 //
 // 1) As a stream, or
-// 2) For stateless decoding using DecodeAll.
+// 2) For stateless decoding using DecodeAll or DecodeBuffer.
 //
 // Only a single stream can be decoded concurrently, but the same decoder
 // can run multiple concurrent stateless decodes. It is even possible to
@@ -169,12 +169,7 @@ func (d *Decoder) Reset(r io.Reader) error {
 			println("*bytes.Buffer detected, doing sync decode, len:", bb.Len())
 		}
 		b := bb.Bytes()
-		var dst []byte
-		if cap(d.current.b) > 0 {
-			dst = d.current.b
-		}
-
-		dst, err := d.DecodeAll(b, dst[:0])
+		dst, err := d.DecodeAll(b, nil)
 		if err == nil {
 			err = io.EOF
 		}
@@ -320,7 +315,7 @@ func (d *Decoder) DecodeAll(input, dst []byte) ([]byte, error) {
 			if size > 1<<20 {
 				size = 1 << 20
 			}
-			dst = make([]byte, 0, size)
+			dst = make([]byte, 0, frame.WindowSize)
 		}
 
 		dst, err = frame.runDecoder(dst, block)
