@@ -16,11 +16,11 @@ import (
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/google/uuid"
 	"github.com/gorilla/pat"
+	"github.com/kelseyhightower/envconfig"
 
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
 	"github.com/tidepool-org/go-common/clients/disc"
-	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/shoreline"
 
@@ -36,10 +36,12 @@ type (
 	// Config holds the configuration for the `tide-whisperer` service
 	Config struct {
 		clients.Config
-		Auth                *auth.Config        `json:"auth"`
-		Service             disc.ServiceListing `json:"service"`
-		Mongo               mongo.Config        `json:"mongo"`
-		store.SchemaVersion `json:"schemaVersion"`
+		Auth                    *auth.Config        `json:"auth"`
+		Service                 disc.ServiceListing `json:"service"`
+		Mongo                   mongo.Config        `json:"mongo"`
+		AuthClientAddress       string              `envconfig:"TIDEPOOL_AUTH_CLIENT_ADDRESS" default:"http://shoreline:9107"`
+		PermissionClientAddress string              `envconfig:"TIDEPOOL_PERMISSION_CLIENT_ADDRESS" default:"http://gatekeeper:9123"`
+		store.SchemaVersion     `json:"schemaVersion"`
 	}
 
 	// so we can wrap and marshal the detailed error
@@ -94,6 +96,11 @@ func main() {
 	log.SetPrefix(dataAPIPrefix)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
+	err := envconfig.Process("", &config)
+	if err != nil {
+		log.Fatal("could not read env")
+	}
+
 	if err := common.LoadEnvironmentConfig(
 		[]string{"TIDEPOOL_TIDE_WHISPERER_SERVICE", "TIDEPOOL_TIDE_WHISPERER_ENV"},
 		&config,
@@ -123,31 +130,14 @@ func main() {
 		log.Fatal(dataAPIPrefix, err)
 	}
 
-	hakkenClient := hakken.NewHakkenBuilder().
-		WithConfig(&config.HakkenConfig).
-		Build()
-
-	if !config.HakkenConfig.SkipHakken {
-		if err := hakkenClient.Start(); err != nil {
-			log.Fatal(dataAPIPrefix, err)
-		}
-		defer func() {
-			if err := hakkenClient.Close(); err != nil {
-				log.Panic(dataAPIPrefix, "Error closing hakkenClient, panicing to get stacks: ", err)
-			}
-		}()
-	} else {
-		log.Print("skipping hakken service")
-	}
-
 	shorelineClient := shoreline.NewShorelineClientBuilder().
-		WithHostGetter(config.ShorelineConfig.ToHostGetter(hakkenClient)).
+		WithHostGetter(disc.NewStaticHostGetterFromString(config.AuthClientAddress)).
 		WithHttpClient(httpClient).
 		WithConfig(&config.ShorelineConfig.ShorelineClientConfig).
 		Build()
 
 	gatekeeperClient := clients.NewGatekeeperClientBuilder().
-		WithHostGetter(config.GatekeeperConfig.ToHostGetter(hakkenClient)).
+		WithHostGetter(disc.NewStaticHostGetterFromString(config.PermissionClientAddress)).
 		WithHttpClient(httpClient).
 		WithTokenProvider(shorelineClient).
 		Build()
@@ -390,14 +380,12 @@ func main() {
 	if err := start(); err != nil {
 		log.Fatal(dataAPIPrefix, err)
 	}
-	hakkenClient.Publish(&config.Service)
 
 	signals := make(chan os.Signal, 40)
 	signal.Notify(signals)
 	go func() {
 		for {
 			sig := <-signals
-			log.Printf(dataAPIPrefix+" Got signal [%s]", sig)
 
 			if sig == syscall.SIGINT || sig == syscall.SIGTERM {
 				server.Close()
