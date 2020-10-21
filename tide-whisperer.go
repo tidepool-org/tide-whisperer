@@ -397,9 +397,9 @@ func main() {
 	go func() {
 		for {
 			sig := <-signals
-			log.Printf(dataAPIPrefix+" Got signal [%s]", sig)
 
 			if sig == syscall.SIGINT || sig == syscall.SIGTERM {
+				log.Printf(dataAPIPrefix+" Got signal [%s]", sig)
 				server.Close()
 				done <- true
 			}
