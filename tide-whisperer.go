@@ -392,17 +392,16 @@ func main() {
 	}
 	hakkenClient.Publish(&config.Service)
 
-	signals := make(chan os.Signal, 40)
-	signal.Notify(signals)
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+
 	go func() {
 		for {
 			sig := <-signals
 
-			if sig == syscall.SIGINT || sig == syscall.SIGTERM {
-				log.Printf(dataAPIPrefix+" Got signal [%s]", sig)
-				server.Close()
-				done <- true
-			}
+			log.Printf(dataAPIPrefix+" Got signal [%s]", sig)
+			server.Close()
+			done <- true
 		}
 	}()
 
