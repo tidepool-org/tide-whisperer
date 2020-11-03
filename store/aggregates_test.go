@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
@@ -93,13 +94,13 @@ func TestStore_GetTimeInRangeData(t *testing.T) {
 
 	qParams := basicTirParams()
 
-	iter, err := store.GetTimeInRangeData(qParams, false)
+	iter, err := store.GetTimeInRangeData(context.Background(), qParams, false)
 	if err != nil {
 		t.Error("Error querying Mongo")
 	}
 
 	resultCount := 0
-	for iter.Next(store.Context) {
+	for iter.Next(context.Background()) {
 		var result map[string]interface{}
 		err := iter.Decode(&result)
 		if err != nil {

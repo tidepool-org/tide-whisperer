@@ -59,9 +59,6 @@ func (c *MockStoreClient) DisablePingError() {
 	c.PingError = false
 }
 
-func (c *MockStoreClient) WithContext(ctx context.Context) Storage {
-	return c
-}
 func (c *MockStoreClient) Close() error {
 	return nil
 }
@@ -80,7 +77,7 @@ func (c *MockStoreClient) Collection(collectionName string, databaseName ...stri
 func (c *MockStoreClient) WaitUntilStarted() {}
 func (c *MockStoreClient) Start()            {}
 
-func (c *MockStoreClient) GetDeviceData(p *Params) (goComMgo.StorageIterator, error) {
+func (c *MockStoreClient) GetDeviceData(ctx context.Context, p *Params) (goComMgo.StorageIterator, error) {
 	c.GetDeviceDataCall = *p
 	c.GetDeviceDataCalled = true
 	if c.DeviceData != nil {
@@ -93,22 +90,22 @@ func (c *MockStoreClient) GetDeviceData(p *Params) (goComMgo.StorageIterator, er
 	}
 	return nil, nil
 }
-func (c *MockStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
+func (c *MockStoreClient) GetDexcomDataSource(ctx context.Context, userID string) (bson.M, error) {
 	return nil, nil
 }
-func (c *MockStoreClient) GetDiabeloopParametersHistory(userID string, levels []int) (bson.M, error) {
+func (c *MockStoreClient) GetDiabeloopParametersHistory(ctx context.Context, userID string, levels []int) (bson.M, error) {
 	if c.ParametersHistory != nil {
 		return c.ParametersHistory, nil
 	}
 	return nil, nil
 }
-func (c *MockStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID string, date string) ([]string, error) {
+func (c *MockStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(ctx context.Context, userID string, date string) ([]string, error) {
 	return nil, nil
 }
-func (c *MockStoreClient) GetDeviceModel(userID string) (string, error) {
+func (c *MockStoreClient) GetDeviceModel(ctx context.Context, userID string) (string, error) {
 	return c.DeviceModel, nil
 }
-func (c *MockStoreClient) GetTimeInRangeData(p *AggParams, logQuery bool) (goComMgo.StorageIterator, error) {
+func (c *MockStoreClient) GetTimeInRangeData(ctx context.Context, p *AggParams, logQuery bool) (goComMgo.StorageIterator, error) {
 	c.GetTimeInRangeDataCall = *p
 	c.GetTimeInRangeDataCalled = true
 	if c.TimeInRangeData != nil {
@@ -121,9 +118,9 @@ func (c *MockStoreClient) GetTimeInRangeData(p *AggParams, logQuery bool) (goCom
 	}
 	return nil, nil
 }
-func (c *MockStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
+func (c *MockStoreClient) HasMedtronicDirectData(ctx context.Context, userID string) (bool, error) {
 	return false, nil
 }
-func (c *MockStoreClient) HasMedtronicLoopDataAfter(userID string, date string) (bool, error) {
+func (c *MockStoreClient) HasMedtronicLoopDataAfter(ctx context.Context, userID string, date string) (bool, error) {
 	return false, nil
 }

@@ -33,7 +33,7 @@ func before(t *testing.T, docs ...interface{}) *Client {
 	dataCollection(store).Drop(context.TODO())
 
 	if len(docs) > 0 {
-		if _, err := dataCollection(store).InsertMany(store.Context, docs); err != nil {
+		if _, err := dataCollection(store).InsertMany(context.Background(), docs); err != nil {
 			t.Error("Unable to insert documents", err)
 		}
 	}
@@ -526,7 +526,7 @@ func TestStore_Ping(t *testing.T) {
 func TestStore_HasMedtronicDirectData_UserID_Missing(t *testing.T) {
 	store := before(t)
 
-	hasMedtronicDirectData, err := store.HasMedtronicDirectData("")
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData(context.Background(), "")
 
 	if err == nil {
 		t.Error("should have received error, but got nil")
@@ -545,7 +545,7 @@ func TestStore_HasMedtronicDirectData_Found(t *testing.T) {
 		"deviceManufacturers": "Medtronic",
 	})
 
-	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData(context.Background(), "1234567890")
 
 	if err != nil {
 		t.Error("failure querying HasMedtronicDirectData", err)
@@ -594,7 +594,7 @@ func TestStore_HasMedtronicDirectData_Found_Multiple(t *testing.T) {
 		"index":               "4",
 	})
 
-	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData(context.Background(), "1234567890")
 
 	if err != nil {
 		t.Error("failure querying HasMedtronicDirectData", err)
@@ -613,7 +613,7 @@ func TestStore_HasMedtronicDirectData_NotFound_UserID(t *testing.T) {
 		"deviceManufacturers": "Medtronic",
 	})
 
-	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData(context.Background(), "1234567890")
 
 	if err != nil {
 		t.Error("failure querying HasMedtronicDirectData", err)
@@ -632,7 +632,7 @@ func TestStore_HasMedtronicDirectData_NotFound_Type(t *testing.T) {
 		"deviceManufacturers": "Medtronic",
 	})
 
-	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData(context.Background(), "1234567890")
 
 	if err != nil {
 		t.Error("failure querying HasMedtronicDirectData", err)
@@ -651,7 +651,7 @@ func TestStore_HasMedtronicDirectData_NotFound_State(t *testing.T) {
 		"deviceManufacturers": "Medtronic",
 	})
 
-	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData(context.Background(), "1234567890")
 
 	if err != nil {
 		t.Error("failure querying HasMedtronicDirectData", err)
@@ -670,7 +670,7 @@ func TestStore_HasMedtronicDirectData_NotFound_Active(t *testing.T) {
 		"deviceManufacturers": "Medtronic",
 	})
 
-	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData(context.Background(), "1234567890")
 
 	if err != nil {
 		t.Error("failure querying HasMedtronicDirectData", err)
@@ -690,7 +690,7 @@ func TestStore_HasMedtronicDirectData_NotFound_DeletedTime(t *testing.T) {
 		"deviceManufacturers": "Medtronic",
 	})
 
-	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData(context.Background(), "1234567890")
 
 	if err != nil {
 		t.Error("failure querying HasMedtronicDirectData", err)
@@ -709,7 +709,7 @@ func TestStore_HasMedtronicDirectData_NotFound_DeviceManufacturer(t *testing.T) 
 		"deviceManufacturers": "Acme",
 	})
 
-	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData(context.Background(), "1234567890")
 
 	if err != nil {
 		t.Error("failure querying HasMedtronicDirectData", err)
@@ -758,7 +758,7 @@ func TestStore_HasMedtronicDirectData_NotFound_Multiple(t *testing.T) {
 		"index":               "4",
 	})
 
-	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
+	hasMedtronicDirectData, err := store.HasMedtronicDirectData(context.Background(), "1234567890")
 
 	if err != nil {
 		t.Error("failure querying HasMedtronicDirectData", err)
@@ -795,7 +795,7 @@ func TestStore_HasMedtronicLoopDataAfter_NotFound_UserID(t *testing.T) {
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	})
 
-	hasMedtronicLoopDataAfter, err := store.HasMedtronicLoopDataAfter("1234567890", "2017-01-01T00:00:00Z")
+	hasMedtronicLoopDataAfter, err := store.HasMedtronicLoopDataAfter(context.Background(), "1234567890", "2017-01-01T00:00:00Z")
 
 	if err != nil {
 		t.Error("failure querying HasMedtronicLoopDataAfter", err)
@@ -838,7 +838,7 @@ func TestStore_HasMedtronicLoopDataAfter_NotFound_Time(t *testing.T) {
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	})
 
-	hasMedtronicLoopDataAfter, err := store.HasMedtronicLoopDataAfter("1234567890", "2017-01-01T00:00:00Z")
+	hasMedtronicLoopDataAfter, err := store.HasMedtronicLoopDataAfter(context.Background(), "1234567890", "2017-01-01T00:00:00Z")
 
 	if err != nil {
 		t.Error("failure querying HasMedtronicLoopDataAfter", err)
@@ -887,7 +887,7 @@ func TestStore_HasMedtronicLoopDataAfter_Found(t *testing.T) {
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	})
 
-	hasMedtronicLoopDataAfter, err := store.HasMedtronicLoopDataAfter("1234567890", "2017-01-01T00:00:00Z")
+	hasMedtronicLoopDataAfter, err := store.HasMedtronicLoopDataAfter(context.Background(), "1234567890", "2017-01-01T00:00:00Z")
 
 	if err != nil {
 		t.Error("failure querying HasMedtronicLoopDataAfter", err)
@@ -935,7 +935,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testi
 		"deviceModel":    "Another Model",
 	})
 
-	loopableMedtronicDirectUploadIdsAfter, err := store.GetLoopableMedtronicDirectUploadIdsAfter("1234567890", "2017-01-01T00:00:00Z")
+	loopableMedtronicDirectUploadIdsAfter, err := store.GetLoopableMedtronicDirectUploadIdsAfter(context.Background(), "1234567890", "2017-01-01T00:00:00Z")
 
 	if err != nil {
 		t.Error("failure querying GetLoopableMedtronicDirectUploadIdsAfter", err)
@@ -990,7 +990,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing
 		"deviceModel":    "523",
 	})
 
-	loopableMedtronicDirectUploadIdsAfter, err := store.GetLoopableMedtronicDirectUploadIdsAfter("1234567890", "2017-01-01T00:00:00Z")
+	loopableMedtronicDirectUploadIdsAfter, err := store.GetLoopableMedtronicDirectUploadIdsAfter(context.Background(), "1234567890", "2017-01-01T00:00:00Z")
 
 	if err != nil {
 		t.Error("failure querying GetLoopableMedtronicDirectUploadIdsAfter", err)
@@ -1061,7 +1061,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
 		"deviceModel":    "523",
 	})
 
-	loopableMedtronicDirectUploadIdsAfter, err := store.GetLoopableMedtronicDirectUploadIdsAfter("1234567890", "2017-01-01T00:00:00Z")
+	loopableMedtronicDirectUploadIdsAfter, err := store.GetLoopableMedtronicDirectUploadIdsAfter(context.Background(), "1234567890", "2017-01-01T00:00:00Z")
 
 	if err != nil {
 		t.Error("failure querying GetLoopableMedtronicDirectUploadIdsAfter", err)
@@ -1083,14 +1083,14 @@ func TestStore_LatestNoFilter(t *testing.T) {
 		Latest:        true,
 	}
 
-	iter, err := store.GetDeviceData(qParams)
+	iter, err := store.GetDeviceData(context.Background(), qParams)
 	if err != nil {
 		t.Error("Error querying Mongo")
 	}
 
 	resultCount := 0
 	processedResultCount := 0
-	for iter.Next(store.Context) {
+	for iter.Next(context.Background()) {
 		var result bson.M
 		err := iter.Decode(&result)
 		if err != nil {
@@ -1133,14 +1133,14 @@ func TestStore_LatestTypeFilter(t *testing.T) {
 		Latest:        true,
 	}
 
-	iter, err := store.GetDeviceData(qParams)
+	iter, err := store.GetDeviceData(context.Background(), qParams)
 	if err != nil {
 		t.Error("Error querying Mongo")
 	}
 
 	resultCount := 0
 	processedResultCount := 0
-	for iter.Next(store.Context) {
+	for iter.Next(context.Background()) {
 		var result bson.M
 		err := iter.Decode(&result)
 		if err != nil {
@@ -1177,14 +1177,14 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 		Latest:        true,
 	}
 
-	iter, err := store.GetDeviceData(qParams)
+	iter, err := store.GetDeviceData(context.Background(), qParams)
 	if err != nil {
 		t.Error("Error querying Mongo")
 	}
 
 	resultCount := 0
 	processedResultCount := 0
-	for iter.Next(store.Context) {
+	for iter.Next(context.Background()) {
 		var result bson.M
 		err := iter.Decode(&result)
 		if err != nil {
@@ -1227,14 +1227,14 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 		Latest:        true,
 	}
 
-	iter, err := store.GetDeviceData(qParams)
+	iter, err := store.GetDeviceData(context.Background(), qParams)
 	if err != nil {
 		t.Error("Error querying Mongo")
 	}
 
 	resultCount := 0
 	processedResultCount := 0
-	for iter.Next(store.Context) {
+	for iter.Next(context.Background()) {
 		var result bson.M
 		err := iter.Decode(&result)
 		if err != nil {
@@ -1291,7 +1291,7 @@ func TestStore_GetDeviceModel(t *testing.T) {
 		})
 	var res string
 	var err error
-	if res, err = store.GetDeviceModel("dblg1_1"); err != nil {
+	if res, err = store.GetDeviceModel(context.Background(), "dblg1_1"); err != nil {
 		t.Errorf("Unexpected Error during device model request: %s", err)
 	}
 	// Retreiving latest (time field desc) payload.device.name not null value

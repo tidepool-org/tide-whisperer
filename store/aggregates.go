@@ -1,6 +1,8 @@
 package store
 
 import (
+	"context"
+
 	"go.mongodb.org/mongo-driver/bson"
 
 	// For debug only pretty printing requests
@@ -265,7 +267,7 @@ func generateTirAggregateQuery(p *AggParams) []bson.M {
 	return finalQuery
 }
 
-func (c *Client) GetTimeInRangeData(p *AggParams, logQuery bool) (mongo.StorageIterator, error) {
+func (c *Client) GetTimeInRangeData(ctx context.Context, p *AggParams, logQuery bool) (mongo.StorageIterator, error) {
 	query := generateTirAggregateQuery(p)
 	// For debug purpose pretty printing mongo requests:
 	if logQuery {
@@ -275,6 +277,6 @@ func (c *Client) GetTimeInRangeData(p *AggParams, logQuery bool) (mongo.StorageI
 			log.Printf("TIR aggregate request : %s", bytes)
 		}
 	}
-	cursor, err := dataCollection(c).Aggregate(c.Context, query)
+	cursor, err := dataCollection(c).Aggregate(ctx, query)
 	return cursor, err
 }

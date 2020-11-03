@@ -1,6 +1,7 @@
 package data
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -151,14 +152,14 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 
 	start := time.Now()
 
-	storageWithCtx := a.store.WithContext(req.Context())
+	ctx := req.Context()
 
 	queryValues := url.Values{":userID": []string{vars["userID"]}}
 	for k, v := range req.URL.Query() {
 		queryValues[k] = v
 	}
 
-	queryParams, err := a.parseDataParams(queryValues)
+	queryParams, err := a.parseDataParams(ctx, queryValues)
 
 	if err != nil {
 		log.Println(DataAPIPrefix, fmt.Sprintf("Error parsing query params: %s", err))
@@ -176,7 +177,7 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 	requestID := newRequestID()
 	queryStart := time.Now()
 	if _, ok := req.URL.Query()["carelink"]; !ok {
-		if hasMedtronicDirectData, medtronicErr := storageWithCtx.HasMedtronicDirectData(queryParams.UserID); medtronicErr != nil {
+		if hasMedtronicDirectData, medtronicErr := a.store.HasMedtronicDirectData(ctx, queryParams.UserID); medtronicErr != nil {
 			log.Printf("%s request %s user %s HasMedtronicDirectData returned error: %s", DataAPIPrefix, requestID, queryParams.UserID, medtronicErr)
 			jsonError(res, errorRunningQuery, start)
 			return
@@ -190,7 +191,7 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 		queryStart = time.Now()
 	}
 	if !queryParams.Dexcom {
-		dexcomDataSource, dexcomErr := storageWithCtx.GetDexcomDataSource(queryParams.UserID)
+		dexcomDataSource, dexcomErr := a.store.GetDexcomDataSource(ctx, queryParams.UserID)
 		if dexcomErr != nil {
 			log.Printf("%s request %s user %s GetDexcomDataSource returned error: %s", DataAPIPrefix, requestID, queryParams.UserID, dexcomErr)
 			jsonError(res, errorRunningQuery, start)
@@ -204,7 +205,7 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 		queryStart = time.Now()
 	}
 	if _, ok := req.URL.Query()["medtronic"]; !ok {
-		hasMedtronicLoopData, medtronicErr := storageWithCtx.HasMedtronicLoopDataAfter(queryParams.UserID, medtronicLoopBoundaryDate)
+		hasMedtronicLoopData, medtronicErr := a.store.HasMedtronicLoopDataAfter(ctx, queryParams.UserID, medtronicLoopBoundaryDate)
 		if medtronicErr != nil {
 			log.Printf("%s request %s user %s HasMedtronicLoopDataAfter returned error: %s", DataAPIPrefix, requestID, queryParams.UserID, medtronicErr)
 			jsonError(res, errorRunningQuery, start)
@@ -219,7 +220,7 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 		queryStart = time.Now()
 	}
 	if !queryParams.Medtronic {
-		medtronicUploadIds, medtronicErr := storageWithCtx.GetLoopableMedtronicDirectUploadIdsAfter(queryParams.UserID, medtronicLoopBoundaryDate)
+		medtronicUploadIds, medtronicErr := a.store.GetLoopableMedtronicDirectUploadIdsAfter(ctx, queryParams.UserID, medtronicLoopBoundaryDate)
 		if medtronicErr != nil {
 			log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter returned error: %s", DataAPIPrefix, requestID, queryParams.UserID, medtronicErr)
 			jsonError(res, errorRunningQuery, start)
@@ -235,19 +236,19 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 		queryStart = time.Now()
 	}
 
-	iter, err := storageWithCtx.GetDeviceData(queryParams)
+	iter, err := a.store.GetDeviceData(ctx, queryParams)
 	if err != nil {
 		log.Printf("%s request %s user %s Mongo Query returned error: %s", DataAPIPrefix, requestID, queryParams.UserID, err)
 	}
 
-	defer iter.Close(req.Context())
+	defer iter.Close(ctx)
 
 	var parametersHistory map[string]interface{}
 	var parametersHistoryErr error
 	if store.InArray("pumpSettings", queryParams.Types) || (len(queryParams.Types) == 1 && queryParams.Types[0] == "") {
 		log.Printf("Calling GetDiabeloopParametersHistory")
 
-		if parametersHistory, parametersHistoryErr = a.store.GetDiabeloopParametersHistory(queryParams.UserID, queryParams.LevelFilter); parametersHistoryErr != nil {
+		if parametersHistory, parametersHistoryErr = a.store.GetDiabeloopParametersHistory(ctx, queryParams.UserID, queryParams.LevelFilter); parametersHistoryErr != nil {
 			log.Printf("%s request %s user %s GetDiabeloopParametersHistory returned error: %s", DataAPIPrefix, requestID, queryParams.UserID, parametersHistoryErr)
 			jsonError(res, errorRunningQuery, start)
 			return
@@ -259,7 +260,7 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 
 	res.Write([]byte("["))
 
-	for iter.Next(req.Context()) {
+	for iter.Next(ctx) {
 		var results map[string]interface{}
 		err := iter.Decode(&results)
 		if err != nil {
@@ -314,7 +315,7 @@ func cleanDateString(dateString string) (string, error) {
 	}
 	return date.Format(time.RFC3339Nano), nil
 }
-func (a *API) parseDataParams(q url.Values) (*store.Params, error) {
+func (a *API) parseDataParams(ctx context.Context, q url.Values) (*store.Params, error) {
 	var strPrms = make(map[string]string)
 	for _, dateField := range []string{"startDate", "endDate"} {
 		dateStr, err := cleanDateString(q.Get(dateField))
@@ -341,7 +342,7 @@ func (a *API) parseDataParams(q url.Values) (*store.Params, error) {
 	var device string
 	var deviceErr error
 	var UserID = q.Get(":userID")
-	if device, deviceErr = a.store.GetDeviceModel(UserID); deviceErr != nil {
+	if device, deviceErr = a.store.GetDeviceModel(ctx, UserID); deviceErr != nil {
 		log.Printf("Error in GetDeviceModel for user %s. Error: %s", UserID, deviceErr)
 	}
 

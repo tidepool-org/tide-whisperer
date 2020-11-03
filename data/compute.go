@@ -164,10 +164,10 @@ func (a *API) GetTimeInRange(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	storageWithCtx := a.store.WithContext(req.Context())
+	ctx := req.Context()
 
 	logInfo.queryStart = time.Now()
-	iter, err := storageWithCtx.GetTimeInRangeData(params, false)
+	iter, err := a.store.GetTimeInRangeData(ctx, params, false)
 	if err != nil {
 		logIndicatorError(logInfo, "Mongo Query", err)
 		jsonError(res, errorRunningQuery, logInfo.apiCallStart)

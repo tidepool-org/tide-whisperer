@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## 0.7.3 - 2020-11-03
+### Fixed
+- YLP-255 MongoDb connection issue
+
 ## 0.7.2 - 2020-10-29
 ### Engineering
 - YLP-245 Review openapi generation so we can serve it through a website
