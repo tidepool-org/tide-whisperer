@@ -6,7 +6,7 @@ sudo: false
 language: go
 
 go:
-  - 1.12.7
+  - 1.15.x
 
 go_import_path: github.com/tidepool-org/tide-whisperer
 
@@ -18,9 +18,7 @@ env:
 
 before_install:
   # MongoDb 4.2 docker container
-  - docker container run -d -p 27017:27017 mongo:4.2 
-  # Not used (yet ?)
-  # - npm install -g snyk;
+  - docker container run -d -p 27017:27017 mongo:4.2
   
 install:
   - ./build.sh
@@ -54,7 +52,7 @@ deploy:
     access_key_id: $AWS_ACCESS_KEY_ID
     secret_access_key: $AWS_SECRET_ACCESS_KEY
     region: $AWS_DEFAULT_REGION
-    bucket: com.diabeloop.yourloops.doc
+    bucket: com.diabeloop.backloops.docs
     skip_cleanup: true
     local-dir: docs/openapi
     upload-dir: openapi/tide-whisperer
@@ -68,7 +66,7 @@ deploy:
     access_key_id: $AWS_ACCESS_KEY_ID
     secret_access_key: $AWS_SECRET_ACCESS_KEY
     region: $AWS_DEFAULT_REGION
-    bucket: com.diabeloop.yourloops.doc
+    bucket: com.diabeloop.backloops.docs
     skip_cleanup: true
     local_dir: ./docs/soup
     upload-dir: soup
@@ -80,7 +78,4 @@ services:
 
 script:
   - ./test.sh
-  # TODO Enable snyk for diabeloop
-  # - snyk test --dev --org=tidepool
-  # - snyk monitor --org=tidepool
   - ./artifact.sh

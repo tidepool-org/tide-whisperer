@@ -1,1 +1,1 @@
-export ARTIFACT_GO_VERSION='1.12.7'
+export ARTIFACT_GO_VERSION='1.15.x'

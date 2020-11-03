@@ -1,6 +1,6 @@
 module github.com/tidepool-org/tide-whisperer
 
-go 1.12
+go 1.15
 
 replace github.com/tidepool-org/go-common => github.com/mdblp/go-common v0.6.0
 

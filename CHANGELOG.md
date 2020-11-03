@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## 0.7.2 - 2020-10-29
+### Engineering
+- YLP-245 Review openapi generation so we can serve it through a website
+
 ## 0.7.1 - 2020-09-25
 ### Fixed
 - Fix S3 deployment
