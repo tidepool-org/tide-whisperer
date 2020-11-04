@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## 0.7.4 - 2020-11-04
+### Engineering
+- Review buildDoc to match "dblp" release tags and ensure copy latest is done
+
 ## 0.7.3 - 2020-11-03
 ### Fixed
 - YLP-255 MongoDb connection issue
