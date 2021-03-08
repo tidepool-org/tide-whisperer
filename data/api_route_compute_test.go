@@ -1,13 +1,13 @@
 package data
 
 import (
-	"github.com/tidepool-org/go-common/clients"
-	"github.com/tidepool-org/tide-whisperer/store"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/tidepool-org/tide-whisperer/store"
 )
 
 // Testing GetTimeInRange route
@@ -69,7 +69,8 @@ func TestGetTimeInRange_WrongToken(t *testing.T) {
 func TestGetTimeInRange_GoodTokenGuestUserNotInvited(t *testing.T) {
 	resetMocks()
 	mockShoreline.UserID = "guestUninvited"
-	mockPerms.SetExpected(clients.Permissions{"unauthorized": clients.Permission{}}, nil)
+	auth := mockPerms.GetMockedAuth(false, map[string]interface{}{}, "tidewhisperer-compute")
+	mockPerms.SetMockOpaAuth("/compute/tir", &auth, nil)
 
 	urlParams := make(map[string]string)
 	urlParams["userIds"] = "patient"
@@ -99,7 +100,8 @@ func TestGetTimeInRange_ServerToken(t *testing.T) {
 	resetMocks()
 	mockShoreline.UserID = "server"
 	mockShoreline.IsServer = true
-	mockPerms.SetExpected(clients.Permissions{"unauthorized": clients.Permission{}}, nil)
+	auth := mockPerms.GetMockedAuth(false, map[string]interface{}{}, "tidewhisperer-compute")
+	mockPerms.SetMockOpaAuth("/compute/tir", &auth, nil)
 
 	urlParams := make(map[string]string)
 	urlParams["userIds"] = "patient"
@@ -164,9 +166,6 @@ func TestGetTimeInRange_UrlParameters(t *testing.T) {
 
 	// Testing string array query parameters
 	for _, stringArrayField := range []string{"userIds"} {
-		if stringArrayField == "userIds" {
-			mockPerms.UserIDs = []string{"p1", "p2", "p3"}
-		}
 		urlParams := make(map[string]string)
 		arrValue := "p1,p2,p3"
 		urlParams[stringArrayField] = arrValue

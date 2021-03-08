@@ -1,11 +1,11 @@
 export TIDEPOOL_TIDE_WHISPERER_ENV='{
   "auth": { 
-    "address": "http://${PLATFORM_AUTH_HOST}:9222", 
-    "serviceSecret": "${PLATFORM_AUTH_SERVICE_SECRET}", 
+    "address": "http://localhost:9222", 
+    "serviceSecret": "AMSTRAMGRAM", 
     "userAgent": "Tidepool-TideWhisperer"
   }
-  "hakken": { "host": "localhost:8000" },
-  "gatekeeper": { "serviceSpec": { "type": "static", "hosts": ["http://localhost:9123"] } },
+  "hakken": { "host": "localhost:8000", "skipHakken\":true },
+  "gatekeeper": { "serviceSpec": { "type": "static", "hosts": ["http://localhost:8181"] } },
   "seagull": { "serviceSpec": { "type": "static", "hosts": ["http://localhost:9120"] } },
   "shoreline": {
     "serviceSpec": { "type": "static", "hosts": ["http://localhost:9107"] },
@@ -31,3 +31,12 @@ export TIDEPOOL_TIDE_WHISPERER_SERVICE='{
     "maximum": 99
   }
 }'
+
+export TIDEPOOL_STORE_ADDRESSES="localhost:27017"
+export TIDEPOOL_STORE_DATABASE="data"
+export TIDEPOOL_STORE_USERNAME="medical"
+export TIDEPOOL_STORE_PASSWORD="password"
+export TIDEPOOL_STORE_OPT_PARAMS="authSource=admin&ssl=false"
+
+export OPA_HOST="http://localhost:8181"
+export SERVICE_NAME="tide-whisperer"

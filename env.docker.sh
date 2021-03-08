@@ -33,3 +33,6 @@ export TIDEPOOL_STORE_DATABASE="data"
 export TIDEPOOL_STORE_USERNAME="medical"
 export TIDEPOOL_STORE_PASSWORD="password"
 export TIDEPOOL_STORE_OPT_PARAMS="authSource=admin&ssl=false"
+
+export OPA_HOST="http://coastguard:8181"
+export SERVICE_NAME="tide-whisperer"

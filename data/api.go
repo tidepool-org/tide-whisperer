@@ -14,7 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/gorilla/mux"
-	"github.com/tidepool-org/go-common/clients"
+	"github.com/tidepool-org/go-common/clients/opa"
 	"github.com/tidepool-org/go-common/clients/shoreline"
 	"github.com/tidepool-org/go-common/clients/status"
 	"github.com/tidepool-org/tide-whisperer/auth"
@@ -29,7 +29,7 @@ type (
 		store           store.Storage
 		shorelineClient shoreline.Client
 		authClient      auth.ClientInterface
-		perms           clients.Gatekeeper
+		perms           opa.Client
 		schemaVersion   store.SchemaVersion
 	}
 
@@ -65,7 +65,7 @@ var (
 	errorInvalidParameters = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
 )
 
-func InitApi(storage store.Storage, shoreline shoreline.Client, auth auth.ClientInterface, permsClient clients.Gatekeeper, schemaV store.SchemaVersion) *API {
+func InitApi(storage store.Storage, shoreline shoreline.Client, auth auth.ClientInterface, permsClient opa.Client, schemaV store.SchemaVersion) *API {
 	return &API{
 		store:           storage,
 		shorelineClient: shoreline,
@@ -406,35 +406,7 @@ func (a *API) getTokenData(req *http.Request) *shoreline.TokenData {
 
 	return td
 }
-func (a *API) userCanViewData(authenticatedUserID string, targetUserIDs []string) bool {
-	if len(targetUserIDs) == 1 {
-		targetUserID := targetUserIDs[0]
-		log.Printf("authenticatedUserID::%v / targetUserID::%v", authenticatedUserID, targetUserID)
-		if authenticatedUserID == targetUserID {
-			return true
-		}
-		perms, err := a.perms.UserInGroup(authenticatedUserID, targetUserID)
-		if err != nil {
-			log.Println(DataAPIPrefix, "Error looking up user in group", err)
-			return false
-		}
-		return !(perms["root"] == nil && perms["view"] == nil)
-	}
-	userPerms, err := a.perms.GroupsForUser(authenticatedUserID)
-	if err != nil {
-		log.Println(DataAPIPrefix, "Error looking up users in group", err)
-		return false
-	}
-	authorized := true
-	for _, uid := range targetUserIDs {
-		if _, exists := userPerms[uid]; !exists {
-			authorized = false
-			break
-		}
-	}
 
-	return authorized
-}
 func (a *API) isAuthorized(req *http.Request, targetUserIDs []string) bool {
 	td := a.getTokenData(req)
 	if td == nil {
@@ -443,7 +415,20 @@ func (a *API) isAuthorized(req *http.Request, targetUserIDs []string) bool {
 	if td.IsServer {
 		return true
 	}
-	return a.userCanViewData(td.UserID, targetUserIDs)
+	if len(targetUserIDs) == 1 {
+		targetUserID := targetUserIDs[0]
+		if td.UserID == targetUserID {
+			return true
+		}
+	}
+
+	auth, err := a.perms.GetOpaAuth(req)
+	if err != nil {
+		log.Println(DataAPIPrefix, fmt.Sprintf("Opa authorization error [%v] ", err))
+		return false
+	}
+	return auth.Result.Authorized
+
 }
 
 func newRequestID() string {
