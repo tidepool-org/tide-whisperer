@@ -70,6 +70,8 @@ github.com/markbates/oncer v0.0.0-20181203154359-bf2de49a0be2/go.mod h1:Ld9puTsI
 github.com/markbates/safe v1.0.1/go.mod h1:nAqgmRi7cY2nqMc92/bSEeQA+R4OheNU2T1kNSCBdG0=
 github.com/mdblp/go-common v0.7.1-0.20210309192313-12f55f1fff3b h1:5dOnptOHAI4EkjoDbkboRUtUlriibByOaS2QbQdo4dY=
 github.com/mdblp/go-common v0.7.1-0.20210309192313-12f55f1fff3b/go.mod h1:cFFwPnC4pEjrr1YUwjyTfL8ogUgwuvjKe8+eS0bm9oA=
+github.com/mdblp/go-common v0.7.1 h1:91/wtlH19kv79HUK8hf7rvak0lVGKUQ346qPsxsYvTU=
+github.com/mdblp/go-common v0.7.1/go.mod h1:cFFwPnC4pEjrr1YUwjyTfL8ogUgwuvjKe8+eS0bm9oA=
 github.com/montanaflynn/stats v0.0.0-20171201202039-1bf9dbcd8cbe/go.mod h1:wL8QJuTMNUDYhXwkmfOly8iTdp5TEcJFWZD2D7SIkUc=
 github.com/pelletier/go-toml v1.4.0/go.mod h1:PN7xzY2wHTK0K9p34ErDQMlFxa51Fk0OUruD3k1mMwo=
 github.com/pelletier/go-toml v1.7.0/go.mod h1:vwGMzjaWMwyfHwgIBhI2YUM4fB6nL6lVAvS1LBMMhTE=
