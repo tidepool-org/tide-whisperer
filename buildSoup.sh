@@ -1,4 +1,4 @@
-#!/bin/bash -eu
+#!/bin/sh -eu
 # Generate Soups
 
 DEPLOY_DOC=${DEPLOY_DOC:-docs/soup}
