@@ -25,6 +25,10 @@ var testingConfig = &goComMgo.Config{
 func before(t *testing.T, docs ...interface{}) *Client {
 
 	logger := log.New(os.Stdout, "mongo-test ", log.LstdFlags|log.LUTC|log.Lshortfile)
+	if _, exist := os.LookupEnv("TIDEPOOL_STORE_ADDRESSES"); exist {
+		// if mongo connexion information is provided via env var
+		testingConfig.FromEnv()
+	}
 	store, _ := NewStore(testingConfig, logger)
 	store.Start()
 	store.WaitUntilStarted()
