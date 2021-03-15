@@ -3,9 +3,9 @@ type: golang
 runTests: false
 testCommand: go test -race -v
 docker: true
+dockerPushToProduction : true
 publishNpm: false
 publishS3: false
-publishOpenapiBucket: com.diabeloop.blp.docs
-publishSoup: false
-publishSoupBucket: com.diabeloop.blp.docs
+publishOpenapiBucket: com.diabeloop.backloops.docs
+publishSoupBucket: com.diabeloop.backloops.docs
 securityScan: true

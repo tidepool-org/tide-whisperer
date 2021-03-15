@@ -11,24 +11,18 @@ pipeline {
                         // git commit id must be a 40 characters length string (lower case or digits)
                         env.GIT_COMMIT = "f".multiply(40)
                     }
-                    builderImage = docker.build('go-build-image','-f ./Dockerfile.build .')
                     env.RUN_ID = UUID.randomUUID().toString()
-                    docker.image('docker.ci.diabeloop.eu/ci-toolbox').inside() {
-                        env.version = sh (
-                            script: 'release-helper get-version',
-                            returnStdout: true
-                        ).trim().toUpperCase()
-                    }
                 }
             }
         }
         stage('Build ') {
-            steps {
-                script {
-                    builderImage.inside("") {
-                        sh "$WORKSPACE/build.sh"
-                    }
+            agent {
+                docker {
+                    image 'docker.ci.diabeloop.eu/go-build:1.15'
                 }
+            }
+            steps {
+                sh "$WORKSPACE/build.sh"
             }
         }
         stage('Test ') {
@@ -36,7 +30,7 @@ pipeline {
                 echo 'start mongo to serve as a testing db'
                 sh 'docker network create twtest${RUN_ID} && docker run --rm -d --net=twtest${RUN_ID} --name=mongo4twtest${RUN_ID} mongo:4.2'
                 script {
-                    builderImage.inside("--net=twtest${RUN_ID}") {
+                    docker.image('docker.ci.diabeloop.eu/go-build:1.15').inside("--net=twtest${RUN_ID}") {
                         sh "TIDEPOOL_STORE_ADDRESSES=mongo4twtest${RUN_ID}:27017 TIDEPOOL_STORE_DATABASE=data_test $WORKSPACE/test.sh"
                     }
                 }
@@ -54,17 +48,7 @@ pipeline {
         }
         stage('Documentation') {
             steps {
-                script {
-                    builderImage.inside("") {
-                        sh """
-                            export TRAVIS_TAG=${version}
-                            ./buildDoc.sh
-                            ./buildSoup.sh
-                        """              
-                        stash name: "doc", includes: "docs/*"
-                    }
-                }
-                
+                genDocumentation()
             }
         }
         stage('Publish') {
