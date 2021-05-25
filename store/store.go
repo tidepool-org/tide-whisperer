@@ -19,8 +19,9 @@ import (
 )
 
 const (
-	dataCollectionName = "deviceData"
-	dataStoreAPIPrefix = "api/data/store "
+	dataCollectionName  = "deviceData"
+	dataStoreAPIPrefix  = "api/data/store "
+	RFC3339NanoSortable = "2006-01-02T15:04:05.00000000Z07:00"
 )
 
 type (
@@ -87,7 +88,12 @@ func cleanDateString(dateString string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return date.Format(time.RFC3339Nano), nil
+
+	// The Golang implementation of time.RFC3339Nano does not use a fixed number of digits after the
+	// decimal point and therefore is not reliably sortable. And so we use our own custom format for
+	// database range queries that will properly sort any data with time stored as an ISO string.
+	// See https://github.com/golang/go/issues/19635
+	return date.Format(RFC3339NanoSortable), nil
 }
 
 // GetParams parses a URL to set parameters
