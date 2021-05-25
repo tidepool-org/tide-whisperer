@@ -505,13 +505,8 @@ func TestStore_cleanDateString(t *testing.T) {
 	if dateStr == "" {
 		t.Error("the returned dateStr should not be empty")
 	}
-
-	if dateStr != "2015-10-10T15:00:00.00000000Z" {
-		t.Error("the returned dateStr should be formatted as a sortable RFC3339Nano datetime")
-	}
-
 	if err != nil {
-		t.Error("we should have no error but got ", err.Error())
+		t.Error("we should have no error but go ", err.Error())
 	}
 
 }
