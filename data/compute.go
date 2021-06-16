@@ -125,7 +125,7 @@ func (a *API) parseIndicatorParams(q url.Values) (*store.AggParams, error) {
 
 	p := &store.AggParams{
 		UserIDs:       userIds,
-		Date:          store.Date{startStr, endStr},
+		Date:          store.Date{Start: startStr, End: endStr},
 		SchemaVersion: &a.schemaVersion,
 	}
 
@@ -154,13 +154,13 @@ func (a *API) GetTimeInRange(res http.ResponseWriter, req *http.Request) {
 	params, err := a.parseIndicatorParams(req.URL.Query())
 	if err != nil {
 		logIndicatorError(logInfo, "store.GetAggParams", err)
-		jsonError(res, errorInvalidParameters, logInfo.apiCallStart)
+		a.jsonError(res, errorInvalidParameters, logInfo.apiCallStart)
 		return
 	}
 
 	logInfo.UserIDs = params.UserIDs
 	if !(a.isAuthorized(req, params.UserIDs)) {
-		jsonError(res, errorNoViewPermission, logInfo.apiCallStart)
+		a.jsonError(res, errorNoViewPermission, logInfo.apiCallStart)
 		return
 	}
 
@@ -170,7 +170,7 @@ func (a *API) GetTimeInRange(res http.ResponseWriter, req *http.Request) {
 	iter, err := a.store.GetTimeInRangeData(ctx, params, false)
 	if err != nil {
 		logIndicatorError(logInfo, "Mongo Query", err)
-		jsonError(res, errorRunningQuery, logInfo.apiCallStart)
+		a.jsonError(res, errorRunningQuery, logInfo.apiCallStart)
 	}
 	logIndicatorSlowQuery(logInfo, "GetTimeInRangeData")
 

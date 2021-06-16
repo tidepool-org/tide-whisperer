@@ -3,13 +3,14 @@ package data
 import (
 	"encoding/json"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"testing"
 
 	"github.com/gorilla/mux"
-	"github.com/tidepool-org/go-common/clients"
 	"github.com/tidepool-org/go-common/clients/opa"
 	"github.com/tidepool-org/go-common/clients/shoreline"
 	"github.com/tidepool-org/go-common/clients/status"
@@ -24,12 +25,12 @@ var (
 		Minimum: 1,
 	}
 	serverToken               = "token"
+	logger                    = log.New(os.Stdout, "api-test", log.LstdFlags|log.Lshortfile)
 	storage                   = store.NewMockStoreClient()
 	mockShoreline             = shoreline.NewMock("token")
 	mockAuth                  = auth.NewMock()
-	perms                     = clients.Permissions{"view": clients.Allowed, "root": clients.Allowed}
 	mockPerms                 = opa.NewMock()
-	tidewhisperer             = InitApi(storage, mockShoreline, mockAuth, mockPerms, schemaVersions)
+	tidewhisperer             = InitAPI(storage, mockShoreline, mockAuth, mockPerms, schemaVersions, logger)
 	defaultGetDataURLVars     = map[string]string{"userID": "patient"}
 	defaultGetDataStoreParams = getDataStoreDefaultParams()
 	rtr                       = mux.NewRouter()
@@ -87,7 +88,7 @@ func checkUnAuthorized(response *httptest.ResponseRecorder, t *testing.T) {
 
 // Utility function to check invalid parameters error responses
 func checkInvalidParams(response *httptest.ResponseRecorder, t *testing.T) {
-	checkResponseError(http.StatusInternalServerError, "invalid_parameters",
+	checkResponseError(http.StatusBadRequest, "invalid_parameters",
 		"one or more parameters are invalid",
 		response, t)
 }
@@ -141,7 +142,7 @@ func TestGetStatus_StatusOk(t *testing.T) {
 	resetMocks()
 
 	request, response := getStatusPrepareRequest()
-	tidewhisperer.GetStatus(response, request)
+	tidewhisperer.getStatus(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("Resp given [%d] expected [%d] ", response.Code, http.StatusOK)
@@ -164,7 +165,7 @@ func TestGetStatus_StatusKo(t *testing.T) {
 	storage.EnablePingError()
 
 	request, response := getStatusPrepareRequest()
-	tidewhisperer.GetStatus(response, request)
+	tidewhisperer.getStatus(response, request)
 
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("Resp given [%d] expected [%d] ", response.Code, http.StatusInternalServerError)
@@ -186,7 +187,7 @@ func TestGet501(t *testing.T) {
 	request, _ := http.NewRequest("GET", "/swagger", nil)
 	response := httptest.NewRecorder()
 	tidewhisperer.SetHandlers("", rtr)
-	tidewhisperer.Get501(response, request)
+	tidewhisperer.get501(response, request)
 	if response.Code != http.StatusNotImplemented {
 		t.Fatalf("Resp given [%d] expected [%d] ", response.Code, http.StatusNotImplemented)
 	}

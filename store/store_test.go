@@ -12,6 +12,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 
+	"github.com/google/uuid"
 	goComMgo "github.com/tidepool-org/go-common/clients/mongo"
 )
 
@@ -23,26 +24,31 @@ var testingConfig = &goComMgo.Config{
 }
 
 func before(t *testing.T, docs ...interface{}) *Client {
+	var err error
+	var ctx = context.Background()
 
 	logger := log.New(os.Stdout, "mongo-test ", log.LstdFlags|log.LUTC|log.Lshortfile)
 	if _, exist := os.LookupEnv("TIDEPOOL_STORE_ADDRESSES"); exist {
 		// if mongo connexion information is provided via env var
 		testingConfig.FromEnv()
 	}
-	store, _ := NewStore(testingConfig, logger)
+	store, err := NewStore(testingConfig, logger)
+	if err != nil {
+		t.Fatalf("Unexpected error while creating store: %s", err)
+	}
 	store.Start()
 	store.WaitUntilStarted()
-	//INIT THE TEST - we use a clean copy of the collection before we start
-	//just drop and don't worry about any errors
-	dataCollection(store).Drop(context.TODO())
 
 	if len(docs) > 0 {
-		if _, err := dataCollection(store).InsertMany(context.Background(), docs); err != nil {
+		if _, err := dataCollection(store).InsertMany(ctx, docs); err != nil {
 			t.Error("Unable to insert documents", err)
 		}
 	}
-	store2, _ := NewStore(testingConfig, logger)
-	return store2
+	t.Cleanup(func() {
+		dataCollection(store).Drop(ctx)
+		store.Close()
+	})
+	return store
 }
 
 func getErrString(mongoQuery, expectedQuery bson.M) string {
@@ -276,6 +282,21 @@ func storeDataForLatestTests() []interface{} {
 	}
 
 	return storeData
+}
+
+func iteratorToAllData(ctx context.Context, iter goComMgo.StorageIterator) ([]map[string]interface{}, error) {
+	var data []map[string]interface{}
+	var err error
+	// TODO all All(ctx, &data) function to StorageIterator
+	for iter.Next(ctx) {
+		var datum map[string]interface{}
+		err = iter.Decode(&datum)
+		if err != nil {
+			break
+		}
+		data = append(data, datum)
+	}
+	return data, err
 }
 
 func TestStore_generateMongoQuery_basic(t *testing.T) {
@@ -1302,5 +1323,248 @@ func TestStore_GetDeviceModel(t *testing.T) {
 	if res != "DBLG1" {
 		t.Errorf("%s should be equal to DBLG1", res)
 	}
+}
 
+func TestStore_GetDataRangeV1(t *testing.T) {
+	userID := "abcdef"
+	startDate := "2020-01-01T00:00:00.000Z"
+	endDate := "2021-01-01T00:00:00.000Z"
+	store := before(t,
+		bson.M{
+			"_userId": userID,
+			"time":    "2020-01-01T00:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   12,
+		},
+		bson.M{
+			"_userId": userID,
+			"time":    "2020-06-01T00:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   12,
+		},
+		bson.M{
+			"_userId": userID,
+			"time":    "2021-01-01T00:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   12,
+		},
+	)
+	traceID := uuid.New().String()
+	res, err := store.GetDataRangeV1(context.Background(), traceID, userID)
+	if err != nil {
+		t.Errorf("Unexpected error during GetDataRangeV1: %s", err)
+	}
+	if res.Start != startDate {
+		t.Errorf("Expected %s to equal %s", res.Start, startDate)
+	}
+	if res.End != endDate {
+		t.Errorf("Expected %s to equal %s", res.End, endDate)
+	}
+}
+
+func TestStore_GetDataV1(t *testing.T) {
+	var err error
+	var iter goComMgo.StorageIterator
+	var data []map[string]interface{}
+	userID := "abcdef"
+	ddr := &Date{
+		Start: "2020-05-01T00:00:00.000Z",
+		End:   "2021-01-02T00:00:00.000Z",
+	}
+	store := before(t,
+		bson.M{
+			"_userId": userID,
+			"id":      "1",
+			"time":    "2020-01-01T00:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   12,
+		},
+		bson.M{
+			"_userId": userID,
+			"id":      "2",
+			"time":    "2020-06-01T00:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   12,
+		},
+		bson.M{
+			"_userId": "a00000",
+			"id":      "a",
+			"time":    "2020-11-01T00:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   12,
+		},
+		bson.M{
+			"_userId": userID,
+			"id":      "3",
+			"time":    "2021-01-01T00:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   12,
+		},
+	)
+	ctx := context.Background()
+	traceID := uuid.New().String()
+	iter, err = store.GetDataV1(ctx, traceID, userID, ddr)
+	if err != nil {
+		t.Fatalf("Unexpected error during GetDataRangeV1: %s", err)
+	}
+	defer iter.Close(ctx)
+
+	if data, err = iteratorToAllData(ctx, iter); err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+
+	if len(data) != 2 {
+		t.Fatalf("Expected a result of 2 data having %d", len(data))
+	}
+
+	for p, datum := range data {
+		id := datum["id"].(string)
+		if !(id == "2" || id == "3") {
+			t.Log(data)
+			t.Fatalf("Invalid datum id %s at %d", id, p)
+		}
+	}
+}
+
+func TestStore_GetLatestPumpSettingsV1(t *testing.T) {
+	var err error
+	var iter goComMgo.StorageIterator
+	var data []map[string]interface{}
+
+	userID := "abcdef"
+	store := before(t,
+		bson.M{
+			"id":             "1",
+			"_active":        true,
+			"_userId":        userID,
+			"_schemaVersion": 1,
+			"time":           "2019-01-19T00:42:51.902Z",
+			"type":           "pumpSettings",
+			"payload": bson.M{
+				"device": bson.M{
+					"name": "DBLG1",
+				},
+			},
+		},
+		bson.M{
+			"id":             "2",
+			"_active":        true,
+			"_userId":        "a00000",
+			"_schemaVersion": 1,
+			"time":           "2019-01-19T01:42:51.902Z",
+			"type":           "pumpSettings",
+			"payload": bson.M{
+				"device": bson.M{
+					"name": "DBLG1",
+				},
+			},
+		},
+		bson.M{
+			"id":             "3",
+			"_active":        true,
+			"_userId":        userID,
+			"_schemaVersion": 1,
+			"time":           "2019-03-19T00:42:51.902Z",
+			"type":           "pumpSettings",
+			"payload": bson.M{
+				"device": bson.M{
+					"name": "DBLG1",
+				},
+			},
+		},
+	)
+	ctx := context.Background()
+	traceID := uuid.New().String()
+
+	iter, err = store.GetLatestPumpSettingsV1(ctx, traceID, userID)
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+	defer iter.Close(ctx)
+
+	if data, err = iteratorToAllData(ctx, iter); err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+
+	if len(data) != 1 {
+		t.Fatalf("Expected result length to be 1, having %d", len(data))
+	}
+
+	id := data[0]["id"].(string)
+	if id != "3" {
+		t.Fatalf("Expected return datum id to be 3, having %s", id)
+	}
+}
+
+func TestStore_GetDataFromIDV1(t *testing.T) {
+	var err error
+	var iter goComMgo.StorageIterator
+	var data []map[string]interface{}
+	userID := "abcdef"
+
+	store := before(t,
+		bson.M{
+			"_userId": userID,
+			"id":      "1",
+			"time":    "2020-01-01T00:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   12,
+		},
+		bson.M{
+			"_userId": userID,
+			"id":      "2",
+			"time":    "2020-06-01T00:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   12,
+		},
+		bson.M{
+			"_userId": userID,
+			"id":      "3",
+			"time":    "2020-11-01T00:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   12,
+		},
+		bson.M{
+			"_userId": userID,
+			"id":      "4",
+			"time":    "2021-01-01T00:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   12,
+		},
+	)
+	ctx := context.Background()
+	traceID := uuid.New().String()
+	ids := []string{"1", "3"}
+	iter, err = store.GetDataFromIDV1(ctx, traceID, ids)
+	if err != nil {
+		t.Fatalf("Unexpected error during GetDataRangeV1: %s", err)
+	}
+	defer iter.Close(ctx)
+
+	if data, err = iteratorToAllData(ctx, iter); err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+
+	if len(data) != 2 {
+		t.Fatalf("Expected a result of 2 data having %d", len(data))
+	}
+
+	for p, datum := range data {
+		id := datum["id"].(string)
+		if !(id == "1" || id == "3") {
+			t.Log(data)
+			t.Fatalf("Invalid datum id %s at %d", id, p)
+		}
+	}
 }

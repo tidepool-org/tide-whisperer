@@ -6,3 +6,5 @@ vendor/
 tide-whisperer
 artifact_go.sh
 docs/
+test-result.txt
+test-report.xml

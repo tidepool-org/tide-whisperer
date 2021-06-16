@@ -123,7 +123,7 @@ func main() {
 	 * Data-Api setup
 	 */
 
-	dataapi := data.InitApi(storage, shorelineClient, authClient, permsClient, config.SchemaVersion)
+	dataapi := data.InitAPI(storage, shorelineClient, authClient, permsClient, config.SchemaVersion, logger)
 	dataapi.SetHandlers("", rtr)
 
 	// ability to return compressed (gzip/deflate) responses if client browser accepts it

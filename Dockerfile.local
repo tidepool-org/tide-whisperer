@@ -1,0 +1,11 @@
+# Production
+FROM ubuntu:focal
+RUN apt-get -y update && \
+    apt-get -y install apt-utils && \
+    apt-get -y upgrade && \
+    apt-get -y clean
+RUN useradd -l -m dblp
+WORKDIR /home/dblp
+USER dblp
+COPY --chown=dblp tide-whisperer /home/dblp
+ENTRYPOINT [ "/home/dblp/tide-whisperer" ]

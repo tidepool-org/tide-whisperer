@@ -20,76 +20,52 @@ const (
 	dataStoreAPIPrefix          = "api/data/store "
 	portalDb                    = "portal"
 	parametersHistoryCollection = "patient_parameters_history"
+	tideWhispererIndexName      = "UserIdTypeTimeWeighted"
 )
+
+var unwantedFields = bson.M{
+	"_id":                0,
+	"_userId":            0,
+	"_groupId":           0,
+	"_version":           0,
+	"_active":            0,
+	"_schemaVersion":     0,
+	"createdTime":        0,
+	"modifiedTime":       0,
+	"conversionOffset":   0,
+	"clockDriftOffset":   0,
+	"timezoneOffset":     0,
+	"deviceTime":         0,
+	"deviceId":           0,
+	"deviceSerialNumber": 0,
+	"source":             0,
+}
+
+var unwantedPumpSettingsFields = bson.M{
+	"_id":                  0,
+	"_userId":              0,
+	"_groupId":             0,
+	"_version":             0,
+	"_active":              0,
+	"_schemaVersion":       0,
+	"createdTime":          0,
+	"modifiedTime":         0,
+	"conversionOffset":     0,
+	"clockDriftOffset":     0,
+	"timezoneOffset":       0,
+	"basalSchedules":       0,
+	"bgTargets":            0,
+	"carbRatios":           0,
+	"insulinSensitivities": 0,
+}
 
 var tideWhispererIndexes = map[string][]mongo.IndexModel{
 	"deviceData": {
 		{
-			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "deviceModel", Value: 1}},
+			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "type", Value: 1}, {Key: "time", Value: -1}},
 			Options: options.Index().
-				SetName("GetLoopableMedtronicDirectUploadIdsAfter").
-				SetBackground(true).
-				SetPartialFilterExpression(
-					bson.D{
-						{Key: "_active", Value: true},
-						{Key: "type", Value: "upload"},
-						{Key: "deviceModel", Value: bson.M{
-							"$exists": true,
-						}},
-						{Key: "time", Value: bson.M{
-							"$gte": "2017-09-01",
-						}},
-						{Key: "_schemaVersion", Value: bson.M{
-							"$gt": 0,
-						}},
-					},
-				),
-		},
-		{
-			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "origin.payload.device.manufacturer", Value: 1}},
-			Options: options.Index().
-				SetName("HasMedtronicLoopDataAfter").
-				SetBackground(true).
-				SetPartialFilterExpression(
-					bson.D{
-						{Key: "_active", Value: true},
-						{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
-						{Key: "time", Value: bson.M{
-							"$gte": "2017-09-01",
-						}},
-						{Key: "_schemaVersion", Value: bson.M{
-							"$gt": 0,
-						}},
-					},
-				),
-		},
-		{
-			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "time", Value: -1}, {Key: "type", Value: 1}},
-			Options: options.Index().
-				SetName("UserIdTimeWeighted").
-				SetBackground(true).
-				SetPartialFilterExpression(
-					bson.D{
-						{Key: "_schemaVersion", Value: bson.M{
-							"$gt": 0,
-						}},
-						{Key: "_active", Value: true},
-					},
-				),
-		},
-		{
-			Keys: bson.D{{Key: "deviceId", Value: 1}, {Key: "time", Value: -1}, {Key: "type", Value: 1}},
-			Options: options.Index().
-				SetName("DeviceId").
-				SetBackground(true).
-				SetPartialFilterExpression(
-					bson.D{
-						{Key: "_schemaVersion", Value: bson.M{
-							"$gt": 0,
-						}},
-						{Key: "_active", Value: true},
-					},
-				),
+				SetName(tideWhispererIndexName).
+				SetWeights(bson.M{"_userId": 10, "type": 5, "time": 1}),
 		},
 	},
 }
@@ -107,6 +83,11 @@ type (
 		HasMedtronicDirectData(ctx context.Context, userID string) (bool, error)
 		HasMedtronicLoopDataAfter(ctx context.Context, userID string, date string) (bool, error)
 		// WithContext(ctx context.Context) Storage
+		// V1 API data functions:
+		GetDataRangeV1(ctx context.Context, traceID string, userID string) (*Date, error)
+		GetDataV1(ctx context.Context, traceID string, userID string, dates *Date) (goComMgo.StorageIterator, error)
+		GetLatestPumpSettingsV1(ctx context.Context, traceID string, userID string) (goComMgo.StorageIterator, error)
+		GetDataFromIDV1(ctx context.Context, traceID string, ids []string) (goComMgo.StorageIterator, error)
 	}
 
 	// SchemaVersion struct
@@ -592,4 +573,97 @@ func (c *Client) GetDeviceModel(ctx context.Context, userID string) (string, err
 
 	device := res["payload"].(map[string]interface{})["device"].(map[string]interface{})
 	return device["name"].(string), err
+}
+
+// GetDataRangeV1 returns the time data range
+func (c *Client) GetDataRangeV1(ctx context.Context, traceID string, userID string) (*Date, error) {
+	if userID == "" {
+		return nil, errors.New("user id is missing")
+	}
+
+	dateRange := &Date{
+		Start: "",
+		End:   "",
+	}
+	var res map[string]interface{}
+
+	query := bson.M{
+		"_userId": userID,
+		// Use only diabetes data, excluding upload & pumpSettings
+		"type": bson.M{"$not": bson.M{"$in": []string{"upload", "pumpSettings"}}},
+	}
+
+	opts := options.FindOne()
+	opts.SetHint(tideWhispererIndexName)
+	opts.SetProjection(bson.M{"time": 1})
+	opts.SetComment(traceID)
+
+	// Finding Last time (i.e. findOne with sort time DESC)
+	opts.SetSort(bson.D{primitive.E{Key: "time", Value: -1}})
+	err := dataCollection(c).FindOne(ctx, query, opts).Decode(&res)
+	if err != nil {
+		return nil, err
+	}
+	dateRange.End = res["time"].(string)
+
+	// Finding First time (i.e. findOne with sort time ASC)
+	opts.SetSort(bson.D{primitive.E{Key: "time", Value: 1}})
+	err = dataCollection(c).FindOne(ctx, query, opts).Decode(&res)
+	if err != nil {
+		return nil, err
+	}
+	dateRange.Start = res["time"].(string)
+
+	return dateRange, nil
+}
+
+// GetDataV1 v1 api call to fetch diabetes data, excludes "upload" and "pumpSettings"
+func (c *Client) GetDataV1(ctx context.Context, traceID string, userID string, dates *Date) (goComMgo.StorageIterator, error) {
+	query := bson.M{
+		"_userId": userID,
+		"type":    bson.M{"$not": bson.M{"$in": []string{"upload", "pumpSettings"}}},
+	}
+
+	if dates.Start != "" && dates.End != "" {
+		query["time"] = bson.M{"$gte": dates.Start, "$lt": dates.End}
+	} else if dates.Start != "" {
+		query["time"] = bson.M{"$gte": dates.Start}
+	} else if dates.End != "" {
+		query["time"] = bson.M{"$lt": dates.End}
+	}
+
+	opts := options.Find()
+	opts.SetProjection(unwantedFields)
+	opts.SetHint(tideWhispererIndexName)
+	opts.SetComment(traceID)
+
+	return dataCollection(c).Find(ctx, query, opts)
+}
+
+// GetLatestPumpSettingsV1 return the latest type == "pumpSettings"
+func (c *Client) GetLatestPumpSettingsV1(ctx context.Context, traceID string, userID string) (goComMgo.StorageIterator, error) {
+	query := bson.M{
+		"_userId": userID,
+		"type":    "pumpSettings",
+	}
+
+	opts := options.Find()
+	opts.SetProjection(unwantedPumpSettingsFields)
+	opts.SetSort(bson.M{"time": -1})
+	opts.SetLimit(1)
+	opts.SetHint(tideWhispererIndexName)
+	opts.SetComment(traceID)
+	return dataCollection(c).Find(ctx, query, opts)
+}
+
+// GetDataFromIDV1 Fetch data from theirs id, using the $in query parameter
+func (c *Client) GetDataFromIDV1(ctx context.Context, traceID string, ids []string) (goComMgo.StorageIterator, error) {
+	query := bson.M{
+		"id": bson.M{"$in": ids},
+	}
+
+	opts := options.Find()
+	opts.SetProjection(unwantedFields)
+	opts.SetComment(traceID)
+	return dataCollection(c).Find(ctx, query, opts)
 }

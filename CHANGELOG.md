@@ -2,6 +2,13 @@
 
 Data access API for tidepool
 
+## 0.9.0 - 2021-06-11
+### Added
+- YLP-747 New data/v1 routes
+### Fixed
+- YLP-819 performance issues on production environment
+
+
 ## 0.8.1 - 2020-03-11
 ### Engineering Use
 - Change build server from Travis to Jenkins

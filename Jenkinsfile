@@ -38,6 +38,7 @@ pipeline {
             post {
                 always {
                     sh 'docker stop mongo4twtest${RUN_ID} && docker network rm twtest${RUN_ID}'
+                    junit 'test-report.xml'
                 }
             }
         }
