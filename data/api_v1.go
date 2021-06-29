@@ -132,7 +132,8 @@ func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
 	var iterData mongo.StorageIterator
 	var iterPumpSettings mongo.StorageIterator
 	var iterUploads mongo.StorageIterator
-
+	var queryStart time.Time
+	var queryDuration float64
 	userID := res.VARS["userID"]
 
 	query := res.URL.Query()
@@ -192,8 +193,10 @@ func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
 	if withPumpSettings {
 		// Initial query to fetch for this user, the client wants the
 		// latest pumpSettings
+		queryStart = time.Now()
 		iterPumpSettings, err = a.store.GetLatestPumpSettingsV1(ctx, res.TraceID, userID)
 		if err != nil {
+
 			logError := &detailedError{
 				Status:          errorRunningQuery.Status,
 				Code:            errorRunningQuery.Code,
@@ -202,20 +205,27 @@ func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
 			}
 			return res.WriteError(logError)
 		}
+		queryDuration = time.Since(queryStart).Seconds()
+		a.logger.Printf("{%s} a.store.GetLatestPumpSettingsV1 for %v took  %.3fs", res.TraceID, userID, queryDuration)
 		defer iterPumpSettings.Close(ctx)
 
 		// Fetch parameters history from portal:
 		levelFilter := make([]int, 1)
 		levelFilter = append(levelFilter, 1)
+		queryStart = time.Now()
 		writeParams.parametersHistory, err = a.store.GetDiabeloopParametersHistory(ctx, userID, levelFilter)
+		queryDuration = time.Since(queryStart).Seconds()
+		a.logger.Printf("{%s} a.store.GetDiabeloopParametersHistory for %v (level %v took  %.3fs", res.TraceID, userID, levelFilter, queryDuration)
 		if err != nil {
 			// Just log the problem, don't crash the query
 			writeParams.parametersHistory = nil
 			a.logger.Printf("{%s} - {GetDiabeloopParametersHistory:\"%s\"}", res.TraceID, err)
 		}
+
 	}
 
 	// Fetch normal data:
+	queryStart = time.Now()
 	iterData, err = a.store.GetDataV1(ctx, res.TraceID, userID, dates)
 	if err != nil {
 		logError := &detailedError{
@@ -226,9 +236,12 @@ func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
 		}
 		return res.WriteError(logError)
 	}
+	queryDuration = time.Since(queryStart).Seconds()
+	a.logger.Printf("{%s} a.store.GetDataV1 for %v (dates: %v) took  %.3fs", res.TraceID, userID, dates, queryDuration)
 	defer iterData.Close(ctx)
 
 	// We return a JSON array, first charater is: '['
+	queryStart = time.Now()
 	err = res.WriteString("[\n")
 	if err != nil {
 		return err
@@ -247,21 +260,28 @@ func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
 	if err != nil {
 		return err
 	}
-
+	queryDuration = time.Since(queryStart).Seconds()
+	a.logger.Printf("{%s} writing main data took  %.3fs", res.TraceID, queryDuration)
 	// Fetch uploads
 	if len(writeParams.uploadIDs) > 0 {
+		queryStart = time.Now()
 		iterUploads, err = a.store.GetDataFromIDV1(ctx, res.TraceID, writeParams.uploadIDs)
 		if err != nil {
 			// Just log the problem, don't crash the query
 			writeParams.parametersHistory = nil
 			a.logger.Printf("{%s} - {GetDataFromIDV1:\"%s\"}", res.TraceID, err)
 		} else {
+			queryDuration = time.Since(queryStart).Seconds()
+			a.logger.Printf("{%s} a.store.GetDataFromIDV1 for %v (uploadIDs: %v) took  %.3fs", res.TraceID, userID, writeParams.uploadIDs, queryDuration)
+			queryStart = time.Now()
 			defer iterUploads.Close(ctx)
 			writeParams.iter = iterUploads
 			err = writeFromIterV1(ctx, writeParams)
 			if err != nil {
 				return err
 			}
+			queryDuration = time.Since(queryStart).Seconds()
+			a.logger.Printf("{%s} writing uploadIDs data took %.3fs", res.TraceID, queryDuration)
 		}
 	}
 
