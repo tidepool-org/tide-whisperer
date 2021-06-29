@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## Unreleased
+### Fixed
+- YLP-859 Missing index on id field for deviceData
+
 ## 0.9.0 - 2021-06-11
 ### Added
 - YLP-747 New data/v1 routes

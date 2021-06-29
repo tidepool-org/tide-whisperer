@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
@@ -514,79 +515,91 @@ func testDataForTirTests() map[string]bson.M {
 	testData := map[string]bson.M{
 		// user1
 		// userid ok | type ok | time ok | veryLow value
-		"user1cbgVeryLow1": bson.M{
+		"user1cbgVeryLow1": {
+			"id":      uuid.New().String(),
 			"_userId": "tir123",
 			"time":    "2020-01-01T08:00:00Z",
 			"type":    "cbg",
 			"value":   2.8,
 		},
-		"user1cbgVeryLow2": bson.M{
+		"user1cbgVeryLow2": {
+			"id":      uuid.New().String(),
 			"_userId": "tir123",
 			"time":    "2020-01-01T08:05:00Z",
 			"type":    "cbg",
 			"value":   2.99,
 		},
 		// userid ok | type ok | time ok | low value
-		"user1cbgLow1": bson.M{
+		"user1cbgLow1": {
+			"id":      uuid.New().String(),
 			"_userId": "tir123",
 			"time":    "2020-01-01T08:10:00Z",
 			"type":    "cbg",
 			"value":   3.01,
 		},
-		"user1cbgLow2": bson.M{
+		"user1cbgLow2": {
+			"id":      uuid.New().String(),
 			"_userId": "tir123",
 			"time":    "2020-01-01T08:15:00Z",
 			"type":    "cbg",
 			"value":   3.89,
 		},
 		// userid ok | type ok | time ok | target value
-		"user1cbgTarget1": bson.M{
+		"user1cbgTarget1": {
+			"id":      uuid.New().String(),
 			"_userId": "tir123",
 			"time":    "2020-01-01T08:20:00Z",
 			"type":    "cbg",
 			"value":   3.91,
 		},
-		"user1cbgTarget2": bson.M{
+		"user1cbgTarget2": {
+			"id":      uuid.New().String(),
 			"_userId": "tir123",
 			"time":    "2020-01-01T08:25:00Z",
 			"type":    "cbg",
 			"value":   9.99,
 		},
 		// userid ok | type ok | time ok | high value
-		"user1cbgHigh1": bson.M{
+		"user1cbgHigh1": {
+			"id":      uuid.New().String(),
 			"_userId": "tir123",
 			"time":    "2020-01-01T08:30:00Z",
 			"type":    "cbg",
 			"value":   10.01,
 		},
-		"user1cbgHigh2": bson.M{
+		"user1cbgHigh2": {
+			"id":      uuid.New().String(),
 			"_userId": "tir123",
 			"time":    "2020-01-01T08:35:00Z",
 			"type":    "cbg",
 			"value":   13.89,
 		},
 		// userid ok | type ok | time ok | veryhigh value
-		"user1cbgVeryHigh1": bson.M{
+		"user1cbgVeryHigh1": {
+			"id":      uuid.New().String(),
 			"_userId": "tir123",
 			"time":    "2020-01-01T08:40:00Z",
 			"type":    "cbg",
 			"value":   13.91,
 		},
-		"user1cbgVeryHigh2": bson.M{
+		"user1cbgVeryHigh2": {
+			"id":      uuid.New().String(),
 			"_userId": "tir123",
 			"time":    "2020-01-01T08:45:00Z",
 			"type":    "cbg",
 			"value":   14.5,
 		},
 		// userid ok | type ok | time ko
-		"user1CbgOutOfTime": bson.M{
+		"user1CbgOutOfTime": {
+			"id":      uuid.New().String(),
 			"_userId": "tir123",
 			"time":    "2020-01-03T00:00:00Z",
 			"type":    "cbg",
 			"value":   7.1237,
 		},
 		// userid ok | type ko | time ok
-		"user1CbgWrongType": bson.M{
+		"user1CbgWrongType": {
+			"id":      uuid.New().String(),
 			"_userId": "tir123",
 			"time":    "2020-01-01T08:50:00Z",
 			"type":    "smbg",
@@ -594,73 +607,84 @@ func testDataForTirTests() map[string]bson.M {
 		},
 		// user2
 		// userid ok | type ok | time ok | veryLow value
-		"user2cbgVeryLow1": bson.M{
+		"user2cbgVeryLow1": {
+			"id":      uuid.New().String(),
 			"_userId": "tir456",
 			"time":    "2020-01-01T08:00:00Z",
 			"type":    "cbg",
 			"value":   2.8,
 		},
-		"user2cbgVeryLow2": bson.M{
+		"user2cbgVeryLow2": {
+			"id":      uuid.New().String(),
 			"_userId": "tir456",
 			"time":    "2020-01-01T08:05:00Z",
 			"type":    "cbg",
 			"value":   2.99,
 		},
 		// userid ok | type ok | time ok | low value
-		"user2cbgLow1": bson.M{
+		"user2cbgLow1": {
+			"id":      uuid.New().String(),
 			"_userId": "tir456",
 			"time":    "2020-01-01T08:10:00Z",
 			"type":    "cbg",
 			"value":   3.01,
 		},
-		"user2cbgLow2": bson.M{
+		"user2cbgLow2": {
+			"id":      uuid.New().String(),
 			"_userId": "tir456",
 			"time":    "2020-01-01T08:15:00Z",
 			"type":    "cbg",
 			"value":   3.89,
 		},
 		// userid ok | type ok | time ok | target value
-		"user2cbgTarget1": bson.M{
+		"user2cbgTarget1": {
+			"id":      uuid.New().String(),
 			"_userId": "tir456",
 			"time":    "2020-01-01T08:20:00Z",
 			"type":    "cbg",
 			"value":   3.91,
 		},
-		"user2cbgTarget2": bson.M{
+		"user2cbgTarget2": {
+			"id":      uuid.New().String(),
 			"_userId": "tir456",
 			"time":    "2020-01-01T08:25:00Z",
 			"type":    "cbg",
 			"value":   9.99,
 		},
 		// userid ok | type ok | time ok | high value
-		"user2cbgHigh1": bson.M{
+		"user2cbgHigh1": {
+			"id":      uuid.New().String(),
 			"_userId": "tir456",
 			"time":    "2020-01-01T08:30:00Z",
 			"type":    "cbg",
 			"value":   10.01,
 		},
-		"user2cbgHigh2": bson.M{
+		"user2cbgHigh2": {
+			"id":      uuid.New().String(),
 			"_userId": "tir456",
 			"time":    "2020-01-01T08:35:00Z",
 			"type":    "cbg",
 			"value":   13.89,
 		},
 		// userid ok | type ok | time ko
-		"user2CbgOutOfTime": bson.M{
+		"user2CbgOutOfTime": {
+			"id":      uuid.New().String(),
 			"_userId": "tir456",
 			"time":    "2019-12-31T08:00:00Z",
 			"type":    "cbg",
 			"value":   7.1237,
 		},
 		// userid ok | type ko | time ok
-		"user2CbgWrongType": bson.M{
+		"user2CbgWrongType": {
+			"id":      uuid.New().String(),
 			"_userId": "tir456",
 			"time":    "2020-01-01T08:50:00Z",
 			"type":    "food",
 			"value":   7.1237,
 		},
 		// userid ko | type ok | time ok
-		"user3cbg": bson.M{
+		"user3cbg": {
+			"id":      uuid.New().String(),
 			"_userId": "xyz123",
 			"time":    "2020-01-01T08:30:00Z",
 			"type":    "cbg",

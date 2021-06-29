@@ -20,7 +20,8 @@ const (
 	dataStoreAPIPrefix          = "api/data/store "
 	portalDb                    = "portal"
 	parametersHistoryCollection = "patient_parameters_history"
-	tideWhispererIndexName      = "UserIdTypeTimeWeighted"
+	idxUserIDTypeTime           = "UserIdTypeTimeWeighted"
+	idxID                       = "UniqId"
 )
 
 var unwantedFields = bson.M{
@@ -64,8 +65,12 @@ var tideWhispererIndexes = map[string][]mongo.IndexModel{
 		{
 			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "type", Value: 1}, {Key: "time", Value: -1}},
 			Options: options.Index().
-				SetName(tideWhispererIndexName).
+				SetName(idxUserIDTypeTime).
 				SetWeights(bson.M{"_userId": 10, "type": 5, "time": 1}),
+		},
+		{
+			Keys:    bson.D{{Key: "id", Value: 1}},
+			Options: options.Index().SetName(idxID).SetUnique(true),
 		},
 	},
 }
@@ -594,7 +599,7 @@ func (c *Client) GetDataRangeV1(ctx context.Context, traceID string, userID stri
 	}
 
 	opts := options.FindOne()
-	opts.SetHint(tideWhispererIndexName)
+	opts.SetHint(idxUserIDTypeTime)
 	opts.SetProjection(bson.M{"time": 1})
 	opts.SetComment(traceID)
 
@@ -634,7 +639,7 @@ func (c *Client) GetDataV1(ctx context.Context, traceID string, userID string, d
 
 	opts := options.Find()
 	opts.SetProjection(unwantedFields)
-	opts.SetHint(tideWhispererIndexName)
+	opts.SetHint(idxUserIDTypeTime)
 	opts.SetComment(traceID)
 
 	return dataCollection(c).Find(ctx, query, opts)
@@ -651,7 +656,7 @@ func (c *Client) GetLatestPumpSettingsV1(ctx context.Context, traceID string, us
 	opts.SetProjection(unwantedPumpSettingsFields)
 	opts.SetSort(bson.M{"time": -1})
 	opts.SetLimit(1)
-	opts.SetHint(tideWhispererIndexName)
+	opts.SetHint(idxUserIDTypeTime)
 	opts.SetComment(traceID)
 	return dataCollection(c).Find(ctx, query, opts)
 }
@@ -665,5 +670,6 @@ func (c *Client) GetDataFromIDV1(ctx context.Context, traceID string, ids []stri
 	opts := options.Find()
 	opts.SetProjection(unwantedFields)
 	opts.SetComment(traceID)
+	opts.SetHint(idxID)
 	return dataCollection(c).Find(ctx, query, opts)
 }

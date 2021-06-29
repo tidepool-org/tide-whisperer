@@ -206,7 +206,8 @@ func typesWithDeviceEventAndSubTypeQuery() bson.M {
 
 func testDataForLatestTests() map[string]bson.M {
 	testData := map[string]bson.M{
-		"upload1": bson.M{
+		"upload1": {
+			"id":             uuid.New().String(),
 			"_active":        true,
 			"_userId":        "abc123",
 			"_schemaVersion": int32(1),
@@ -215,7 +216,8 @@ func testDataForLatestTests() map[string]bson.M {
 			"deviceId":       "dev123",
 			"uploadId":       "9244bb16e27c4973c2f37af81784a05d",
 		},
-		"cbg1": bson.M{
+		"cbg1": {
+			"id":             uuid.New().String(),
 			"_active":        true,
 			"_userId":        "abc123",
 			"_schemaVersion": int32(1),
@@ -226,7 +228,8 @@ func testDataForLatestTests() map[string]bson.M {
 			"uploadId":       "9244bb16e27c4973c2f37af81784a05d",
 			"value":          12.82223,
 		},
-		"upload2": bson.M{
+		"upload2": {
+			"id":             uuid.New().String(),
 			"_active":        true,
 			"_userId":        "abc123",
 			"_schemaVersion": int32(1),
@@ -235,7 +238,8 @@ func testDataForLatestTests() map[string]bson.M {
 			"deviceId":       "dev456",
 			"uploadId":       "zzz4bb16e27c4973c2f37af81784a05d",
 		},
-		"cbg2": bson.M{
+		"cbg2": {
+			"id":             uuid.New().String(),
 			"_active":        true,
 			"_userId":        "abc123",
 			"_schemaVersion": int32(1),
@@ -246,7 +250,8 @@ func testDataForLatestTests() map[string]bson.M {
 			"deviceId":       "dev456",
 			"value":          9.7213,
 		},
-		"upload3": bson.M{
+		"upload3": {
+			"id":             uuid.New().String(),
 			"_active":        true,
 			"_userId":        "xyz123",
 			"_schemaVersion": int32(1),
@@ -255,7 +260,8 @@ func testDataForLatestTests() map[string]bson.M {
 			"deviceId":       "dev789",
 			"uploadId":       "xxx4bb16e27c4973c2f37af81784a05d",
 		},
-		"cbg3": bson.M{
+		"cbg3": {
+			"id":             uuid.New().String(),
 			"_active":        true,
 			"_userId":        "xyz123",
 			"_schemaVersion": int32(1),
@@ -271,8 +277,10 @@ func testDataForLatestTests() map[string]bson.M {
 	return testData
 }
 
-func storeDataForLatestTests() []interface{} {
-	testData := testDataForLatestTests()
+func storeDataForLatestTests(testData map[string]bson.M) []interface{} {
+	if testData == nil {
+		testData = testDataForLatestTests()
+	}
 
 	storeData := make([]interface{}, len(testData))
 	index := 0
@@ -582,6 +590,7 @@ func TestStore_HasMedtronicDirectData_Found(t *testing.T) {
 
 func TestStore_HasMedtronicDirectData_Found_Multiple(t *testing.T) {
 	store := before(t, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "0000000000",
 		"type":                "upload",
 		"_state":              "closed",
@@ -589,6 +598,7 @@ func TestStore_HasMedtronicDirectData_Found_Multiple(t *testing.T) {
 		"deviceManufacturers": "Medtronic",
 		"index":               "0",
 	}, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "1234567890",
 		"type":                "upload",
 		"_state":              "closed",
@@ -596,6 +606,7 @@ func TestStore_HasMedtronicDirectData_Found_Multiple(t *testing.T) {
 		"deviceManufacturers": "Medtronic",
 		"index":               "1",
 	}, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "1234567890",
 		"type":                "upload",
 		"_state":              "open",
@@ -603,6 +614,7 @@ func TestStore_HasMedtronicDirectData_Found_Multiple(t *testing.T) {
 		"deviceManufacturers": "Medtronic",
 		"index":               "2",
 	}, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "1234567890",
 		"type":                "upload",
 		"_state":              "closed",
@@ -610,6 +622,7 @@ func TestStore_HasMedtronicDirectData_Found_Multiple(t *testing.T) {
 		"deviceManufacturers": "Medtronic",
 		"index":               "3",
 	}, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "1234567890",
 		"type":                "upload",
 		"_state":              "closed",
@@ -631,6 +644,7 @@ func TestStore_HasMedtronicDirectData_Found_Multiple(t *testing.T) {
 
 func TestStore_HasMedtronicDirectData_NotFound_UserID(t *testing.T) {
 	store := before(t, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "0000000000",
 		"type":                "upload",
 		"_state":              "closed",
@@ -650,6 +664,7 @@ func TestStore_HasMedtronicDirectData_NotFound_UserID(t *testing.T) {
 
 func TestStore_HasMedtronicDirectData_NotFound_Type(t *testing.T) {
 	store := before(t, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "1234567890",
 		"type":                "cgm",
 		"_state":              "closed",
@@ -669,6 +684,7 @@ func TestStore_HasMedtronicDirectData_NotFound_Type(t *testing.T) {
 
 func TestStore_HasMedtronicDirectData_NotFound_State(t *testing.T) {
 	store := before(t, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "1234567890",
 		"type":                "upload",
 		"_state":              "open",
@@ -688,6 +704,7 @@ func TestStore_HasMedtronicDirectData_NotFound_State(t *testing.T) {
 
 func TestStore_HasMedtronicDirectData_NotFound_Active(t *testing.T) {
 	store := before(t, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "1234567890",
 		"type":                "upload",
 		"_state":              "closed",
@@ -707,6 +724,7 @@ func TestStore_HasMedtronicDirectData_NotFound_Active(t *testing.T) {
 
 func TestStore_HasMedtronicDirectData_NotFound_DeletedTime(t *testing.T) {
 	store := before(t, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "1234567890",
 		"type":                "upload",
 		"_state":              "closed",
@@ -727,6 +745,7 @@ func TestStore_HasMedtronicDirectData_NotFound_DeletedTime(t *testing.T) {
 
 func TestStore_HasMedtronicDirectData_NotFound_DeviceManufacturer(t *testing.T) {
 	store := before(t, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "1234567890",
 		"type":                "upload",
 		"_state":              "closed",
@@ -746,6 +765,7 @@ func TestStore_HasMedtronicDirectData_NotFound_DeviceManufacturer(t *testing.T) 
 
 func TestStore_HasMedtronicDirectData_NotFound_Multiple(t *testing.T) {
 	store := before(t, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "0000000000",
 		"type":                "upload",
 		"_state":              "closed",
@@ -753,6 +773,7 @@ func TestStore_HasMedtronicDirectData_NotFound_Multiple(t *testing.T) {
 		"deviceManufacturers": "Medtronic",
 		"index":               "0",
 	}, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "1234567890",
 		"type":                "cgm",
 		"_state":              "closed",
@@ -760,6 +781,7 @@ func TestStore_HasMedtronicDirectData_NotFound_Multiple(t *testing.T) {
 		"deviceManufacturers": "Medtronic",
 		"index":               "1",
 	}, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "1234567890",
 		"type":                "upload",
 		"_state":              "open",
@@ -767,6 +789,7 @@ func TestStore_HasMedtronicDirectData_NotFound_Multiple(t *testing.T) {
 		"deviceManufacturers": "Medtronic",
 		"index":               "2",
 	}, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "1234567890",
 		"type":                "upload",
 		"_state":              "closed",
@@ -774,6 +797,7 @@ func TestStore_HasMedtronicDirectData_NotFound_Multiple(t *testing.T) {
 		"deviceManufacturers": "Medtronic",
 		"index":               "3",
 	}, bson.M{
+		"id":                  uuid.New().String(),
 		"_userId":             "1234567890",
 		"type":                "upload",
 		"_state":              "closed",
@@ -795,24 +819,28 @@ func TestStore_HasMedtronicDirectData_NotFound_Multiple(t *testing.T) {
 
 func TestStore_HasMedtronicLoopDataAfter_NotFound_UserID(t *testing.T) {
 	store := before(t, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "0000000000",
 		"_schemaVersion": 1,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Animas"}}},
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        false,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 0,
@@ -832,30 +860,35 @@ func TestStore_HasMedtronicLoopDataAfter_NotFound_UserID(t *testing.T) {
 
 func TestStore_HasMedtronicLoopDataAfter_NotFound_Time(t *testing.T) {
 	store := before(t, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "0000000000",
 		"_schemaVersion": 1,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
 		"time":           "2016-12-31T23:59:59Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Animas"}}},
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        false,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 0,
@@ -875,36 +908,42 @@ func TestStore_HasMedtronicLoopDataAfter_NotFound_Time(t *testing.T) {
 
 func TestStore_HasMedtronicLoopDataAfter_Found(t *testing.T) {
 	store := before(t, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "0000000000",
 		"_schemaVersion": 1,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
 		"time":           "2016-12-31T23:59:59Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Animas"}}},
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        false,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
 		"time":           "2018-02-03T04:05:06Z",
 		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 0,
@@ -924,6 +963,7 @@ func TestStore_HasMedtronicLoopDataAfter_Found(t *testing.T) {
 
 func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testing.T) {
 	store := before(t, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "0000000000",
 		"_schemaVersion": 1,
@@ -931,6 +971,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testi
 		"type":           "upload",
 		"deviceModel":    "523",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        false,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
@@ -938,6 +979,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testi
 		"type":           "upload",
 		"deviceModel":    "523",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 0,
@@ -945,6 +987,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testi
 		"type":           "upload",
 		"deviceModel":    "523",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
@@ -952,6 +995,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testi
 		"type":           "cgm",
 		"deviceModel":    "523",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
@@ -972,6 +1016,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testi
 
 func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing.T) {
 	store := before(t, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "0000000000",
 		"_schemaVersion": 1,
@@ -979,6 +1024,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing
 		"type":           "upload",
 		"deviceModel":    "723",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        false,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
@@ -986,6 +1032,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing
 		"type":           "upload",
 		"deviceModel":    "523",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 0,
@@ -993,6 +1040,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing
 		"type":           "upload",
 		"deviceModel":    "554",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
@@ -1000,6 +1048,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing
 		"type":           "cgm",
 		"deviceModel":    "523",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
@@ -1007,6 +1056,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing
 		"type":           "upload",
 		"deviceModel":    "Another Model",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
@@ -1027,6 +1077,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing
 
 func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
 	store := before(t, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "0000000000",
 		"_schemaVersion": 1,
@@ -1034,6 +1085,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
 		"type":           "upload",
 		"deviceModel":    "723",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        false,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
@@ -1041,6 +1093,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
 		"type":           "upload",
 		"deviceModel":    "523",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 0,
@@ -1048,6 +1101,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
 		"type":           "upload",
 		"deviceModel":    "554",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
@@ -1056,6 +1110,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
 		"deviceModel":    "554",
 		"uploadId":       "11223344",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
@@ -1063,6 +1118,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
 		"type":           "cgm",
 		"deviceModel":    "523",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
@@ -1071,6 +1127,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
 		"deviceModel":    "523K",
 		"uploadId":       "55667788",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
@@ -1078,6 +1135,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
 		"type":           "upload",
 		"deviceModel":    "Another Model",
 	}, bson.M{
+		"id":             uuid.New().String(),
 		"_active":        true,
 		"_userId":        "1234567890",
 		"_schemaVersion": 1,
@@ -1098,7 +1156,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
 
 func TestStore_LatestNoFilter(t *testing.T) {
 	testData := testDataForLatestTests()
-	storeData := storeDataForLatestTests()
+	storeData := storeDataForLatestTests(testData)
 
 	store := before(t, storeData...)
 
@@ -1147,7 +1205,7 @@ func TestStore_LatestNoFilter(t *testing.T) {
 
 func TestStore_LatestTypeFilter(t *testing.T) {
 	testData := testDataForLatestTests()
-	storeData := storeDataForLatestTests()
+	storeData := storeDataForLatestTests(testData)
 
 	store := before(t, storeData...)
 
@@ -1191,7 +1249,7 @@ func TestStore_LatestTypeFilter(t *testing.T) {
 
 func TestStore_LatestUploadIdFilter(t *testing.T) {
 	testData := testDataForLatestTests()
-	storeData := storeDataForLatestTests()
+	storeData := storeDataForLatestTests(testData)
 
 	store := before(t, storeData...)
 
@@ -1241,7 +1299,7 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 
 func TestStore_LatestDeviceIdFilter(t *testing.T) {
 	testData := testDataForLatestTests()
-	storeData := storeDataForLatestTests()
+	storeData := storeDataForLatestTests(testData)
 
 	store := before(t, storeData...)
 
@@ -1291,6 +1349,7 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 func TestStore_GetDeviceModel(t *testing.T) {
 	store := before(t,
 		bson.M{
+			"id":             uuid.New().String(),
 			"_active":        true,
 			"_userId":        "dblg1_1",
 			"_schemaVersion": 1,
@@ -1303,6 +1362,7 @@ func TestStore_GetDeviceModel(t *testing.T) {
 			},
 		},
 		bson.M{
+			"id":             uuid.New().String(),
 			"_active":        true,
 			"_userId":        "dblg1_1",
 			"_schemaVersion": 1,
@@ -1331,6 +1391,7 @@ func TestStore_GetDataRangeV1(t *testing.T) {
 	endDate := "2021-01-01T00:00:00.000Z"
 	store := before(t,
 		bson.M{
+			"id":      uuid.New().String(),
 			"_userId": userID,
 			"time":    "2020-01-01T00:00:00.000Z",
 			"type":    "cbg",
@@ -1338,6 +1399,7 @@ func TestStore_GetDataRangeV1(t *testing.T) {
 			"value":   12,
 		},
 		bson.M{
+			"id":      uuid.New().String(),
 			"_userId": userID,
 			"time":    "2020-06-01T00:00:00.000Z",
 			"type":    "cbg",
@@ -1345,6 +1407,7 @@ func TestStore_GetDataRangeV1(t *testing.T) {
 			"value":   12,
 		},
 		bson.M{
+			"id":      uuid.New().String(),
 			"_userId": userID,
 			"time":    "2021-01-01T00:00:00.000Z",
 			"type":    "cbg",
