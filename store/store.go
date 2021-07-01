@@ -70,7 +70,7 @@ var tideWhispererIndexes = map[string][]mongo.IndexModel{
 		},
 		{
 			Keys:    bson.D{{Key: "id", Value: 1}},
-			Options: options.Index().SetName(idxID).SetUnique(true),
+			Options: options.Index().SetName(idxID),
 		},
 	},
 }

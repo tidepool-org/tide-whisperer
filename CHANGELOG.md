@@ -2,7 +2,7 @@
 
 Data access API for tidepool
 
-## Unreleased
+## 0.9.1 - 2021-07-01
 ### Fixed
 - YLP-858 Some algorithm settings are visible on the daily view
 - YLP-859 Missing index on id field for deviceData
