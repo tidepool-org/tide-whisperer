@@ -101,3 +101,54 @@ func TestAPI_GetDataV1(t *testing.T) {
 		t.Fatalf("Expected '%s' to equal '%s'", bodyStr, expectedBody)
 	}
 }
+
+func TestAPI_GetDataV1_Parameters(t *testing.T) {
+	traceID := uuid.New().String()
+	userID := "abcdef"
+	urlParams := map[string]string{
+		"userID": userID,
+	}
+
+	storage.DataV1 = []string{
+		"{\"id\":\"01\",\"uploadId\":\"00\",\"time\":\"2021-01-10T00:00:01.000Z\",\"type\":\"deviceEvent\",\"subType\":\"deviceParameter\",\"level\":\"1\"}",
+		"{\"id\":\"02\",\"uploadId\":\"00\",\"time\":\"2021-01-10T00:00:02.000Z\",\"type\":\"deviceEvent\",\"subType\":\"deviceParameter\",\"level\":\"2\"}",
+		"{\"id\":\"03\",\"uploadId\":\"00\",\"time\":\"2021-01-10T00:00:03.000Z\",\"type\":\"deviceEvent\",\"subType\":\"deviceParameter\",\"level\":\"3\"}",
+	}
+	storage.DataIDV1 = []string{
+		"{\"id\":\"00\",\"uploadId\":\"00\",\"time\":\"2021-01-10T00:00:00.000Z\",\"type\":\"upload\"}",
+	}
+	t.Cleanup(func() {
+		storage.DataV1 = nil
+		storage.DataIDV1 = nil
+	})
+
+	resetOPAMockRouteV1(true, "/v1/data", userID)
+	handlerLogFunc := tidewhisperer.middlewareV1(tidewhisperer.getDataV1, "userID")
+
+	request, _ := http.NewRequest("GET", "/v1/data/"+userID, nil)
+	request.Header.Set("x-tidepool-trace-session", traceID)
+	request.Header.Set("x-tidepool-session-token", userID)
+	request = mux.SetURLVars(request, urlParams)
+	response := httptest.NewRecorder()
+
+	handlerLogFunc(response, request)
+	result := response.Result()
+	if result.StatusCode != http.StatusOK {
+		t.Fatalf("Expected %d to equal %d", response.Code, http.StatusOK)
+	}
+
+	body := make([]byte, 1024)
+	defer result.Body.Close()
+	n, _ := result.Body.Read(body)
+	bodyStr := string(body[:n])
+
+	expectedBody := `[
+{"id":"01","level":"1","subType":"deviceParameter","time":"2021-01-10T00:00:01.000Z","type":"deviceEvent","uploadId":"00"},
+{"id":"02","level":"2","subType":"deviceParameter","time":"2021-01-10T00:00:02.000Z","type":"deviceEvent","uploadId":"00"},
+{"id":"00","time":"2021-01-10T00:00:00.000Z","type":"upload","uploadId":"00"}]
+`
+
+	if bodyStr != expectedBody {
+		t.Fatalf("Expected '%s' to equal '%s'", bodyStr, expectedBody)
+	}
+}

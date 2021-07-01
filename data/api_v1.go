@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -36,6 +37,9 @@ type (
 		jsonError errorCounter
 	}
 )
+
+// Parameters level to keep in api response
+var parameterLevelFilter = [...]int{1, 2}
 
 func (a *API) setHandlesV1(prefix string, rtr *mux.Router) {
 	// rtr.HandleFunc(prefix+"/status", a.requestLogger(a.getStatus)).Methods("GET")
@@ -208,14 +212,11 @@ func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
 		queryDuration = time.Since(queryStart).Seconds()
 		a.logger.Printf("{%s} a.store.GetLatestPumpSettingsV1 for %v took  %.3fs", res.TraceID, userID, queryDuration)
 		defer iterPumpSettings.Close(ctx)
-
 		// Fetch parameters history from portal:
-		levelFilter := make([]int, 1)
-		levelFilter = append(levelFilter, 1)
 		queryStart = time.Now()
-		writeParams.parametersHistory, err = a.store.GetDiabeloopParametersHistory(ctx, userID, levelFilter)
+		writeParams.parametersHistory, err = a.store.GetDiabeloopParametersHistory(ctx, userID, parameterLevelFilter[:])
 		queryDuration = time.Since(queryStart).Seconds()
-		a.logger.Printf("{%s} a.store.GetDiabeloopParametersHistory for %v (level %v took  %.3fs", res.TraceID, userID, levelFilter, queryDuration)
+		a.logger.Printf("{%s} a.store.GetDiabeloopParametersHistory for %v (level %v took  %.3fs", res.TraceID, userID, parameterLevelFilter[:], queryDuration)
 		if err != nil {
 			// Just log the problem, don't crash the query
 			writeParams.parametersHistory = nil
@@ -331,6 +332,18 @@ func writeFromIterV1(ctx context.Context, p *writeFromIter) error {
 			if !haveUploadID {
 				// No upload ID, abnormal situation
 				continue
+			}
+			if datumType == "deviceEvent" {
+				datumSubType, haveSubType := datum["subType"].(string)
+				if haveSubType && datumSubType == "deviceParameter" {
+					datumLevel, haveLevel := datum["level"]
+					if haveLevel {
+						intLevel, err := strconv.Atoi(fmt.Sprintf("%v", datumLevel))
+						if err == nil && !containsInt(parameterLevelFilter[:], intLevel) {
+							continue
+						}
+					}
+				}
 			}
 			// Record the uploadID
 			if !(datumType == "upload" && uploadID == datumID) {

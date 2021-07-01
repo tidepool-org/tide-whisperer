@@ -35,6 +35,14 @@ func contains(a []string, x string) bool {
 	}
 	return false
 }
+func containsInt(a []int, x int) bool {
+	for _, n := range a {
+		if x == n {
+			return true
+		}
+	}
+	return false
+}
 
 func timeIt(name string) {
 	if _, present := timerValues[name]; present {
