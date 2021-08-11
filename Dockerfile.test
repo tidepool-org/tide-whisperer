@@ -7,7 +7,7 @@ RUN apt-get update -y && \
     apt-get install -y --no-install-recommends wget build-essential psmisc && \
     apt-get clean -y
 WORKDIR /tmp
-ENV GO_ARCHIVE go1.16.4.linux-amd64.tar.gz
+ENV GO_ARCHIVE go1.16.6.linux-amd64.tar.gz
 ENV GOROOT /go
 ENV GOPATH /root/go
 RUN wget -nv https://golang.org/dl/$GO_ARCHIVE && \
@@ -29,4 +29,4 @@ RUN /bin/bash -c '/usr/local/bin/docker-entrypoint.sh mongod &' && \
     kill "$(ps -C mongod -o pid=)" && \
     sleep 1
 
-ENTRYPOINT ["/bin/true"]
+ENTRYPOINT ["/bin/cat", "coverage.html"]

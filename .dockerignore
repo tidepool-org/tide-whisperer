@@ -4,3 +4,5 @@ docs
 Dockerfile*
 test-result.txt
 test-report.xml
+coverage.html
+coverage.out

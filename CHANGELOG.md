@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## 0.10.0 - 2021-08-10
+### Added
+- YLP-892 Add tide-whisperer v1 route for compute TIR & TBR with pumpSettings parameters
+
 ## 0.9.1 - 2021-07-01
 ### Fixed
 - YLP-858 Some algorithm settings are visible on the daily view

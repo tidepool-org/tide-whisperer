@@ -47,6 +47,8 @@ type MockStoreClient struct {
 	DataRangeV1 []string
 	DataV1      []string
 	DataIDV1    []string
+	DataBGV1    []string
+	DataPSV1    *string
 }
 
 func NewMockStoreClient() *MockStoreClient {
@@ -156,6 +158,13 @@ func (c *MockStoreClient) GetDataV1(ctx context.Context, traceID string, userID 
 
 // GetLatestPumpSettingsV1 return the latest type == "pumpSettings"
 func (c *MockStoreClient) GetLatestPumpSettingsV1(ctx context.Context, traceID string, userID string) (goComMgo.StorageIterator, error) {
+	if c.DataPSV1 != nil {
+		return &MockStoreIterator{
+			numIter: -1,
+			maxIter: 1,
+			data:    []string{*c.DataPSV1},
+		}, nil
+	}
 	return nil, fmt.Errorf("{%s} - [%s] - No data", traceID, userID)
 }
 
@@ -168,5 +177,17 @@ func (c *MockStoreClient) GetDataFromIDV1(ctx context.Context, traceID string, i
 			data:    c.DataIDV1,
 		}, nil
 	}
-	return nil, fmt.Errorf("{%s} -No data", traceID)
+	return nil, fmt.Errorf("{%s} - No data", traceID)
+}
+
+// GetCbgForSummaryV1 return the cbg/smbg values for the given user starting at startDate
+func (c *MockStoreClient) GetCbgForSummaryV1(ctx context.Context, traceID string, userID string, startDate string) (goComMgo.StorageIterator, error) {
+	if c.DataBGV1 != nil {
+		return &MockStoreIterator{
+			numIter: -1,
+			maxIter: len(c.DataBGV1),
+			data:    c.DataBGV1,
+		}, nil
+	}
+	return nil, fmt.Errorf("{%s} - No data", traceID)
 }

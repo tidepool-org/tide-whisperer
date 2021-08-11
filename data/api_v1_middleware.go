@@ -40,6 +40,8 @@ type (
 	RequestLoggerFunc func(HandlerLoggerFunc) HandlerLoggerFunc
 )
 
+var emptyUserIDs = []string{}
+
 func (res *httpResponseWriter) Grow(n int) {
 	if n > 0 { // Avoid Grow panic()
 		res.writeBuffer.Grow(n)
@@ -94,11 +96,11 @@ func (res *httpResponseWriter) WriteHeader(statusCode int) {
 }
 
 // middlewareV1 middleware to log received requests
-func (a *API) middlewareV1(fn HandlerLoggerFunc, params ...string) http.HandlerFunc {
+func (a *API) middlewareV1(fn HandlerLoggerFunc, checkPermissions bool, params ...string) http.HandlerFunc {
+	// The mux handler func:
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		start := time.Now().UTC()
-		ctx := r.Context()
 
 		// It is recommended by go to get the request information before writing
 		// So get theses now
@@ -115,6 +117,9 @@ func (a *API) middlewareV1(fn HandlerLoggerFunc, params ...string) http.HandlerF
 			traceID = uuid.New().String()
 		}
 
+		// Make our context
+		ctx := timeItContext(r.Context())
+
 		res := httpResponseWriter{
 			Header:     r.Header.Clone(), // Clone the header, to be sure
 			URL:        r.URL,
@@ -124,6 +129,7 @@ func (a *API) middlewareV1(fn HandlerLoggerFunc, params ...string) http.HandlerF
 			err:        nil,
 		}
 
+		userIDs := emptyUserIDs
 		// The handler have parameters, get them
 		if len(params) > 0 {
 			res.VARS = mux.Vars(r) // Decode route parameter
@@ -132,13 +138,24 @@ func (a *API) middlewareV1(fn HandlerLoggerFunc, params ...string) http.HandlerF
 				// userID is a commonly used parameter
 				// See if we can view the data
 				userID := res.VARS["userID"]
+				userIDs = []string{userID}
 
-				if userID == "" {
-					res.WriteError(&errorInvalidParameters)
-				} else if !a.isAuthorized(r, []string{userID}) {
-					res.WriteError(&errorNoViewPermission)
+				if len(userID) > 64 {
+					// Quick verification on the userID for security reason
+					// Partial but may help without beeing a burden
+					// 64 characters is probably a good compromise
+					res.WriteError(&detailedError{
+						Status:          http.StatusBadRequest,
+						Code:            "invalid_userid",
+						Message:         "Invalid parameter userId",
+						InternalMessage: "userID do not match the regex",
+					})
 				}
 			}
+		}
+
+		if checkPermissions && !a.isAuthorized(r, userIDs) {
+			err = res.WriteError(&errorNoViewPermission)
 		}
 
 		// Mainteners: No read from the request below this point!
@@ -146,12 +163,18 @@ func (a *API) middlewareV1(fn HandlerLoggerFunc, params ...string) http.HandlerF
 		// Make the call to the API function if we can:
 		if res.err == nil {
 			err = fn(ctx, &res)
+			if err != nil {
+				logErrors = append(logErrors, fmt.Sprintf("efn:\"%s\"", err))
+			}
 		}
 
 		// We will send a JSON, so advertise it for all of our requests
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(res.statusCode)
-		w.Write([]byte(res.writeBuffer.String()))
+		_, err = w.Write([]byte(res.writeBuffer.String()))
+		if err != nil {
+			logErrors = append(logErrors, fmt.Sprintf("eww:\"%s\"", err))
+		}
 
 		// Log errors management
 		if res.err != nil {
@@ -163,18 +186,21 @@ func (a *API) middlewareV1(fn HandlerLoggerFunc, params ...string) http.HandlerF
 			}
 		}
 
-		if err != nil {
-			logErrors = append(logErrors, fmt.Sprintf("werr:\"%s\"", err))
-		}
-
 		// Get the time spent on it
 		end := time.Now().UTC()
 		dur := end.Sub(start).Milliseconds()
 		// Log the message
-		logError := ""
+		var logError string
 		if len(logErrors) > 0 {
-			logError = fmt.Sprintf(" - {%s} -", strings.Join(logErrors, ","))
+			logError = fmt.Sprintf("{%s} - ", strings.Join(logErrors, ","))
 		}
-		a.logger.Printf("{%s}%s %s %d - %d ms - %d bytes", traceID, logError, logRequest, res.statusCode, dur, res.size)
+
+		timerResults := timeResults(ctx)
+		if len(timerResults) > 0 {
+			timerResults = fmt.Sprintf("{%s} %d ms", timerResults, dur)
+		} else {
+			timerResults = fmt.Sprintf("%d ms", dur)
+		}
+		a.logger.Printf("{%s} %s %d - %s%s - %d bytes", traceID, logRequest, res.statusCode, logError, timerResults, res.size)
 	}
 }

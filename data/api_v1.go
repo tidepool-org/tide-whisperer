@@ -15,7 +15,6 @@ import (
 )
 
 type (
-
 	// errorCounter to record only the first error to avoid spamming the log and takes too much time
 	errorCounter struct {
 		firstError error
@@ -36,6 +35,53 @@ type (
 		// datum JSON marshall errors
 		jsonError errorCounter
 	}
+	// SummaryResultV1 returned by the summary v1 route
+	SummaryResultV1 struct {
+		// The userID of this summary
+		UserID string `json:"userId"`
+		// First upload data date (ISO-8601 datetime)
+		RangeStart string `json:"rangeStart"`
+		// Last upload data date (ISO-8601 datetime)
+		RangeEnd string `json:"rangeEnd"`
+		// Number of days used to compute the TIR & TBR
+		ComputeDays int `json:"computeDays"`
+		// % of cbg/smbg in range (TIR)
+		PercentTimeInRange int `json:"percentTimeInRange"`
+		// % of cbg/smbg below range (TBR)
+		PercentTimeBelowRange int `json:"percentTimeBelowRange"`
+		// Number of bg values used to compute the TIR & TBR (if 0, the percent values are meaningless)
+		NumBgValues int `json:"numBgValues"`
+		// The Hypo limit used to compute TIR & TBR
+		GlyHypoLimit float64 `json:"glyHypoLimit"`
+		// The Hyper limit used to compute TIR & TBR
+		GlyHyperLimit float64 `json:"glyHyperLimit"`
+		// The unit of hypo/hyper values
+		GlyUnit string `json:"glyUnit"`
+	}
+	simplifiedBgDatum struct {
+		Value float64 `json:"value" bson:"value"`
+		Unit  string  `json:"units" bson:"units"`
+	}
+	deviceParameter struct {
+		Level int    `json:"level" bson:"level"`
+		Name  string `json:"name" bson:"name"`
+		Unit  string `json:"unit" bson:"unit"`
+		Value string `json:"value" bson:"value"`
+	}
+	pumpSettingsPayload struct {
+		Parameters []deviceParameter `json:"parameters" bson:"parameters"`
+		// Uncomment & fill if needed:
+		// Device     map[string]string `json:"device" bson:"device"`
+		// CGM        map[string]string `json:"cgm" bson:"cgm"`
+		// Pump       map[string]string `json:"pump" bson:"pump"`
+	}
+	// PumpSettings datum to get a specific device parameter
+	PumpSettings struct {
+		ID      string              `json:"id" bson:"id"`
+		Type    string              `json:"type" bson:"type"`
+		Time    string              `json:"time" bson:"time"`
+		Payload pumpSettingsPayload `json:"payload" bson:"payload"`
+	}
 )
 
 // Parameters level to keep in api response
@@ -43,9 +89,10 @@ var parameterLevelFilter = [...]int{1, 2}
 
 func (a *API) setHandlesV1(prefix string, rtr *mux.Router) {
 	// rtr.HandleFunc(prefix+"/status", a.requestLogger(a.getStatus)).Methods("GET")
-	rtr.HandleFunc(prefix+"/range/{userID}", a.middlewareV1(a.getRangeV1, "userID")).Methods("GET")
-	rtr.HandleFunc(prefix+"/data/{userID}", a.middlewareV1(a.getDataV1, "userID")).Methods("GET")
-	rtr.HandleFunc(prefix+"/{.*}", a.middlewareV1(a.getNotFoundV1)).Methods("GET")
+	rtr.HandleFunc(prefix+"/range/{userID}", a.middlewareV1(a.getRangeV1, true, "userID")).Methods("GET")
+	rtr.HandleFunc(prefix+"/summary/{userID}", a.middlewareV1(a.getDataSummaryV1, true, "userID")).Methods("GET")
+	rtr.HandleFunc(prefix+"/data/{userID}", a.middlewareV1(a.getDataV1, true, "userID")).Methods("GET")
+	rtr.HandleFunc(prefix+"/{.*}", a.middlewareV1(a.getNotFoundV1, false)).Methods("GET")
 }
 
 // getNotFoundV1 should it be version free?
@@ -83,13 +130,128 @@ func (a *API) getRangeV1(ctx context.Context, res *httpResponseWriter) error {
 		return res.WriteError(logError)
 	}
 
-	if dates.Start == "" || dates.End == "" {
+	if dates == nil || dates.Start == "" || dates.End == "" {
 		return res.WriteError(&errorNotfound)
 	}
 
 	result := make([]string, 2)
 	result[0] = dates.Start
 	result[1] = dates.End
+
+	jsonResult, err := json.Marshal(result)
+	if err != nil {
+		logError := &detailedError{
+			Status:          http.StatusInternalServerError,
+			Code:            "json_marshall_error",
+			Message:         "internal server error",
+			InternalMessage: err.Error(),
+		}
+		return res.WriteError(logError)
+	}
+
+	return res.Write(jsonResult)
+}
+
+// @Summary Get the data summary for a specific patient
+//
+// @Description Return summary information for a patient (TIR/TBR/...)
+//
+// @ID tide-whisperer-api-v1-getsummary
+// @Produce json
+//
+// @Param userID path string true "The ID of the user"
+//
+// @Param days query integer false "The number of days used to compute TIR & TBR" default(1)
+//
+// @Success 200 {object} data.SummaryResultV1
+// @Failure 400 {object} data.detailedError
+// @Failure 403 {object} data.detailedError
+// @Failure 404 {object} data.detailedError
+// @Failure 500 {object} data.detailedError
+//
+// @Param x-tidepool-trace-session header string false "Trace session uuid" format(uuid)
+// @Security TidepoolAuth
+//
+// @Router /v1/summary/{userID} [get]
+func (a *API) getDataSummaryV1(ctx context.Context, res *httpResponseWriter) error {
+	var err error
+	var numDays int64 = 1
+
+	userID := res.VARS["userID"]
+	query := res.URL.Query()
+	daysStr := query.Get("days")
+
+	if daysStr != "" && daysStr != "1" {
+		numDays, err = strconv.ParseInt(daysStr, 10, 8)
+		if err != nil || numDays < 1 || numDays > 31 {
+			logError := &detailedError{
+				Status:          errorInvalidParameters.Status,
+				Code:            errorInvalidParameters.Code,
+				Message:         "invalid days parameter",
+				InternalMessage: err.Error(),
+			}
+			return res.WriteError(logError)
+		}
+	}
+
+	// First get the data range
+	dates, startTime, err := a.getDataSummaryRangeV1(ctx, res.TraceID, userID, numDays)
+	if err != nil {
+		var logError *detailedError
+		if err.Error() == errorNotfound.Code {
+			logError = &errorNotfound
+		} else {
+			logError = &detailedError{
+				Status:          errorRunningQuery.Status,
+				Code:            errorRunningQuery.Code,
+				Message:         errorRunningQuery.Message,
+				InternalMessage: err.Error(),
+			}
+		}
+		return res.WriteError(logError)
+	}
+
+	// Get the current device parameters (to get hypo/hyper values)
+	glyLimits, err := a.getDataSummaryGlyLimits(ctx, res.TraceID, userID)
+	if err != nil {
+		logError := &detailedError{
+			Status:          errorRunningQuery.Status,
+			Code:            errorRunningQuery.Code,
+			Message:         errorRunningQuery.Message,
+			InternalMessage: err.Error(),
+		}
+		return res.WriteError(logError)
+	}
+
+	// Get the BG percent below/in range
+	tresholds, err := a.getDataSummaryThresholds(ctx, res.TraceID, userID, startTime, glyLimits)
+	if err != nil {
+		logError := &detailedError{
+			Status:          errorRunningQuery.Status,
+			Code:            errorRunningQuery.Code,
+			Message:         errorRunningQuery.Message,
+			InternalMessage: err.Error(),
+		}
+		return res.WriteError(logError)
+	}
+
+	result := &SummaryResultV1{
+		UserID:                userID,
+		RangeStart:            dates.Start,
+		RangeEnd:              dates.End,
+		ComputeDays:           int(numDays),
+		NumBgValues:           tresholds.totalNumBgValues,
+		PercentTimeBelowRange: tresholds.percentTimeBelowRange,
+		PercentTimeInRange:    tresholds.percentTimeInRange,
+		GlyUnit:               glyLimits.unit,
+	}
+	if glyLimits.unit == unitMgdL {
+		result.GlyHypoLimit = glyLimits.hypoMgdl
+		result.GlyHyperLimit = glyLimits.hyperMgdl
+	} else {
+		result.GlyHypoLimit = glyLimits.hypoMmoll
+		result.GlyHyperLimit = glyLimits.hyperMmoll
+	}
 
 	jsonResult, err := json.Marshal(result)
 	if err != nil {
@@ -136,8 +298,6 @@ func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
 	var iterData mongo.StorageIterator
 	var iterPumpSettings mongo.StorageIterator
 	var iterUploads mongo.StorageIterator
-	var queryStart time.Time
-	var queryDuration float64
 	userID := res.VARS["userID"]
 
 	query := res.URL.Query()
@@ -197,10 +357,9 @@ func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
 	if withPumpSettings {
 		// Initial query to fetch for this user, the client wants the
 		// latest pumpSettings
-		queryStart = time.Now()
+		timeIt(ctx, "getLastPumpSettings")
 		iterPumpSettings, err = a.store.GetLatestPumpSettingsV1(ctx, res.TraceID, userID)
 		if err != nil {
-
 			logError := &detailedError{
 				Status:          errorRunningQuery.Status,
 				Code:            errorRunningQuery.Code,
@@ -209,24 +368,22 @@ func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
 			}
 			return res.WriteError(logError)
 		}
-		queryDuration = time.Since(queryStart).Seconds()
-		a.logger.Printf("{%s} a.store.GetLatestPumpSettingsV1 for %v took  %.3fs", res.TraceID, userID, queryDuration)
 		defer iterPumpSettings.Close(ctx)
+		timeEnd(ctx, "getLastPumpSettings")
+
 		// Fetch parameters history from portal:
-		queryStart = time.Now()
+		timeIt(ctx, "getParamHistory")
 		writeParams.parametersHistory, err = a.store.GetDiabeloopParametersHistory(ctx, userID, parameterLevelFilter[:])
-		queryDuration = time.Since(queryStart).Seconds()
-		a.logger.Printf("{%s} a.store.GetDiabeloopParametersHistory for %v (level %v took  %.3fs", res.TraceID, userID, parameterLevelFilter[:], queryDuration)
 		if err != nil {
 			// Just log the problem, don't crash the query
 			writeParams.parametersHistory = nil
 			a.logger.Printf("{%s} - {GetDiabeloopParametersHistory:\"%s\"}", res.TraceID, err)
 		}
-
+		timeEnd(ctx, "getParamHistory")
 	}
 
 	// Fetch normal data:
-	queryStart = time.Now()
+	timeIt(ctx, "getData")
 	iterData, err = a.store.GetDataV1(ctx, res.TraceID, userID, dates)
 	if err != nil {
 		logError := &detailedError{
@@ -237,12 +394,12 @@ func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
 		}
 		return res.WriteError(logError)
 	}
-	queryDuration = time.Since(queryStart).Seconds()
-	a.logger.Printf("{%s} a.store.GetDataV1 for %v (dates: %v) took  %.3fs", res.TraceID, userID, dates, queryDuration)
 	defer iterData.Close(ctx)
+	timeEnd(ctx, "getData")
 
+	timeIt(ctx, "writeData")
+	defer timeEnd(ctx, "writeData")
 	// We return a JSON array, first charater is: '['
-	queryStart = time.Now()
 	err = res.WriteString("[\n")
 	if err != nil {
 		return err
@@ -256,34 +413,32 @@ func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
 		}
 	}
 
+	timeIt(ctx, "writeDataMain")
 	writeParams.iter = iterData
 	err = writeFromIterV1(ctx, writeParams)
 	if err != nil {
 		return err
 	}
-	queryDuration = time.Since(queryStart).Seconds()
-	a.logger.Printf("{%s} writing main data took  %.3fs", res.TraceID, queryDuration)
+	timeEnd(ctx, "writeDataMain")
+
 	// Fetch uploads
 	if len(writeParams.uploadIDs) > 0 {
-		queryStart = time.Now()
+		timeIt(ctx, "getUploads")
 		iterUploads, err = a.store.GetDataFromIDV1(ctx, res.TraceID, writeParams.uploadIDs)
 		if err != nil {
 			// Just log the problem, don't crash the query
 			writeParams.parametersHistory = nil
 			a.logger.Printf("{%s} - {GetDataFromIDV1:\"%s\"}", res.TraceID, err)
 		} else {
-			queryDuration = time.Since(queryStart).Seconds()
-			a.logger.Printf("{%s} a.store.GetDataFromIDV1 for %v (uploadIDs: %v) took  %.3fs", res.TraceID, userID, writeParams.uploadIDs, queryDuration)
-			queryStart = time.Now()
 			defer iterUploads.Close(ctx)
 			writeParams.iter = iterUploads
 			err = writeFromIterV1(ctx, writeParams)
 			if err != nil {
+				timeEnd(ctx, "getUploads")
 				return err
 			}
-			queryDuration = time.Since(queryStart).Seconds()
-			a.logger.Printf("{%s} writing uploadIDs data took %.3fs", res.TraceID, queryDuration)
 		}
+		timeEnd(ctx, "getUploads")
 	}
 
 	// Silently failed theses error to the client, but record them to the log

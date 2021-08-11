@@ -101,12 +101,13 @@ func TestApiV1MiddlewareNoError(t *testing.T) {
 		return nil
 	}
 
-	handlerLogFunc := tidewhisperer.middlewareV1(handlerFunc)
+	handlerLogFunc := tidewhisperer.middlewareV1(handlerFunc, false)
 
 	traceID := uuid.New().String()
-	request, _ := http.NewRequest("GET", "/test", nil)
+	request, _ := http.NewRequest("GET", "/v1/no-error", nil)
 	request.Header.Set("x-tidepool-trace-session", traceID)
 	response := httptest.NewRecorder()
+
 	handlerLogFunc(response, request)
 
 	result := response.Result()
@@ -135,7 +136,7 @@ func TestApiV1MiddlewareErrorResponse(t *testing.T) {
 		return nil
 	}
 
-	handlerLogFunc := tidewhisperer.middlewareV1(handlerFunc)
+	handlerLogFunc := tidewhisperer.middlewareV1(handlerFunc, false)
 
 	traceID := uuid.New().String()
 	request, _ := http.NewRequest("GET", "/test", nil)
@@ -177,7 +178,7 @@ func TestApiV1MiddlewareNoErrorWithUserID(t *testing.T) {
 		return nil
 	}
 
-	handlerLogFunc := tidewhisperer.middlewareV1(handlerFunc, "userID")
+	handlerLogFunc := tidewhisperer.middlewareV1(handlerFunc, true, "userID")
 
 	request, _ := http.NewRequest("GET", "/test/abcdef", nil)
 	request.Header.Set("x-tidepool-trace-session", traceID)
@@ -226,7 +227,7 @@ func TestApiV1MiddlewareNotAuthorizedWithUserID(t *testing.T) {
 		return nil
 	}
 
-	handlerLogFunc := tidewhisperer.middlewareV1(handlerFunc, "userID")
+	handlerLogFunc := tidewhisperer.middlewareV1(handlerFunc, true, "userID")
 
 	request, _ := http.NewRequest("GET", "/test/abcdef", nil)
 	request.Header.Set("x-tidepool-trace-session", traceID)

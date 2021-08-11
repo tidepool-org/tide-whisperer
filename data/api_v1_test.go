@@ -1,6 +1,7 @@
 package data
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -22,7 +23,7 @@ func TestAPI_GetRangeV1(t *testing.T) {
 		storage.DataRangeV1 = nil
 	})
 	expectedValue := "[\"" + storage.DataRangeV1[0] + "\",\"" + storage.DataRangeV1[1] + "\"]"
-	handlerLogFunc := tidewhisperer.middlewareV1(tidewhisperer.getRangeV1, "userID")
+	handlerLogFunc := tidewhisperer.middlewareV1(tidewhisperer.getRangeV1, true, "userID")
 
 	request, _ := http.NewRequest("GET", "/v1/range/"+userID, nil)
 	request.Header.Set("x-tidepool-trace-session", traceID)
@@ -69,7 +70,7 @@ func TestAPI_GetDataV1(t *testing.T) {
 	})
 
 	resetOPAMockRouteV1(true, "/v1/data", userID)
-	handlerLogFunc := tidewhisperer.middlewareV1(tidewhisperer.getDataV1, "userID")
+	handlerLogFunc := tidewhisperer.middlewareV1(tidewhisperer.getDataV1, true, "userID")
 
 	request, _ := http.NewRequest("GET", "/v1/data/"+userID, nil)
 	request.Header.Set("x-tidepool-trace-session", traceID)
@@ -123,7 +124,7 @@ func TestAPI_GetDataV1_Parameters(t *testing.T) {
 	})
 
 	resetOPAMockRouteV1(true, "/v1/data", userID)
-	handlerLogFunc := tidewhisperer.middlewareV1(tidewhisperer.getDataV1, "userID")
+	handlerLogFunc := tidewhisperer.middlewareV1(tidewhisperer.getDataV1, true, "userID")
 
 	request, _ := http.NewRequest("GET", "/v1/data/"+userID, nil)
 	request.Header.Set("x-tidepool-trace-session", traceID)
@@ -148,6 +149,81 @@ func TestAPI_GetDataV1_Parameters(t *testing.T) {
 {"id":"00","time":"2021-01-10T00:00:00.000Z","type":"upload","uploadId":"00"}]
 `
 
+	if bodyStr != expectedBody {
+		t.Fatalf("Expected '%s' to equal '%s'", bodyStr, expectedBody)
+	}
+}
+
+func TestAPI_GetDataSummaryV1(t *testing.T) {
+	userID := "abcdef"
+	urlParams := map[string]string{
+		"userID": userID,
+	}
+	pumpSettings := &PumpSettings{
+		ID:   "1",
+		Type: "pumpSettings",
+		Time: "2021-01-02T20:00:00.000Z",
+		Payload: pumpSettingsPayload{
+			Parameters: []deviceParameter{
+				{
+					Level: 1,
+					Name:  "PATIENT_GLY_HYPO_LIMIT",
+					Value: "70",
+					Unit:  "mg/dL",
+				}, {
+					Level: 1,
+					Name:  "PATIENT_GLY_HYPER_LIMIT",
+					Value: "180",
+					Unit:  "mg/dL",
+				}, {
+					Level: 1,
+					Name:  "WEIGHT",
+					Value: "80",
+					Unit:  "kg",
+				},
+			},
+		},
+	}
+	pumpSettingsJSON, err := json.Marshal(pumpSettings)
+	if err != nil {
+		t.Fatalf("Marshal pump settings: %e", err)
+	}
+	dataPS := string(pumpSettingsJSON)
+
+	resetOPAMockRouteV1(true, "/v1/summary", userID)
+	handlerLogFunc := tidewhisperer.middlewareV1(tidewhisperer.getDataSummaryV1, true, "userID")
+
+	storage.DataRangeV1 = []string{"2021-01-01T00:00:00.000Z", "2021-01-03T00:00:00.000Z"}
+	storage.DataPSV1 = &dataPS
+	storage.DataBGV1 = []string{
+		"{\"value\":60,\"units\":\"mg/dL\"}",
+		"{\"value\":80,\"units\":\"mg/dL\"}",
+		"{\"value\":84,\"units\":\"mg/dL\"}",
+		"{\"value\":200,\"units\":\"mg/dL\"}",
+	}
+	t.Cleanup(func() {
+		storage.DataRangeV1 = nil
+		storage.DataPSV1 = nil
+		storage.DataBGV1 = nil
+	})
+
+	request, _ := http.NewRequest("GET", "/v1/summary/"+userID, nil)
+	request.Header.Set("x-tidepool-session-token", userID)
+	request = mux.SetURLVars(request, urlParams)
+	response := httptest.NewRecorder()
+
+	handlerLogFunc(response, request)
+	result := response.Result()
+	if result.StatusCode != http.StatusOK {
+		t.Fatalf("Expected %d to equal %d", response.Code, http.StatusOK)
+	}
+
+	body := make([]byte, 256)
+	defer result.Body.Close()
+	n, _ := result.Body.Read(body)
+	bodyStr := string(body[:n])
+
+	expectedBody := "{\"userId\":\"abcdef\",\"rangeStart\":\"2021-01-01T00:00:00.000Z\",\"rangeEnd\":\"2021-01-03T00:00:00.000Z\",\"computeDays\":1,\"percentTimeInRange\":50,\"percentTimeBelowRange\":25,\"numBgValues\":4,\"glyHypoLimit\":70,\"glyHyperLimit\":180,\"glyUnit\":\"mg/dL\"}"
 	if bodyStr != expectedBody {
 		t.Fatalf("Expected '%s' to equal '%s'", bodyStr, expectedBody)
 	}

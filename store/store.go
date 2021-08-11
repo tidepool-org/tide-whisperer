@@ -60,6 +60,17 @@ var unwantedPumpSettingsFields = bson.M{
 	"insulinSensitivities": 0,
 }
 
+var wantedRangeFields = bson.M{
+	"_id":  0,
+	"time": 1,
+}
+
+var wantedBgFields = bson.M{
+	"_id":   0,
+	"value": 1,
+	"units": 1,
+}
+
 var tideWhispererIndexes = map[string][]mongo.IndexModel{
 	"deviceData": {
 		{
@@ -93,6 +104,7 @@ type (
 		GetDataV1(ctx context.Context, traceID string, userID string, dates *Date) (goComMgo.StorageIterator, error)
 		GetLatestPumpSettingsV1(ctx context.Context, traceID string, userID string) (goComMgo.StorageIterator, error)
 		GetDataFromIDV1(ctx context.Context, traceID string, ids []string) (goComMgo.StorageIterator, error)
+		GetCbgForSummaryV1(ctx context.Context, traceID string, userID string, startDate string) (goComMgo.StorageIterator, error)
 	}
 
 	// SchemaVersion struct
@@ -581,6 +593,8 @@ func (c *Client) GetDeviceModel(ctx context.Context, userID string) (string, err
 }
 
 // GetDataRangeV1 returns the time data range
+//
+// If no data for the requested user, return nil or empty string dates
 func (c *Client) GetDataRangeV1(ctx context.Context, traceID string, userID string) (*Date, error) {
 	if userID == "" {
 		return nil, errors.New("user id is missing")
@@ -600,13 +614,16 @@ func (c *Client) GetDataRangeV1(ctx context.Context, traceID string, userID stri
 
 	opts := options.FindOne()
 	opts.SetHint(idxUserIDTypeTime)
-	opts.SetProjection(bson.M{"time": 1})
+	opts.SetProjection(wantedRangeFields)
 	opts.SetComment(traceID)
 
 	// Finding Last time (i.e. findOne with sort time DESC)
 	opts.SetSort(bson.D{primitive.E{Key: "time", Value: -1}})
 	err := dataCollection(c).FindOne(ctx, query, opts).Decode(&res)
 	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil
+		}
 		return nil, err
 	}
 	dateRange.End = res["time"].(string)
@@ -671,5 +688,20 @@ func (c *Client) GetDataFromIDV1(ctx context.Context, traceID string, ids []stri
 	opts.SetProjection(unwantedFields)
 	opts.SetComment(traceID)
 	opts.SetHint(idxID)
+	return dataCollection(c).Find(ctx, query, opts)
+}
+
+// GetCbgForSummaryV1 return the cbg/smbg values for the given user starting at startDate
+func (c *Client) GetCbgForSummaryV1(ctx context.Context, traceID string, userID string, startDate string) (goComMgo.StorageIterator, error) {
+	query := bson.M{
+		"_userId": userID,
+		"type":    "cbg",
+		"time":    bson.M{"$gt": startDate},
+	}
+
+	opts := options.Find()
+	opts.SetProjection(wantedBgFields)
+	opts.SetComment(traceID)
+	opts.SetHint(idxUserIDTypeTime)
 	return dataCollection(c).Find(ctx, query, opts)
 }

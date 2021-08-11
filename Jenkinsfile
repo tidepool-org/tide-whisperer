@@ -15,7 +15,7 @@ pipeline {
                 }
             }
         }
-        stage('Build ') {
+        stage('Build') {
             agent {
                 docker {
                     image 'docker.ci.diabeloop.eu/go-build:1.15'
@@ -25,7 +25,7 @@ pipeline {
                 sh "$WORKSPACE/build.sh"
             }
         }
-        stage('Test ') {
+        stage('Test') {
             steps {
                 echo 'start mongo to serve as a testing db'
                 sh 'docker network create twtest${RUN_ID} && docker run --rm -d --net=twtest${RUN_ID} --name=mongo4twtest${RUN_ID} mongo:4.2'
@@ -39,6 +39,7 @@ pipeline {
                 always {
                     sh 'docker stop mongo4twtest${RUN_ID} && docker network rm twtest${RUN_ID}'
                     junit 'test-report.xml'
+                    archiveArtifacts artifacts: 'coverage.html', allowEmptyArchive: true
                 }
             }
         }

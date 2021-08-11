@@ -8,3 +8,5 @@ artifact_go.sh
 docs/
 test-result.txt
 test-report.xml
+coverage.html
+coverage.out

@@ -1,4 +1,6 @@
 # Production
+# Build command example:
+# docker build -t docker.ci.diabeloop.eu/tide-whisperer:1.0.0 -f Dockerfile.local .
 FROM ubuntu:focal
 RUN apt-get -y update && \
     apt-get -y install apt-utils && \

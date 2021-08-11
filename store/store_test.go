@@ -1631,3 +1631,80 @@ func TestStore_GetDataFromIDV1(t *testing.T) {
 		}
 	}
 }
+
+func TestStore_GetCbgForSummaryV1(t *testing.T) {
+	var err error
+	var iter goComMgo.StorageIterator
+	var data []map[string]interface{}
+	userID := "abcdef"
+
+	store := before(t,
+		bson.M{
+			"_userId": userID,
+			"id":      "1",
+			"time":    "2020-01-01T00:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   10,
+		},
+		bson.M{
+			"_userId": userID,
+			"id":      "2",
+			"time":    "2020-01-01T00:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   11,
+		},
+		bson.M{
+			"_userId": userID,
+			"id":      "3",
+			"time":    "2020-11-02T10:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   12,
+		},
+		bson.M{
+			"_userId": userID,
+			"id":      "4",
+			"time":    "2021-01-03T00:00:00.000Z",
+			"type":    "cbg",
+			"units":   "mmol/L",
+			"value":   13,
+		},
+	)
+	ctx := context.Background()
+	traceID := uuid.New().String()
+	iter, err = store.GetCbgForSummaryV1(ctx, traceID, userID, "2020-01-02T00:00:00.000Z")
+	if err != nil {
+		t.Fatalf("Unexpected error during GetCbgForSummaryV1: %s", err)
+	}
+	defer iter.Close(ctx)
+
+	if data, err = iteratorToAllData(ctx, iter); err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+
+	if len(data) != 2 {
+		t.Fatalf("Expected a result of 2 data having %d", len(data))
+	}
+
+	have12 := false
+	have13 := false
+	for p, datum := range data {
+		units := datum["units"].(string)
+		if units != "mmol/L" {
+			t.Fatalf("Unexpected unit %s expected mmol/L", units)
+		}
+		value := datum["value"].(int32)
+		if value == 12 {
+			have12 = true
+		} else if value == 13 {
+			have13 = true
+		} else if p > 1 {
+			t.Fatalf("Unexpected number of result: %d", p)
+		}
+	}
+	if !(have12 && have13) {
+		t.Fatalf("Missing expected results: 12:%t 13:%t", have12, have13)
+	}
+}
