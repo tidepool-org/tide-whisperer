@@ -56,6 +56,7 @@ type (
 		Types    []string
 		SubTypes []string
 		Date
+		DateStr
 		*SchemaVersion
 		Carelink           bool
 		Dexcom             bool
@@ -63,13 +64,19 @@ type (
 		DeviceID           string
 		Latest             bool
 		Medtronic          bool
-		MedtronicDate      string
+		MedtronicDate      time.Time
 		MedtronicUploadIds []string
 		UploadID           string
 	}
 
 	// Date struct
 	Date struct {
+		Start time.Time
+		End   time.Time
+	}
+
+	// DateStr struct
+	DateStr struct {
 		Start string
 		End   string
 	}
@@ -80,31 +87,34 @@ type (
 	}
 )
 
-func cleanDateString(dateString string) (string, error) {
+func cleanDateString(dateString string) (string, time.Time, error) {
+	date := time.Time{}
+
 	if dateString == "" {
-		return "", nil
+		return "", date, nil
 	}
 	date, err := time.Parse(time.RFC3339Nano, dateString)
 	if err != nil {
-		return "", err
+		return "", date, err
 	}
 
 	// The Golang implementation of time.RFC3339Nano does not use a fixed number of digits after the
 	// decimal point and therefore is not reliably sortable. And so we use our own custom format for
 	// database range queries that will properly sort any data with time stored as an ISO string.
 	// See https://github.com/golang/go/issues/19635
-	return date.Format(RFC3339NanoSortable), nil
+	return date.Format(RFC3339NanoSortable), date, nil
 }
 
 // GetParams parses a URL to set parameters
 func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 
-	startStr, err := cleanDateString(q.Get("startDate"))
+	// NOTE: *Str is redundant once dates are all converted to native dates
+	startStr, startDate, err := cleanDateString(q.Get("startDate"))
 	if err != nil {
 		return nil, err
 	}
 
-	endStr, err := cleanDateString(q.Get("endDate"))
+	endStr, endDate, err := cleanDateString(q.Get("endDate"))
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +171,8 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		//by a comma e.g. "type=smbg,cbg" so split them out into an array of values
 		Types:         strings.Split(q.Get("type"), ","),
 		SubTypes:      strings.Split(q.Get("subType"), ","),
-		Date:          Date{startStr, endStr},
+		DateStr:       DateStr{startStr, endStr},
+		Date:          Date{startDate, endDate},
 		SchemaVersion: schema,
 		Carelink:      carelink,
 		Dexcom:        dexcom,
@@ -285,12 +296,22 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["subType"] = bson.M{"$in": p.SubTypes}
 	}
 
-	if p.Date.Start != "" && p.Date.End != "" {
-		groupDataQuery["time"] = bson.M{"$gte": p.Date.Start, "$lte": p.Date.End}
-	} else if p.Date.Start != "" {
-		groupDataQuery["time"] = bson.M{"$gte": p.Date.Start}
-	} else if p.Date.End != "" {
-		groupDataQuery["time"] = bson.M{"$lte": p.Date.End}
+	// we OR query here, one for Date objects, and one for strings as a migration step.
+	if p.DateStr.Start != "" && p.DateStr.End != "" {
+		groupDataQuery["$or"] = bson.A{
+			bson.M{"time": bson.M{"$gte": p.DateStr.Start, "$lte": p.DateStr.End}},
+			bson.M{"time": bson.M{"$gte": p.Date.Start, "$lte": p.Date.End}},
+		}
+	} else if p.DateStr.Start != "" {
+		groupDataQuery["$or"] = bson.A{
+			bson.M{"time": bson.M{"$gte": p.DateStr.Start}},
+			bson.M{"time": bson.M{"$gte": p.Date.Start}},
+		}
+	} else if p.DateStr.End != "" {
+		groupDataQuery["$or"] = bson.A{
+			bson.M{"time": bson.M{"$lte": p.DateStr.End}},
+			bson.M{"time": bson.M{"$lte": p.Date.End}},
+		}
 	}
 
 	if !p.Carelink {
@@ -312,16 +333,35 @@ func generateMongoQuery(p *Params) bson.M {
 				{"type": bson.M{"$ne": "cbg"}},
 				{"uploadId": bson.M{"$in": p.DexcomDataSource["dataSetIds"]}},
 			}
+
+			// more redundant OR query for multiple date field types
 			earliestDataTime := p.DexcomDataSource["earliestDataTime"].(primitive.DateTime).Time().UTC()
-			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}})
+			dexcomQuery = append(dexcomQuery,
+				bson.M{"$or": bson.A{
+					bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}},
+					bson.M{"time": bson.M{"$lt": earliestDataTime}},
+					},
+				},
+			)
+
 			latestDataTime := p.DexcomDataSource["latestDataTime"].(primitive.DateTime).Time().UTC()
-			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}})
+			dexcomQuery = append(dexcomQuery,
+				bson.M{"$or": bson.A{
+					bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}},
+					bson.M{"time": bson.M{"$gt": latestDataTime}},
+					},
+				},
+			)
+
 			andQuery = append(andQuery, bson.M{"$or": dexcomQuery})
 		}
 
 		if !p.Medtronic && len(p.MedtronicUploadIds) > 0 {
 			medtronicQuery := []bson.M{
-				{"time": bson.M{"$lt": p.MedtronicDate}},
+				{"$or": bson.A{
+					bson.M{"time": bson.M{"$lt": p.MedtronicDate.Format(time.RFC3339)}},
+					bson.M{"time": bson.M{"$lt": p.MedtronicDate}},
+					}},
 				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
 				{"uploadId": bson.M{"$nin": p.MedtronicUploadIds}},
 			}
@@ -413,19 +453,24 @@ func (c *MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 
 // HasMedtronicLoopDataAfter checks the database to see if Loop data exists for `userID` that originated
 // from a Medtronic device after `date`
-func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string) (bool, error) {
+func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date time.Time) (bool, error) {
 	if userID == "" {
 		return false, errors.New("user id is missing")
 	}
-	if date == "" {
+	if date.IsZero() {
 		return false, errors.New("date is missing")
 	}
 
-	query := bson.D{
-		{Key: "_active", Value: true},
-		{Key: "_userId", Value: userID},
-		{Key: "time", Value: bson.D{{Key: "$gte", Value: date}}},
-		{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
+	dateStr := date.Format(RFC3339NanoSortable)
+
+	query := bson.M{
+		"_active": true,
+		"_userId": userID,
+		"$or": bson.A{
+			bson.M{"time": bson.M{"$gte": date}},
+			bson.M{"time": bson.M{"$gte": dateStr}},
+			},
+		"origin.payload.device.manufacturer": "Medtronic",
 	}
 
 	err := dataCollection(c).FindOne(c.context, query).Err()
@@ -438,18 +483,23 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 
 // GetLoopableMedtronicDirectUploadIdsAfter returns all Upload IDs for `userID` where Loop data was found
 // for a Medtronic device after `date`.
-func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID string, date string) ([]string, error) {
+func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID string, date time.Time) ([]string, error) {
 	if userID == "" {
 		return nil, errors.New("user id is missing")
 	}
-	if date == "" {
+	if date.IsZero() {
 		return nil, errors.New("date is missing")
 	}
+
+	dateStr := date.Format(RFC3339NanoSortable)
 
 	query := bson.M{
 		"_active":     true,
 		"_userId":     userID,
-		"time":        bson.M{"$gte": date},
+		"$or": bson.A{
+			bson.M{"time": bson.M{"$gte": date}},
+			bson.M{"time": bson.M{"$gte": dateStr}},
+			},
 		"type":        "upload",
 		"deviceModel": bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
 	}
@@ -484,7 +534,7 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 
 	// _schemaVersion is still in the list of fields to remove. Although we don't query for it, data can still exist for it
 	// until BACK-1281 is done.
-	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
+	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0, "_deduplicator": 0}
 
 	if p.Latest {
 		latest := &latestIterator{pos: -1}

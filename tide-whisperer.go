@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson/primitive"
+
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/google/uuid"
 	"github.com/gorilla/pat"
@@ -78,8 +80,9 @@ var (
 
 const (
 	dataAPIPrefix             = "api/data "
-	medtronicLoopBoundaryDate = "2017-09-01"
+	medtronicLoopBoundaryDateUnix = 1504238400
 	slowQueryDuration         = 0.1 // seconds
+	DeviceTimeFormat          = "2006-01-02T15:04:05"
 )
 
 //set the intenal message that we will use for logging
@@ -90,6 +93,8 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 
 func main() {
 	var config Config
+
+	medtronicLoopBoundaryDate := time.Unix(medtronicLoopBoundaryDateUnix, 0).UTC()
 
 	log.SetPrefix(dataAPIPrefix)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -330,6 +335,14 @@ func main() {
 			}
 
 			if len(results) > 0 {
+				// HACK convert deviceTime to string before marshal, to avoid modifying the results map above
+				switch v := results["deviceTime"].(type) {
+					case primitive.DateTime:
+						results["deviceTime"] = v.Time().Format(DeviceTimeFormat)
+					case string:
+						// do nothing
+				}
+
 				if bytes, err := json.Marshal(results); err != nil {
 					mongoErrorCount.WithLabelValues("marshal").Inc()
 					log.Printf("%s request %s user %s Marshal returned error: %s", dataAPIPrefix, requestID, userID, err)
