@@ -70,16 +70,10 @@ type (
 		UploadID           string
 	}
 
-	// container for multi-type date storage
-	HybridDate struct {
-		Str string
-		Time time.Time
-	}
-
 	// Date struct
 	Date struct {
-		Start HybridDate
-		End   HybridDate
+		Start time.Time
+		End   time.Time
 	}
 
 	latestIterator struct {
@@ -88,23 +82,23 @@ type (
 	}
 )
 
-func cleanDateString(dateString string) (*HybridDate, error) {
+func cleanDateString(dateString string) (time.Time, error) {
 	date := time.Time{}
 
 	if dateString == "" {
-		return nil, nil
+		return date, nil
 	}
 
 	date, err := time.Parse(time.RFC3339Nano, dateString)
 	if err != nil {
-		return nil, err
+		return date, err
 	}
 
 	// The Golang implementation of time.RFC3339Nano does not use a fixed number of digits after the
 	// decimal point and therefore is not reliably sortable. And so we use our own custom format for
 	// database range queries that will properly sort any data with time stored as an ISO string.
 	// See https://github.com/golang/go/issues/19635
-	return &HybridDate{date.Format(RFC3339NanoSortable), date}, nil
+	return date, nil
 }
 
 // GetParams parses a URL to set parameters
@@ -173,7 +167,7 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		//by a comma e.g. "type=smbg,cbg" so split them out into an array of values
 		Types:         strings.Split(q.Get("type"), ","),
 		SubTypes:      strings.Split(q.Get("subType"), ","),
-		Date:          Date{*startDate, *endDate},
+		Date:          Date{startDate, endDate},
 		SchemaVersion: schema,
 		Carelink:      carelink,
 		Dexcom:        dexcom,
@@ -299,20 +293,23 @@ func generateMongoQuery(p *Params) bson.M {
 	}
 
 	// we OR query here, one for Date objects, and one for strings as a migration step.
-	if p.Date.Start.Str != "" && p.Date.End.Str != "" {
+	if !p.Date.Start.IsZero() && !p.Date.End.IsZero() {
 		groupDataQuery["$or"] = bson.A{
-			bson.M{"time": bson.M{"$gte": p.Date.Start.Str, "$lte": p.Date.End.Str}},
-			bson.M{"time": bson.M{"$gte": p.Date.Start.Time, "$lte": p.Date.End.Time}},
+			bson.M{"time": bson.M{
+				"$gte": p.Date.Start.Format(RFC3339NanoSortable),
+				"$lte": p.Date.End.Format(RFC3339NanoSortable),
+			}},
+			bson.M{"time": bson.M{"$gte": p.Date.Start, "$lte": p.Date.End}},
 		}
-	} else if p.Date.Start.Str != "" {
+	} else if !p.Date.Start.IsZero() {
 		groupDataQuery["$or"] = bson.A{
-			bson.M{"time": bson.M{"$gte": p.Date.Start.Str}},
-			bson.M{"time": bson.M{"$gte": p.Date.Start.Time}},
+			bson.M{"time": bson.M{"$gte": p.Date.Start.Format(RFC3339NanoSortable)}},
+			bson.M{"time": bson.M{"$gte": p.Date.Start}},
 		}
-	} else if p.Date.End.Str != "" {
+	} else if !p.Date.End.IsZero() {
 		groupDataQuery["$or"] = bson.A{
-			bson.M{"time": bson.M{"$lte": p.Date.End.Str}},
-			bson.M{"time": bson.M{"$lte": p.Date.End.Time}},
+			bson.M{"time": bson.M{"$lte": p.Date.End.Format(RFC3339NanoSortable)}},
+			bson.M{"time": bson.M{"$lte": p.Date.End}},
 		}
 	}
 
