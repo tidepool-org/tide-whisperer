@@ -94,10 +94,6 @@ func cleanDateString(dateString string) (time.Time, error) {
 		return date, err
 	}
 
-	// The Golang implementation of time.RFC3339Nano does not use a fixed number of digits after the
-	// decimal point and therefore is not reliably sortable. And so we use our own custom format for
-	// database range queries that will properly sort any data with time stored as an ISO string.
-	// See https://github.com/golang/go/issues/19635
 	return date, nil
 }
 
@@ -214,8 +210,9 @@ func (c *MongoStoreClient) WithContext(ctx context.Context) *MongoStoreClient {
 // EnsureIndexes exist for the MongoDB collection. EnsureIndexes uses the Background() context, in order
 // to pass back the MongoDB errors, rather than any context errors.
 func (c *MongoStoreClient) EnsureIndexes() error {
-	//medtronicIndexDateTime, _ := time.Parse(medtronicDateFormat, medtronicIndexDate)
+	medtronicIndexDateTime, _ := time.Parse(medtronicDateFormat, medtronicIndexDate)
 	indexes := []mongo.IndexModel{
+		// BEGIN LEGACY INDEXES
 		{
 			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "deviceModel", Value: 1}},
 			Options: options.Index().
@@ -245,6 +242,40 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 						{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
 						{Key: "time", Value: bson.M{
 							"$gte": medtronicIndexDate,
+						}},
+					},
+				),
+		},
+		// END LEGACY INDEXES
+		{
+			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "deviceModel", Value: 1}},
+			Options: options.Index().
+				SetName("GetLoopableMedtronicDirectUploadIdsAfter_v2_DateTime").
+				SetBackground(true).
+				SetPartialFilterExpression(
+					bson.D{
+						{Key: "_active", Value: true},
+						{Key: "type", Value: "upload"},
+						{Key: "deviceModel", Value: bson.M{
+							"$exists": true,
+						}},
+						{Key: "time", Value: bson.M{
+							"$gte": medtronicIndexDateTime,
+						}},
+					},
+				),
+		},
+		{
+			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "origin.payload.device.manufacturer", Value: 1}},
+			Options: options.Index().
+				SetName("HasMedtronicLoopDataAfter_v2_DateTime").
+				SetBackground(true).
+				SetPartialFilterExpression(
+					bson.D{
+						{Key: "_active", Value: true},
+						{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
+						{Key: "time", Value: bson.M{
+							"$gte": medtronicIndexDateTime,
 						}},
 					},
 				),
@@ -293,6 +324,11 @@ func generateMongoQuery(p *Params) bson.M {
 	}
 
 	// we OR query here, one for Date objects, and one for strings as a migration step.
+
+	// The Golang implementation of time.RFC3339Nano does not use a fixed number of digits after the
+	// decimal point and therefore is not reliably sortable. And so we use our own custom format for
+	// database range queries that will properly sort any data with time stored as an ISO string.
+	// See https://github.com/golang/go/issues/19635
 	if !p.Date.Start.IsZero() && !p.Date.End.IsZero() {
 		groupDataQuery["$or"] = bson.A{
 			bson.M{"time": bson.M{
@@ -540,7 +576,7 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 
 	// _schemaVersion is still in the list of fields to remove. Although we don't query for it, data can still exist for it
 	// until BACK-1281 is done.
-	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0, "_deduplicator": 0}
+	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
 
 	if p.Latest {
 		latest := &latestIterator{pos: -1}
