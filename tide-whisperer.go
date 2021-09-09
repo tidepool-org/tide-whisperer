@@ -26,6 +26,9 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	muxprom "gitlab.com/msvechla/mux-prometheus/pkg/middleware"
 
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
@@ -111,6 +114,12 @@ func main() {
 	if err := shorelineClient.Start(); err != nil {
 		logger.Fatal(err)
 	}
+
+	/*
+	 * Instrumentation setup
+	 */
+	instrumentation := muxprom.NewCustomInstrumentation(true, "dblp", "tidewhisperer", prometheus.DefBuckets, nil, prometheus.DefaultRegisterer)
+	
 	storage, err := store.NewStore(&config.Mongo, logger)
 	if err != nil {
 		logger.Fatal(err)
@@ -118,6 +127,9 @@ func main() {
 	defer storage.Close()
 	storage.Start()
 	rtr := mux.NewRouter()
+
+	rtr.Use(instrumentation.Middleware)
+	rtr.Path("/metrics").Handler(promhttp.Handler())
 
 	/*
 	 * Data-Api setup
