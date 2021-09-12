@@ -248,7 +248,7 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 		},
 		// END LEGACY INDEXES
 		{
-			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "deviceModel", Value: 1}},
+			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "deviceModel", Value: 1}, {Key: "fakefield", Value: 1}},
 			Options: options.Index().
 				SetName("GetLoopableMedtronicDirectUploadIdsAfter_v2_DateTime").
 				SetBackground(true).
@@ -266,7 +266,7 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 				),
 		},
 		{
-			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "origin.payload.device.manufacturer", Value: 1}},
+			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "origin.payload.device.manufacturer", Value: 1}, {Key: "fakefield", Value: 1}},
 			Options: options.Index().
 				SetName("HasMedtronicLoopDataAfter_v2_DateTime").
 				SetBackground(true).
@@ -392,7 +392,10 @@ func generateMongoQuery(p *Params) bson.M {
 		}
 
 		if !p.Medtronic && len(p.MedtronicUploadIds) > 0 {
-			medtronicDateTime, _ := time.Parse(medtronicDateFormat, p.MedtronicDate)
+			medtronicDateTime, err := time.Parse(medtronicDateFormat, p.MedtronicDate)
+			if err != nil{
+				medtronicDateTime, _ = time.Parse(time.RFC3339, p.MedtronicDate)
+			}
 			medtronicQuery := []bson.M{
 				{"$or": bson.A{
 					bson.M{"time": bson.M{"$lt": p.MedtronicDate}},
@@ -498,6 +501,9 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 	}
 
 	dateTime, err := time.Parse(medtronicDateFormat, date)
+	if err != nil{
+		dateTime, err = time.Parse(time.RFC3339, date)
+	}
 	if err != nil {
 		return false, errors.New("date is invalid")
 	}
@@ -531,6 +537,9 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 	}
 
 	dateTime, err := time.Parse(medtronicDateFormat, date)
+	if err != nil{
+		dateTime, err = time.Parse(time.RFC3339, date)
+	}
 	if err != nil {
 		return nil, errors.New("date is invalid")
 	}
