@@ -328,7 +328,7 @@ func TestStore_EnsureIndexes(t *testing.T) {
 					{Key: "$exists", Value: true},
 				}},
 				{Key: "time", Value: bson.D{
-					{Key: "$gte", Value: medtronicIndexDateTime.UnixMilli()},
+					{Key: "$gte", Value: medtronicIndexDateTime.UnixNano()/1000000},
 				}},
 			},
 			Name: "GetLoopableMedtronicDirectUploadIdsAfter_v2_DateTime",
@@ -340,7 +340,7 @@ func TestStore_EnsureIndexes(t *testing.T) {
 				{Key: "_active", Value: true},
 				{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
 				{Key: "time", Value: bson.D{
-					{Key: "$gte", Value: medtronicIndexDateTime.UnixMilli()},
+					{Key: "$gte", Value: medtronicIndexDateTime.UnixNano()/1000000},
 				}},
 			},
 			Name: "HasMedtronicLoopDataAfter_v2_DateTime",
