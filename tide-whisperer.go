@@ -333,11 +333,6 @@ func main() {
 			}
 
 			if len(results) > 0 {
-				// HACK convert deviceTime to string before marshal, to avoid modifying the results map above
-				if deviceTime, ok := results["deviceTime"].(primitive.DateTime); ok {
-					results["deviceTime"] = deviceTime.Time().Format(DeviceTimeFormat)
-				}
-
 				if bytes, err := json.Marshal(results); err != nil {
 					mongoErrorCount.WithLabelValues("marshal").Inc()
 					log.Printf("%s request %s user %s Marshal returned error: %s", dataAPIPrefix, requestID, userID, err)
