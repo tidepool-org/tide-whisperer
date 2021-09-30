@@ -13,8 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson/primitive"
-
 	httpgzip "github.com/daaku/go.httpgzip"
 	"github.com/google/uuid"
 	"github.com/gorilla/pat"
