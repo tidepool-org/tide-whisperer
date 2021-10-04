@@ -80,7 +80,6 @@ const (
 	dataAPIPrefix             = "api/data "
 	medtronicLoopBoundaryDate = "2017-09-01"
 	slowQueryDuration         = 0.1 // seconds
-	DeviceTimeFormat          = "2006-01-02T15:04:05"
 )
 
 //set the intenal message that we will use for logging

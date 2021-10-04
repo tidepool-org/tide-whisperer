@@ -99,8 +99,6 @@ func cleanDateString(dateString string) (time.Time, error) {
 
 // GetParams parses a URL to set parameters
 func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
-
-	// NOTE: *Str is redundant once dates are all converted to native dates
 	startDate, err := cleanDateString(q.Get("startDate"))
 	if err != nil {
 		return nil, err
@@ -323,8 +321,6 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["subType"] = bson.M{"$in": p.SubTypes}
 	}
 
-	// we OR query here, one for Date objects, and one for strings as a migration step.
-
 	// The Golang implementation of time.RFC3339Nano does not use a fixed number of digits after the
 	// decimal point and therefore is not reliably sortable. And so we use our own custom format for
 	// database range queries that will properly sort any data with time stored as an ISO string.
@@ -375,7 +371,7 @@ func generateMongoQuery(p *Params) bson.M {
 				bson.M{"$or": bson.A{
 					bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}},
 					bson.M{"time": bson.M{"$lt": earliestDataTime}},
-					},
+				},
 				},
 			)
 
@@ -384,7 +380,7 @@ func generateMongoQuery(p *Params) bson.M {
 				bson.M{"$or": bson.A{
 					bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}},
 					bson.M{"time": bson.M{"$gt": latestDataTime}},
-					},
+				},
 				},
 			)
 
@@ -393,14 +389,14 @@ func generateMongoQuery(p *Params) bson.M {
 
 		if !p.Medtronic && len(p.MedtronicUploadIds) > 0 {
 			medtronicDateTime, err := time.Parse(medtronicDateFormat, p.MedtronicDate)
-			if err != nil{
+			if err != nil {
 				medtronicDateTime, _ = time.Parse(time.RFC3339, p.MedtronicDate)
 			}
 			medtronicQuery := []bson.M{
 				{"$or": bson.A{
 					bson.M{"time": bson.M{"$lt": p.MedtronicDate}},
 					bson.M{"time": bson.M{"$lt": medtronicDateTime}},
-					}},
+				}},
 				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
 				{"uploadId": bson.M{"$nin": p.MedtronicUploadIds}},
 			}
@@ -501,7 +497,7 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 	}
 
 	dateTime, err := time.Parse(medtronicDateFormat, date)
-	if err != nil{
+	if err != nil {
 		dateTime, err = time.Parse(time.RFC3339, date)
 	}
 	if err != nil {
@@ -514,7 +510,7 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 		"$or": bson.A{
 			bson.M{"time": bson.M{"$gte": dateTime}},
 			bson.M{"time": bson.M{"$gte": date}},
-			},
+		},
 		"origin.payload.device.manufacturer": "Medtronic",
 	}
 
@@ -537,7 +533,7 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 	}
 
 	dateTime, err := time.Parse(medtronicDateFormat, date)
-	if err != nil{
+	if err != nil {
 		dateTime, err = time.Parse(time.RFC3339, date)
 	}
 	if err != nil {
@@ -545,12 +541,12 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 	}
 
 	query := bson.M{
-		"_active":     true,
-		"_userId":     userID,
+		"_active": true,
+		"_userId": userID,
 		"$or": bson.A{
 			bson.M{"time": bson.M{"$gte": dateTime}},
 			bson.M{"time": bson.M{"$gte": date}},
-			},
+		},
 		"type":        "upload",
 		"deviceModel": bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
 	}
