@@ -30,6 +30,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	muxprom "gitlab.com/msvechla/mux-prometheus/pkg/middleware"
 
+	tideV2Client "github.com/mdblp/tide-whisperer-v2/client/tidewhisperer"
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
 	"github.com/tidepool-org/go-common/clients/disc"
@@ -73,7 +74,6 @@ func main() {
 	if found {
 		config.Auth.ServiceSecret = authSecret
 	}
-
 	config.Mongo.FromEnv()
 
 	tr := &http.Transport{
@@ -85,7 +85,6 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
-
 	hakkenClient := hakken.NewHakkenBuilder().
 		WithConfig(&config.HakkenConfig).
 		Build()
@@ -114,12 +113,13 @@ func main() {
 	if err := shorelineClient.Start(); err != nil {
 		logger.Fatal(err)
 	}
+	tideV2Client := tideV2Client.NewTideWhispererClientFromEnv(httpClient)
 
 	/*
 	 * Instrumentation setup
 	 */
 	instrumentation := muxprom.NewCustomInstrumentation(true, "dblp", "tidewhisperer", prometheus.DefBuckets, nil, prometheus.DefaultRegisterer)
-	
+
 	storage, err := store.NewStore(&config.Mongo, logger)
 	if err != nil {
 		logger.Fatal(err)
@@ -135,7 +135,7 @@ func main() {
 	 * Data-Api setup
 	 */
 
-	dataapi := data.InitAPI(storage, shorelineClient, authClient, permsClient, config.SchemaVersion, logger)
+	dataapi := data.InitAPI(storage, shorelineClient, authClient, permsClient, config.SchemaVersion, logger, tideV2Client)
 	dataapi.SetHandlers("", rtr)
 
 	// ability to return compressed (gzip/deflate) responses if client browser accepts it

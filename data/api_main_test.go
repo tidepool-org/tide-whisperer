@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
+	twV2Client "github.com/mdblp/tide-whisperer-v2/client/tidewhisperer"
 	"github.com/tidepool-org/go-common/clients/opa"
 	"github.com/tidepool-org/go-common/clients/shoreline"
 	"github.com/tidepool-org/go-common/clients/status"
@@ -30,7 +31,8 @@ var (
 	mockShoreline             = shoreline.NewMock("token")
 	mockAuth                  = auth.NewMock()
 	mockPerms                 = opa.NewMock()
-	tidewhisperer             = InitAPI(storage, mockShoreline, mockAuth, mockPerms, schemaVersions, logger)
+	mockTideV2                = twV2Client.NewMock()
+	tidewhisperer             = InitAPI(storage, mockShoreline, mockAuth, mockPerms, schemaVersions, logger, mockTideV2)
 	defaultGetDataURLVars     = map[string]string{"userID": "patient"}
 	defaultGetDataStoreParams = getDataStoreDefaultParams()
 	rtr                       = mux.NewRouter()

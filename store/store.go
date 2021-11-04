@@ -101,7 +101,7 @@ type (
 		// WithContext(ctx context.Context) Storage
 		// V1 API data functions:
 		GetDataRangeV1(ctx context.Context, traceID string, userID string) (*Date, error)
-		GetDataV1(ctx context.Context, traceID string, userID string, dates *Date) (goComMgo.StorageIterator, error)
+		GetDataV1(ctx context.Context, traceID string, userID string, dates *Date, excludeTypes []string) (goComMgo.StorageIterator, error)
 		GetLatestPumpSettingsV1(ctx context.Context, traceID string, userID string) (goComMgo.StorageIterator, error)
 		GetDataFromIDV1(ctx context.Context, traceID string, ids []string) (goComMgo.StorageIterator, error)
 		GetCbgForSummaryV1(ctx context.Context, traceID string, userID string, startDate string) (goComMgo.StorageIterator, error)
@@ -640,10 +640,16 @@ func (c *Client) GetDataRangeV1(ctx context.Context, traceID string, userID stri
 }
 
 // GetDataV1 v1 api call to fetch diabetes data, excludes "upload" and "pumpSettings"
-func (c *Client) GetDataV1(ctx context.Context, traceID string, userID string, dates *Date) (goComMgo.StorageIterator, error) {
+func (c *Client) GetDataV1(ctx context.Context, traceID string, userID string, dates *Date, excludeTypes []string) (goComMgo.StorageIterator, error) {
+	if !InArray("upload", excludeTypes) {
+		excludeTypes = append(excludeTypes, "upload")
+	}
+	if !InArray("pumpSettings", excludeTypes) {
+		excludeTypes = append(excludeTypes, "pumpSettings")
+	}
 	query := bson.M{
 		"_userId": userID,
-		"type":    bson.M{"$not": bson.M{"$in": []string{"upload", "pumpSettings"}}},
+		"type":    bson.M{"$not": bson.M{"$in": excludeTypes}},
 	}
 
 	if dates.Start != "" && dates.End != "" {

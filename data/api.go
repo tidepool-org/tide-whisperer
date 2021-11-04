@@ -13,15 +13,16 @@ import (
 
 	"github.com/google/uuid"
 
+	"strconv"
+	"strings"
+
 	"github.com/gorilla/mux"
+	tideV2Client "github.com/mdblp/tide-whisperer-v2/client/tidewhisperer"
 	"github.com/tidepool-org/go-common/clients/opa"
 	"github.com/tidepool-org/go-common/clients/shoreline"
 	"github.com/tidepool-org/go-common/clients/status"
 	"github.com/tidepool-org/tide-whisperer/auth"
 	"github.com/tidepool-org/tide-whisperer/store"
-
-	"strconv"
-	"strings"
 )
 
 type (
@@ -33,6 +34,7 @@ type (
 		perms           opa.Client
 		schemaVersion   store.SchemaVersion
 		logger          *log.Logger
+		tideV2Client    tideV2Client.ClientInterface
 	}
 
 	varsHandler func(http.ResponseWriter, *http.Request, map[string]string)
@@ -63,11 +65,12 @@ var (
 	errorNoPermissions     = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissions for user"}
 	errorRunningQuery      = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
 	errorLoadingEvents     = detailedError{Status: http.StatusInternalServerError, Code: "json_marshal_error", Message: "internal server error"}
+	errorTideV2Http        = detailedError{Status: http.StatusInternalServerError, Code: "tidev2_error", Message: "internal server error"}
 	errorInvalidParameters = detailedError{Status: http.StatusBadRequest, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
 	errorNotfound          = detailedError{Status: http.StatusNotFound, Code: "data_not_found", Message: "no data for specified user"}
 )
 
-func InitAPI(storage store.Storage, shoreline shoreline.Client, auth auth.ClientInterface, permsClient opa.Client, schemaV store.SchemaVersion, logger *log.Logger) *API {
+func InitAPI(storage store.Storage, shoreline shoreline.Client, auth auth.ClientInterface, permsClient opa.Client, schemaV store.SchemaVersion, logger *log.Logger, V2Client tideV2Client.ClientInterface) *API {
 	return &API{
 		store:           storage,
 		shorelineClient: shoreline,
@@ -75,6 +78,7 @@ func InitAPI(storage store.Storage, shoreline shoreline.Client, auth auth.Client
 		perms:           permsClient,
 		schemaVersion:   schemaV,
 		logger:          logger,
+		tideV2Client:    V2Client,
 	}
 }
 

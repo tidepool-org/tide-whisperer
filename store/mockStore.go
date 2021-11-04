@@ -145,7 +145,7 @@ func (c *MockStoreClient) GetDataRangeV1(ctx context.Context, traceID string, us
 }
 
 // GetDataV1 v1 api mock call to fetch diabetes data
-func (c *MockStoreClient) GetDataV1(ctx context.Context, traceID string, userID string, dates *Date) (goComMgo.StorageIterator, error) {
+func (c *MockStoreClient) GetDataV1(ctx context.Context, traceID string, userID string, dates *Date, excludedType []string) (goComMgo.StorageIterator, error) {
 	if c.DataV1 != nil {
 		return &MockStoreIterator{
 			numIter: -1,

@@ -1,5 +1,7 @@
 # Development
 FROM golang:1.15-alpine AS development
+ARG GOPRIVATE
+ARG GITHUB_TOKEN
 ENV GO111MODULE=on
 WORKDIR /go/src/github.com/tidepool-org/tide-whisperer
 RUN adduser -D tidepool && \
@@ -7,7 +9,9 @@ RUN adduser -D tidepool && \
     chown -R tidepool /go/src/github.com/tidepool-org/tide-whisperer
 USER tidepool
 COPY --chown=tidepool . .
-RUN ./build.sh
+RUN git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/" && \ 
+    ./build.sh && \
+    git config --global --unset url."https://${GITHUB_TOKEN}@github.com/".insteadOf
 CMD ["./dist/tide-whisperer"]
 
 # Production

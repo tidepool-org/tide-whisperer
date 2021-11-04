@@ -1473,7 +1473,7 @@ func TestStore_GetDataV1(t *testing.T) {
 	)
 	ctx := context.Background()
 	traceID := uuid.New().String()
-	iter, err = store.GetDataV1(ctx, traceID, userID, ddr)
+	iter, err = store.GetDataV1(ctx, traceID, userID, ddr, []string{})
 	if err != nil {
 		t.Fatalf("Unexpected error during GetDataRangeV1: %s", err)
 	}

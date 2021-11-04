@@ -4,14 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/mdblp/tide-whisperer-v2/schema"
 	"github.com/tidepool-org/go-common/clients/mongo"
-	"github.com/tidepool-org/tide-whisperer/store"
 )
 
 type (
@@ -22,8 +20,9 @@ type (
 	}
 	// writeFromIter struct to pass to the function which write the http result from the mongo iterator for diabetes data
 	writeFromIter struct {
-		res  *httpResponseWriter
-		iter mongo.StorageIterator
+		res    *httpResponseWriter
+		iter   mongo.StorageIterator
+		dataV2 []schema.CbgBucket
 		// parametersHistory fetched from portal database
 		parametersHistory map[string]interface{}
 		// uploadIDs encountered during the operation
@@ -92,6 +91,7 @@ func (a *API) setHandlesV1(prefix string, rtr *mux.Router) {
 	rtr.HandleFunc(prefix+"/range/{userID}", a.middlewareV1(a.getRangeV1, true, "userID")).Methods("GET")
 	rtr.HandleFunc(prefix+"/summary/{userID}", a.middlewareV1(a.getDataSummaryV1, true, "userID")).Methods("GET")
 	rtr.HandleFunc(prefix+"/data/{userID}", a.middlewareV1(a.getDataV1, true, "userID")).Methods("GET")
+	rtr.HandleFunc(prefix+"/dataV2/{userID}", a.middlewareV1(a.getDataV2, true, "userID")).Methods("GET")
 	rtr.HandleFunc(prefix+"/{.*}", a.middlewareV1(a.getNotFoundV1, false)).Methods("GET")
 }
 
@@ -293,98 +293,31 @@ func (a *API) getDataSummaryV1(ctx context.Context, res *httpResponseWriter) err
 //
 // @Router /v1/data/{userID} [get]
 func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
+	params, logError := getDataV1Params(res)
+	if logError != nil {
+		return res.WriteError(logError)
+	}
 	var err error
 	// Mongo iterators
 	var iterData mongo.StorageIterator
 	var iterPumpSettings mongo.StorageIterator
 	var iterUploads mongo.StorageIterator
-	userID := res.VARS["userID"]
 
-	query := res.URL.Query()
-	startDate := query.Get("startDate")
-	endDate := query.Get("endDate")
-	withPumpSettings := query.Get("withPumpSettings") == "true"
+	dates := &params.dates
 
-	// Check startDate & endDate parameter
-	if startDate != "" || endDate != "" {
-		var logError *detailedError
-		var startTime time.Time
-		var endTime time.Time
-		var timeRange int64 = 1 // endDate - startDate in seconds, initialized to 1 to avoid trigger an error, see below
+	writeParams := &params.writer
 
-		if startDate != "" {
-			startTime, err = time.Parse(time.RFC3339Nano, startDate)
-		}
-		if err == nil && endDate != "" {
-			endTime, err = time.Parse(time.RFC3339Nano, endDate)
-		}
-
-		if err == nil && startDate != "" && endDate != "" {
-			timeRange = endTime.Unix() - startTime.Unix()
-		}
-
-		if timeRange > 0 {
-			// Make an estimated guessed about the amount of data we need to send
-			// to help our buffer, since we may send ten or so megabytes of JSON
-			// I saw ~ 1.15 byte per second in my test
-			// fmt.Printf("Grow: %d * 1.15 -> %d\n", timeRange, int(math.Round(float64(timeRange)*1.15)))
-			res.Grow(int(math.Round(float64(timeRange) * 1.15)))
-		} else {
-			err = fmt.Errorf("startDate is after endDate")
-		}
-
-		if err != nil {
-			logError = &detailedError{
-				Status:          errorInvalidParameters.Status,
-				Code:            errorInvalidParameters.Code,
-				Message:         errorInvalidParameters.Message,
-				InternalMessage: err.Error(),
-			}
-			return res.WriteError(logError)
-		}
-	}
-
-	dates := &store.Date{
-		Start: startDate,
-		End:   endDate,
-	}
-
-	writeParams := &writeFromIter{
-		res:       res,
-		uploadIDs: make([]string, 0, 16),
-	}
-
-	if withPumpSettings {
-		// Initial query to fetch for this user, the client wants the
-		// latest pumpSettings
-		timeIt(ctx, "getLastPumpSettings")
-		iterPumpSettings, err = a.store.GetLatestPumpSettingsV1(ctx, res.TraceID, userID)
-		if err != nil {
-			logError := &detailedError{
-				Status:          errorRunningQuery.Status,
-				Code:            errorRunningQuery.Code,
-				Message:         errorRunningQuery.Message,
-				InternalMessage: err.Error(),
-			}
+	if params.includePumpSettings {
+		iterPumpSettings, logError = a.getLatestPumpSettings(ctx, params.traceID, params.user, writeParams)
+		if logError != nil {
 			return res.WriteError(logError)
 		}
 		defer iterPumpSettings.Close(ctx)
-		timeEnd(ctx, "getLastPumpSettings")
-
-		// Fetch parameters history from portal:
-		timeIt(ctx, "getParamHistory")
-		writeParams.parametersHistory, err = a.store.GetDiabeloopParametersHistory(ctx, userID, parameterLevelFilter[:])
-		if err != nil {
-			// Just log the problem, don't crash the query
-			writeParams.parametersHistory = nil
-			a.logger.Printf("{%s} - {GetDiabeloopParametersHistory:\"%s\"}", res.TraceID, err)
-		}
-		timeEnd(ctx, "getParamHistory")
 	}
 
 	// Fetch normal data:
 	timeIt(ctx, "getData")
-	iterData, err = a.store.GetDataV1(ctx, res.TraceID, userID, dates)
+	iterData, err = a.store.GetDataV1(ctx, params.traceID, params.user, dates, []string{})
 	if err != nil {
 		logError := &detailedError{
 			Status:          errorRunningQuery.Status,
@@ -394,63 +327,19 @@ func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
 		}
 		return res.WriteError(logError)
 	}
-	defer iterData.Close(ctx)
 	timeEnd(ctx, "getData")
 
-	timeIt(ctx, "writeData")
-	defer timeEnd(ctx, "writeData")
-	// We return a JSON array, first charater is: '['
-	err = res.WriteString("[\n")
-	if err != nil {
-		return err
-	}
-
-	if withPumpSettings && iterPumpSettings != nil {
-		writeParams.iter = iterPumpSettings
-		err = writeFromIterV1(ctx, writeParams)
-		if err != nil {
-			return err
-		}
-	}
-
-	timeIt(ctx, "writeDataMain")
-	writeParams.iter = iterData
-	err = writeFromIterV1(ctx, writeParams)
-	if err != nil {
-		return err
-	}
-	timeEnd(ctx, "writeDataMain")
-
-	// Fetch uploads
-	if len(writeParams.uploadIDs) > 0 {
-		timeIt(ctx, "getUploads")
-		iterUploads, err = a.store.GetDataFromIDV1(ctx, res.TraceID, writeParams.uploadIDs)
-		if err != nil {
-			// Just log the problem, don't crash the query
-			writeParams.parametersHistory = nil
-			a.logger.Printf("{%s} - {GetDataFromIDV1:\"%s\"}", res.TraceID, err)
-		} else {
-			defer iterUploads.Close(ctx)
-			writeParams.iter = iterUploads
-			err = writeFromIterV1(ctx, writeParams)
-			if err != nil {
-				timeEnd(ctx, "getUploads")
-				return err
-			}
-		}
-		timeEnd(ctx, "getUploads")
-	}
-
-	// Silently failed theses error to the client, but record them to the log
-	if writeParams.decode.firstError != nil {
-		a.logger.Printf("{%s} - {nErrors:%d,MongoDecode:\"%s\"}", res.TraceID, writeParams.decode.numErrors, writeParams.decode.firstError)
-	}
-	if writeParams.jsonError.firstError != nil {
-		a.logger.Printf("{%s} - {nErrors:%d,jsonMarshall:\"%s\"}", res.TraceID, writeParams.jsonError.numErrors, writeParams.jsonError.firstError)
-	}
-
-	// Last JSON array charater:
-	return res.WriteString("]\n")
+	defer iterData.Close(ctx)
+	return a.writeDataV1(
+		ctx,
+		res,
+		params.includePumpSettings,
+		iterPumpSettings,
+		iterUploads,
+		iterData,
+		[]schema.CbgBucket{},
+		writeParams,
+	)
 }
 
 // writeFromIterV1 Common code to write
