@@ -168,8 +168,8 @@ func (c *MockStoreClient) GetLatestPumpSettingsV1(ctx context.Context, traceID s
 	return nil, fmt.Errorf("{%s} - [%s] - No data", traceID, userID)
 }
 
-// GetDataFromIDV1 fetch data from theirs id
-func (c *MockStoreClient) GetDataFromIDV1(ctx context.Context, traceID string, ids []string) (goComMgo.StorageIterator, error) {
+// GetUploadDataV1 Fetch upload data from theirs upload ids, using the $in query parameter
+func (c *MockStoreClient) GetUploadDataV1(ctx context.Context, traceID string, uploadIds []string) (goComMgo.StorageIterator, error) {
 	if c.DataIDV1 != nil {
 		return &MockStoreIterator{
 			numIter: -1,

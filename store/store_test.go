@@ -1566,7 +1566,7 @@ func TestStore_GetLatestPumpSettingsV1(t *testing.T) {
 	}
 }
 
-func TestStore_GetDataFromIDV1(t *testing.T) {
+func TestStore_GetUploadDataV1(t *testing.T) {
 	var err error
 	var iter goComMgo.StorageIterator
 	var data []map[string]interface{}
@@ -1574,42 +1574,42 @@ func TestStore_GetDataFromIDV1(t *testing.T) {
 
 	store := before(t,
 		bson.M{
-			"_userId": userID,
-			"id":      "1",
-			"time":    "2020-01-01T00:00:00.000Z",
-			"type":    "cbg",
-			"units":   "mmol/L",
-			"value":   12,
+			"_userId":  userID,
+			"id":       "1",
+			"uploadId": "1",
+			"time":     "2020-01-01T00:00:00.000Z",
+			"type":     "upload",
 		},
 		bson.M{
-			"_userId": userID,
-			"id":      "2",
-			"time":    "2020-06-01T00:00:00.000Z",
-			"type":    "cbg",
-			"units":   "mmol/L",
-			"value":   12,
+			"_userId":  userID,
+			"id":       "2",
+			"uploadId": "1",
+			"time":     "2020-06-01T00:00:00.000Z",
+			"type":     "cbg",
+			"units":    "mmol/L",
+			"value":    12,
 		},
 		bson.M{
-			"_userId": userID,
-			"id":      "3",
-			"time":    "2020-11-01T00:00:00.000Z",
-			"type":    "cbg",
-			"units":   "mmol/L",
-			"value":   12,
+			"_userId":  userID,
+			"id":       "3",
+			"uploadId": "3",
+			"time":     "2020-11-01T00:00:00.000Z",
+			"type":     "upload",
 		},
 		bson.M{
-			"_userId": userID,
-			"id":      "4",
-			"time":    "2021-01-01T00:00:00.000Z",
-			"type":    "cbg",
-			"units":   "mmol/L",
-			"value":   12,
+			"_userId":  userID,
+			"id":       "4",
+			"uploadId": "3",
+			"time":     "2021-01-01T00:00:00.000Z",
+			"type":     "cbg",
+			"units":    "mmol/L",
+			"value":    12,
 		},
 	)
 	ctx := context.Background()
 	traceID := uuid.New().String()
-	ids := []string{"1", "3"}
-	iter, err = store.GetDataFromIDV1(ctx, traceID, ids)
+	ids := []string{"1", "2", "3", "4"}
+	iter, err = store.GetUploadDataV1(ctx, traceID, ids)
 	if err != nil {
 		t.Fatalf("Unexpected error during GetDataRangeV1: %s", err)
 	}
@@ -1629,6 +1629,17 @@ func TestStore_GetDataFromIDV1(t *testing.T) {
 			t.Log(data)
 			t.Fatalf("Invalid datum id %s at %d", id, p)
 		}
+		uploadId := datum["uploadId"].(string)
+		if !(uploadId == "1" || uploadId == "3") {
+			t.Log(data)
+			t.Fatalf("Invalid datum uploadId %s at %d", uploadId, p)
+		}
+		datumType := datum["type"].(string)
+		if datumType != "upload" {
+			t.Log(data)
+			t.Fatalf("Invalid datum type %s at %d", datumType, p)
+		}
+
 	}
 }
 

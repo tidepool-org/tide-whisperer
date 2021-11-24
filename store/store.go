@@ -21,7 +21,6 @@ const (
 	portalDb                    = "portal"
 	parametersHistoryCollection = "patient_parameters_history"
 	idxUserIDTypeTime           = "UserIdTypeTimeWeighted"
-	idxID                       = "UniqId"
 )
 
 var unwantedFields = bson.M{
@@ -79,10 +78,6 @@ var tideWhispererIndexes = map[string][]mongo.IndexModel{
 				SetName(idxUserIDTypeTime).
 				SetWeights(bson.M{"_userId": 10, "type": 5, "time": 1}),
 		},
-		{
-			Keys:    bson.D{{Key: "id", Value: 1}},
-			Options: options.Index().SetName(idxID),
-		},
 	},
 }
 
@@ -103,7 +98,7 @@ type (
 		GetDataRangeV1(ctx context.Context, traceID string, userID string) (*Date, error)
 		GetDataV1(ctx context.Context, traceID string, userID string, dates *Date, excludeTypes []string) (goComMgo.StorageIterator, error)
 		GetLatestPumpSettingsV1(ctx context.Context, traceID string, userID string) (goComMgo.StorageIterator, error)
-		GetDataFromIDV1(ctx context.Context, traceID string, ids []string) (goComMgo.StorageIterator, error)
+		GetUploadDataV1(ctx context.Context, traceID string, uploadIds []string) (goComMgo.StorageIterator, error)
 		GetCbgForSummaryV1(ctx context.Context, traceID string, userID string, startDate string) (goComMgo.StorageIterator, error)
 	}
 
@@ -684,16 +679,16 @@ func (c *Client) GetLatestPumpSettingsV1(ctx context.Context, traceID string, us
 	return dataCollection(c).Find(ctx, query, opts)
 }
 
-// GetDataFromIDV1 Fetch data from theirs id, using the $in query parameter
-func (c *Client) GetDataFromIDV1(ctx context.Context, traceID string, ids []string) (goComMgo.StorageIterator, error) {
+// GetUploadDataV1 Fetch upload data from theirs upload ids, using the $in query parameter
+func (c *Client) GetUploadDataV1(ctx context.Context, traceID string, uploadIds []string) (goComMgo.StorageIterator, error) {
 	query := bson.M{
-		"id": bson.M{"$in": ids},
+		"uploadId": bson.M{"$in": uploadIds},
+		"type":     "upload",
 	}
 
 	opts := options.Find()
 	opts.SetProjection(unwantedFields)
 	opts.SetComment(traceID)
-	opts.SetHint(idxID)
 	return dataCollection(c).Find(ctx, query, opts)
 }
 

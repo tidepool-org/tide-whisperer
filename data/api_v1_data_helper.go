@@ -161,11 +161,11 @@ func (a *API) writeDataV1(
 	// Fetch uploads
 	if len(writeParams.uploadIDs) > 0 {
 		timeIt(ctx, "getUploads")
-		iterUploads, err = a.store.GetDataFromIDV1(ctx, res.TraceID, writeParams.uploadIDs)
+		iterUploads, err = a.store.GetUploadDataV1(ctx, res.TraceID, writeParams.uploadIDs)
 		if err != nil {
 			// Just log the problem, don't crash the query
 			writeParams.parametersHistory = nil
-			a.logger.Printf("{%s} - {GetDataFromIDV1:\"%s\"}", res.TraceID, err)
+			a.logger.Printf("{%s} - {GetUploadDataV1:\"%s\"}", res.TraceID, err)
 		} else {
 			defer iterUploads.Close(ctx)
 			writeParams.iter = iterUploads
