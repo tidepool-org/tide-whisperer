@@ -47,10 +47,10 @@ func (a *API) getDataFromStore(ctx context.Context, wg *sync.WaitGroup, traceID 
 	elapsed_time := time.Now().Sub(start).Milliseconds()
 	dataFromStoreTimer.Observe(float64(elapsed_time))
 }
-func (a *API) getDataFromTideV2(ctx context.Context, wg *sync.WaitGroup, userID string, sessionToken string, dates *store.Date, tideV2Data chan []schema.CbgBucket, logErrorDataV2 chan *detailedError) {
+func (a *API) getCbgFromTideV2(ctx context.Context, wg *sync.WaitGroup, userID string, sessionToken string, dates *store.Date, tideV2Data chan []schema.CbgBucket, logErrorDataV2 chan *detailedError) {
 	defer wg.Done()
 	start := time.Now()
-	data, err := a.tideV2Client.GetDataV2(userID, sessionToken, dates.Start, dates.End)
+	data, err := a.tideV2Client.GetCbgV2(userID, sessionToken, dates.Start, dates.End)
 	if err != nil {
 		logErrorDataV2 <- &detailedError{
 			Status:          errorTideV2Http.Status,
@@ -61,6 +61,26 @@ func (a *API) getDataFromTideV2(ctx context.Context, wg *sync.WaitGroup, userID 
 		tideV2Data <- nil
 	} else {
 		tideV2Data <- data
+		logErrorDataV2 <- nil
+	}
+	elapsed_time := time.Now().Sub(start).Milliseconds()
+	dataFromTideV2Timer.Observe(float64(elapsed_time))
+}
+
+func (a *API) getBasalFromTideV2(ctx context.Context, wg *sync.WaitGroup, userID string, sessionToken string, dates *store.Date, v2Data chan []schema.BasalBucket, logErrorDataV2 chan *detailedError) {
+	defer wg.Done()
+	start := time.Now()
+	data, err := a.tideV2Client.GetBasalV2(userID, sessionToken, dates.Start, dates.End)
+	if err != nil {
+		logErrorDataV2 <- &detailedError{
+			Status:          errorTideV2Http.Status,
+			Code:            errorTideV2Http.Code,
+			Message:         errorTideV2Http.Message,
+			InternalMessage: err.Error(),
+		}
+		v2Data <- nil
+	} else {
+		v2Data <- data
 		logErrorDataV2 <- nil
 	}
 	elapsed_time := time.Now().Sub(start).Milliseconds()
@@ -116,19 +136,24 @@ func (a *API) getDataV2(ctx context.Context, res *httpResponseWriter) error {
 	// Fetch data from store and V2 API (for cbg)
 	var wg sync.WaitGroup
 	sessionToken := res.Header.Get("x-tidepool-session-token")
-	wg.Add(2)
+	wg.Add(3)
 	chanStoreError := make(chan *detailedError, 1)
 	defer close(chanStoreError)
 	chanMongoIter := make(chan mongo.StorageIterator, 1)
 	defer close(chanMongoIter)
 	chanApiError := make(chan *detailedError, 1)
 	defer close(chanApiError)
-	chanApiResult := make(chan []schema.CbgBucket, 1)
-	defer close(chanApiResult)
+	chanApiCbgs := make(chan []schema.CbgBucket, 1)
+	defer close(chanApiCbgs)
+	chanApiBasals := make(chan []schema.BasalBucket, 1)
+	defer close(chanApiBasals)
+	chanApiBasalError := make(chan *detailedError, 1)
+	defer close(chanApiBasalError)
 
 	// Parallel routines
 	go a.getDataFromStore(ctx, &wg, res.TraceID, params.user, dates, chanMongoIter, chanStoreError)
-	go a.getDataFromTideV2(ctx, &wg, params.user, sessionToken, dates, chanApiResult, chanApiError)
+	go a.getCbgFromTideV2(ctx, &wg, params.user, sessionToken, dates, chanApiCbgs, chanApiError)
+	go a.getBasalFromTideV2(ctx, &wg, params.user, sessionToken, dates, chanApiBasals, chanApiBasalError)
 
 	wg.Wait()
 
@@ -137,12 +162,14 @@ func (a *API) getDataV2(ctx context.Context, res *httpResponseWriter) error {
 		return res.WriteError(logErrorStore)
 	}
 	logErrorDataV2 := <-chanApiError
+	logErrorDataV2 = <-chanApiBasalError
 	if logErrorDataV2 != nil {
 		return res.WriteError(logErrorDataV2)
 	}
 
 	iterData := <-chanMongoIter
-	tideV2Data := <-chanApiResult
+	Cbgs := <-chanApiCbgs
+	Basals := <-chanApiBasals
 
 	defer iterData.Close(ctx)
 
@@ -153,7 +180,8 @@ func (a *API) getDataV2(ctx context.Context, res *httpResponseWriter) error {
 		iterPumpSettings,
 		iterUploads,
 		iterData,
-		tideV2Data,
+		Cbgs,
+		Basals,
 		writeParams,
 	)
 }

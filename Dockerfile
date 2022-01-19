@@ -1,5 +1,5 @@
 # Development
-FROM golang:1.15-alpine AS development
+FROM golang:1.17-alpine AS development
 ARG GOPRIVATE
 ARG GITHUB_TOKEN
 ENV GO111MODULE=on

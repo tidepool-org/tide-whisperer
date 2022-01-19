@@ -22,7 +22,8 @@ type (
 	writeFromIter struct {
 		res    *httpResponseWriter
 		iter   mongo.StorageIterator
-		dataV2 []schema.CbgBucket
+		cbgs   []schema.CbgBucket
+		basals []schema.BasalBucket
 		// parametersHistory fetched from portal database
 		parametersHistory map[string]interface{}
 		// uploadIDs encountered during the operation
@@ -338,6 +339,7 @@ func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
 		iterUploads,
 		iterData,
 		[]schema.CbgBucket{},
+		[]schema.BasalBucket{},
 		writeParams,
 	)
 }

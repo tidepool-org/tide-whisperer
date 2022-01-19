@@ -37,7 +37,7 @@ func TestAPI_GetDataV2(t *testing.T) {
 	creationTime2, _ := time.Parse(time.RFC3339, "2021-01-02T08:00:00Z")
 	day2, _ := time.Parse(dayTimeFormat, "2021-01-02")
 
-	mockTideV2.MockedData = []schema.CbgBucket{
+	mockTideV2.MockedCbg = []schema.CbgBucket{
 		{
 			Id:                "bucket1",
 			CreationTimestamp: creationTime1,
@@ -97,10 +97,31 @@ func TestAPI_GetDataV2(t *testing.T) {
 			},
 		},
 	}
+	mockTideV2.MockedBasal = []schema.BasalBucket{
+		{
+			Id:                "bucket1",
+			CreationTimestamp: creationTime1,
+			UserId:            userID,
+			Day:               day1,
+			Samples: []schema.BasalSample{
+				{
+					DeliveryType: "automated",
+					Duration:     1000,
+					Rate:         1.0,
+					Sample: schema.Sample{
+						Timestamp:      day1.Add(time.Minute * 5),
+						Timezone:       "Paris",
+						TimezoneOffset: 120,
+					},
+				},
+			},
+		},
+	}
 	t.Cleanup(func() {
 		storage.DataV1 = nil
 		storage.DataIDV1 = nil
-		mockTideV2.MockedData = []schema.CbgBucket{}
+		mockTideV2.MockedCbg = []schema.CbgBucket{}
+		mockTideV2.MockedBasal = []schema.BasalBucket{}
 	})
 
 	resetOPAMockRouteV1(true, "/v1/dataV2", userID)
@@ -135,6 +156,7 @@ func TestAPI_GetDataV2(t *testing.T) {
 {"id":"bucket2_0","time":"2021-01-02T00:05:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":11},
 {"id":"bucket2_1","time":"2021-01-02T00:10:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":11.2},
 {"id":"bucket2_2","time":"2021-01-02T00:15:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":11.8},
+{"deliveryType":"automated","duration":1000,"id":"bucket1_0","rate":1,"time":"2021-01-01T00:05:00Z","timezone":"Paris","type":"basal"},
 {"id":"00","time":"2021-01-10T00:00:00.000Z","type":"upload","uploadId":"00"}]
 `
 

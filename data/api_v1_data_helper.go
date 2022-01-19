@@ -122,7 +122,8 @@ func (a *API) writeDataV1(
 	iterPumpSettings mongo.StorageIterator,
 	iterUploads mongo.StorageIterator,
 	iterData mongo.StorageIterator,
-	tideV2Data []schema.CbgBucket,
+	Cbgs []schema.CbgBucket,
+	Basals []schema.BasalBucket,
 	writeParams *writeFromIter,
 ) error {
 	timeIt(ctx, "writeData")
@@ -149,15 +150,26 @@ func (a *API) writeDataV1(
 	}
 	timeEnd(ctx, "writeDataMain")
 
-	if len(tideV2Data) > 0 {
-		timeIt(ctx, "writeDataV2")
-		writeParams.dataV2 = tideV2Data
-		err = writeDataV2(ctx, writeParams)
+	if len(Cbgs) > 0 {
+		timeIt(ctx, "WriteCbgs")
+		writeParams.cbgs = Cbgs
+		err = writeCbgs(ctx, writeParams)
 		if err != nil {
 			return err
 		}
-		timeEnd(ctx, "writeDataV2")
+		timeEnd(ctx, "WriteCbgs")
 	}
+
+	if len(Basals) > 0 {
+		timeIt(ctx, "writeBasals")
+		writeParams.basals = Basals
+		err = writeBasals(ctx, writeParams)
+		if err != nil {
+			return err
+		}
+		timeEnd(ctx, "writeBasals")
+	}
+
 	// Fetch uploads
 	if len(writeParams.uploadIDs) > 0 {
 		timeIt(ctx, "getUploads")
@@ -191,9 +203,9 @@ func (a *API) writeDataV1(
 }
 
 // Mapping V2 Bucket schema to expected V1 schema + write to output
-func writeDataV2(ctx context.Context, p *writeFromIter) error {
+func writeCbgs(ctx context.Context, p *writeFromIter) error {
 	var err error
-	for _, bucket := range p.dataV2 {
+	for _, bucket := range p.cbgs {
 		for i, sample := range bucket.Samples {
 			datum := make(map[string]interface{})
 			// Building a fake id (bucket.Id/range index)
@@ -203,6 +215,45 @@ func writeDataV2(ctx context.Context, p *writeFromIter) error {
 			datum["timezone"] = sample.Timezone
 			datum["units"] = sample.Units
 			datum["value"] = sample.Value
+			jsonDatum, err := json.Marshal(datum)
+			if err != nil {
+				if p.jsonError.firstError == nil {
+					p.jsonError.firstError = err
+				}
+				p.jsonError.numErrors++
+				continue
+			}
+			if p.writeCount > 0 {
+				// Add the coma and line return (for readability)
+				err = p.res.WriteString(",\n")
+				if err != nil {
+					return err
+				}
+			}
+			err = p.res.Write(jsonDatum)
+			if err != nil {
+				return err
+			}
+			p.writeCount++
+		}
+	}
+	return err
+}
+
+// Mapping V2 Bucket schema to expected V1 schema + write to output
+func writeBasals(ctx context.Context, p *writeFromIter) error {
+	var err error
+	for _, bucket := range p.basals {
+		for i, sample := range bucket.Samples {
+			datum := make(map[string]interface{})
+			// Building a fake id (bucket.Id/range index)
+			datum["id"] = fmt.Sprintf("%s_%d", bucket.Id, i)
+			datum["type"] = "basal"
+			datum["time"] = sample.Timestamp
+			datum["timezone"] = sample.Timezone
+			datum["deliveryType"] = sample.DeliveryType
+			datum["rate"] = sample.Rate
+			datum["duration"] = sample.Duration
 			jsonDatum, err := json.Marshal(datum)
 			if err != nil {
 				if p.jsonError.firstError == nil {

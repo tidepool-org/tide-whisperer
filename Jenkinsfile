@@ -19,7 +19,7 @@ pipeline {
         stage('Build') {
             agent {
                 docker {
-                    image 'docker.ci.diabeloop.eu/go-build:1.15'
+                    image 'docker.ci.diabeloop.eu/go-build:1.17'
                 }
             }
             steps {
@@ -35,7 +35,7 @@ pipeline {
                 echo 'start mongo to serve as a testing db'
                 sh 'docker network create twtest${RUN_ID} && docker run --rm -d --net=twtest${RUN_ID} --name=mongo4twtest${RUN_ID} mongo:4.2'
                 script {
-                    docker.image('docker.ci.diabeloop.eu/go-build:1.15').inside("--net=twtest${RUN_ID}") {
+                    docker.image('docker.ci.diabeloop.eu/go-build:1.17').inside("--net=twtest${RUN_ID}") {
                         withCredentials ([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
                             sh 'git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"'
                             sh "TIDEPOOL_STORE_ADDRESSES=mongo4twtest${RUN_ID}:27017 TIDEPOOL_STORE_DATABASE=data_test $WORKSPACE/test.sh"
