@@ -2,7 +2,7 @@
 
 Data access API for tidepool
 
-## 0.13.00 - 2022-01-19
+## 0.13.0 - 2022-01-19
 - YLP-1161 implement tide-whisperer call to tide-whisperer-v2
 
 ## 0.12.0 - 2021-11-22
