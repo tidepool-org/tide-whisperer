@@ -2,6 +2,9 @@
 
 Data access API for tidepool
 
+## 0.13.1 - 2022-02-10
+- YLP-1161 implement tide-whisperer call to tide-whisperer-v2 (Fix exclusions)
+
 ## 0.13.0 - 2022-01-19
 - YLP-1161 implement tide-whisperer call to tide-whisperer-v2
 
@@ -29,7 +32,6 @@ Data access API for tidepool
 - YLP-747 New data/v1 routes
 ### Fixed
 - YLP-819 performance issues on production environment
-
 
 ## 0.8.1 - 2020-03-11
 ### Engineering Use
@@ -85,19 +87,19 @@ Data access API for tidepool
 ### Added 
 - PT-734 Display the application version number on the status endpoint (/status).
 
-## 0.3.2 
+## 0.3.2 - 2019-09-16
 ### Fixed 
 - PT-649 Get Level 2 and 3 parameters for parameter history
 
-## 0.3.1
+## 0.3.1 - 2019-08-30 
 ### Added
 - PT-607 DBLHU users should access to Level 1 and Level 2 parameters in the parameters history.
 
-## 0.3.0
+## 0.3.0 - 2019-07-30 
 ### Added
 - PT-511 Access diabeloop system parameters history from tide-whisperer
 
-## 0.2.0 
+## 0.2.0 - 2019-06-03
 ### Added
 - Integration from Tidepool latest changes
 

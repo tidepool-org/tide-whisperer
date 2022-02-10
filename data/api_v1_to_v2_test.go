@@ -1,8 +1,10 @@
 package data
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,14 +13,71 @@ import (
 	"github.com/mdblp/tide-whisperer-v2/schema"
 )
 
-const dayTimeFormat = "2006-01-02"
+const (
+	dayTimeFormat  = "2006-01-02"
+	expectedDataV1 = `{"id":"01","time":"2021-01-10T00:00:00.000Z","type":"basal","uploadId":"00","value":10},
+		{"id":"02","time":"2021-01-10T00:00:01.000Z","type":"basal","uploadId":"00","value":11},
+		{"id":"03","time":"2021-01-10T00:00:02.000Z","type":"basal","uploadId":"00","value":12},
+		{"id":"04","time":"2021-01-10T00:00:03.000Z","type":"basal","uploadId":"00","value":13},
+		{"id":"05","time":"2021-01-10T00:00:04.000Z","type":"basal","uploadId":"00","value":14}`
+	expectedCbgBucket = `{"id":"bucket1_0","time":"2021-01-01T00:05:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":10},
+	{"id":"bucket1_1","time":"2021-01-01T00:10:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":10.2},
+	{"id":"bucket1_2","time":"2021-01-01T00:15:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":10.8},
+	{"id":"bucket2_0","time":"2021-01-02T00:05:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":11},
+	{"id":"bucket2_1","time":"2021-01-02T00:10:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":11.2},
+	{"id":"bucket2_2","time":"2021-01-02T00:15:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":11.8}`
+	expectedBasalBucket = `{"deliveryType":"automated","duration":1000,"id":"bucket1_0","rate":1,"time":"2021-01-01T00:05:00Z","timezone":"Paris","type":"basal"}`
+	expectedDataIdV1    = `{"id":"00","time":"2021-01-10T00:00:00.000Z","type":"upload","uploadId":"00"}`
+)
+
+func compareString(str1 string, str2 string) bool {
+	// cleanse strings
+	str1 = strings.ReplaceAll(str1, " ", "")
+	str1 = strings.ReplaceAll(str1, "\n", "")
+	str1 = strings.ReplaceAll(str1, "\t", "")
+	str2 = strings.ReplaceAll(str2, " ", "")
+	str2 = strings.ReplaceAll(str2, "\n", "")
+	str2 = strings.ReplaceAll(str2, "\t", "")
+
+	fmt.Printf("str1: %v\n", str1)
+	fmt.Printf("str2: %v\n", str2)
+	return str1 == str2
+}
+
+func assertRequest(apiParams map[string]string, urlParams map[string]string, expectedStatusCode int, expectedBody string) error {
+	traceID := uuid.New().String()
+	userID := apiParams["userID"]
+
+	handlerLogFunc := tidewhisperer.middlewareV1(tidewhisperer.getDataV2, true, "userID")
+	request, _ := http.NewRequest("GET", "/v1/dataV2/"+userID, nil)
+	request.Header.Set("x-tidepool-trace-session", traceID)
+	request.Header.Set("x-tidepool-session-token", userID)
+	request = mux.SetURLVars(request, apiParams)
+	q := request.URL.Query()
+	for key, value := range urlParams {
+		q.Add(key, value)
+	}
+	request.URL.RawQuery = q.Encode()
+	response := httptest.NewRecorder()
+
+	handlerLogFunc(response, request)
+	result := response.Result()
+	if result.StatusCode != expectedStatusCode {
+		return fmt.Errorf("Expected %d to equal %d", response.Code, http.StatusOK)
+	}
+
+	body := make([]byte, 2048)
+	defer result.Body.Close()
+	n, _ := result.Body.Read(body)
+	bodyStr := string(body[:n])
+	if !compareString(bodyStr, expectedBody) {
+		return fmt.Errorf("Expected '%s' to equal '%s'", bodyStr, expectedBody)
+	}
+	return nil
+}
 
 func TestAPI_GetDataV2(t *testing.T) {
-	traceID := uuid.New().String()
 	userID := "abcdef"
-	urlParams := map[string]string{
-		"userID": userID,
-	}
 
 	storage.DataV1 = []string{
 		"{\"id\":\"01\",\"uploadId\":\"00\",\"time\":\"2021-01-10T00:00:00.000Z\",\"type\":\"basal\",\"value\":10}",
@@ -125,42 +184,72 @@ func TestAPI_GetDataV2(t *testing.T) {
 	})
 
 	resetOPAMockRouteV1(true, "/v1/dataV2", userID)
-	handlerLogFunc := tidewhisperer.middlewareV1(tidewhisperer.getDataV2, true, "userID")
 
-	request, _ := http.NewRequest("GET", "/v1/dataV2/"+userID, nil)
-	request.Header.Set("x-tidepool-trace-session", traceID)
-	request.Header.Set("x-tidepool-session-token", userID)
-	request = mux.SetURLVars(request, urlParams)
-	response := httptest.NewRecorder()
+	// // testing with cbg and basal buckets
 
-	handlerLogFunc(response, request)
-	result := response.Result()
-	if result.StatusCode != http.StatusOK {
-		t.Fatalf("Expected %d to equal %d", response.Code, http.StatusOK)
+	apiParms := map[string]string{
+		"userID": userID,
+	}
+	urlParams := map[string]string{
+		"basalBucket": "true",
+		"cbgBucket":   "true",
+	}
+	expectedBody := "[" + strings.Join(
+		[]string{
+			expectedDataV1,
+			expectedCbgBucket,
+			expectedBasalBucket,
+			expectedDataIdV1,
+		}, ",") + "]"
+	err := assertRequest(apiParms, urlParams, http.StatusOK, expectedBody)
+	if err != nil {
+		t.Fatalf("CBG and Basal buckets: %v", err.Error())
 	}
 
-	body := make([]byte, 2048)
-	defer result.Body.Close()
-	n, _ := result.Body.Read(body)
-	bodyStr := string(body[:n])
+	// testing with cbg only
+	urlParams = map[string]string{
+		"cbgBucket": "true",
+	}
+	expectedBody = "[" + strings.Join(
+		[]string{
+			expectedDataV1,
+			expectedCbgBucket,
+			expectedDataIdV1,
+		}, ",") + "]"
 
-	expectedBody := `[
-{"id":"01","time":"2021-01-10T00:00:00.000Z","type":"basal","uploadId":"00","value":10},
-{"id":"02","time":"2021-01-10T00:00:01.000Z","type":"basal","uploadId":"00","value":11},
-{"id":"03","time":"2021-01-10T00:00:02.000Z","type":"basal","uploadId":"00","value":12},
-{"id":"04","time":"2021-01-10T00:00:03.000Z","type":"basal","uploadId":"00","value":13},
-{"id":"05","time":"2021-01-10T00:00:04.000Z","type":"basal","uploadId":"00","value":14},
-{"id":"bucket1_0","time":"2021-01-01T00:05:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":10},
-{"id":"bucket1_1","time":"2021-01-01T00:10:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":10.2},
-{"id":"bucket1_2","time":"2021-01-01T00:15:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":10.8},
-{"id":"bucket2_0","time":"2021-01-02T00:05:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":11},
-{"id":"bucket2_1","time":"2021-01-02T00:10:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":11.2},
-{"id":"bucket2_2","time":"2021-01-02T00:15:00Z","timezone":"GMT","type":"cbg","units":"mmol/L","value":11.8},
-{"deliveryType":"automated","duration":1000,"id":"bucket1_0","rate":1,"time":"2021-01-01T00:05:00Z","timezone":"Paris","type":"basal"},
-{"id":"00","time":"2021-01-10T00:00:00.000Z","type":"upload","uploadId":"00"}]
-`
+	err = assertRequest(apiParms, urlParams, http.StatusOK, expectedBody)
+	if err != nil {
+		t.Fatalf("Cbg bucket only: %v", err.Error())
+	}
 
-	if bodyStr != expectedBody {
-		t.Fatalf("Expected '%s' to equal '%s'", bodyStr, expectedBody)
+	// testing with basal only
+
+	urlParams = map[string]string{
+		"basalBucket": "true",
+		"cbgBucket":   "false",
+	}
+	expectedBody = "[" + strings.Join(
+		[]string{
+			expectedDataV1,
+			expectedBasalBucket,
+			expectedDataIdV1,
+		}, ",") + "]"
+
+	err = assertRequest(apiParms, urlParams, http.StatusOK, expectedBody)
+	if err != nil {
+		t.Fatalf("Basal bucket only: %v", err.Error())
+	}
+
+	// // testing with no buscket
+	urlParams = map[string]string{}
+	expectedBody = "[" + strings.Join(
+		[]string{
+			expectedDataV1,
+			expectedCbgBucket,
+			expectedDataIdV1,
+		}, ",") + "]"
+	err = assertRequest(apiParms, urlParams, http.StatusOK, expectedBody)
+	if err != nil {
+		t.Fatalf("No bucket: %v", err.Error())
 	}
 }

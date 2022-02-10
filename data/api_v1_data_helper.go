@@ -18,6 +18,7 @@ type (
 		user                string
 		traceID             string
 		includePumpSettings bool
+		source              map[string]bool
 		writer              writeFromIter
 	}
 )
@@ -31,6 +32,14 @@ func getDataV1Params(res *httpResponseWriter) (*apiDataParams, *detailedError) {
 	startDate := query.Get("startDate")
 	endDate := query.Get("endDate")
 	withPumpSettings := query.Get("withPumpSettings") == "true"
+	basalBucket := query.Get("basalBucket") == "true"
+	cbgBucket := (query.Get("cbgBucket") == "true" || query.Get("cbgBucket") == "")
+
+	dataSource := map[string]bool{
+		"store":       true,
+		"basalBucket": basalBucket,
+		"cbgBucket":   cbgBucket,
+	}
 
 	// Check startDate & endDate parameter
 	if startDate != "" || endDate != "" {
@@ -78,6 +87,7 @@ func getDataV1Params(res *httpResponseWriter) (*apiDataParams, *detailedError) {
 		user:                userID,
 		traceID:             res.TraceID,
 		includePumpSettings: withPumpSettings,
+		source:              dataSource,
 		writer: writeFromIter{
 			res:       res,
 			uploadIDs: make([]string, 0, 16),

@@ -635,6 +635,7 @@ func (c *Client) GetDataRangeV1(ctx context.Context, traceID string, userID stri
 }
 
 // GetDataV1 v1 api call to fetch diabetes data, excludes "upload" and "pumpSettings"
+// and potentially other types
 func (c *Client) GetDataV1(ctx context.Context, traceID string, userID string, dates *Date, excludeTypes []string) (goComMgo.StorageIterator, error) {
 	if !InArray("upload", excludeTypes) {
 		excludeTypes = append(excludeTypes, "upload")
