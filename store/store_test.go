@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 
-	"github.com/google/uuid"
 	goComMgo "github.com/tidepool-org/go-common/clients/mongo"
 )
 
@@ -1717,5 +1717,110 @@ func TestStore_GetCbgForSummaryV1(t *testing.T) {
 	}
 	if !(have12 && have13) {
 		t.Fatalf("Missing expected results: 12:%t 13:%t", have12, have13)
+	}
+}
+
+func TestStore_GetLatestBasalSecurityProfile(t *testing.T) {
+
+	userID := "abcdef"
+	store := before(t,
+		bson.M{
+			"_active":        true,
+			"guid":           "1",
+			"deviceId":       "Kaleido-fake-12345",
+			"deviceTime":     "2020-01-01T08:20:00",
+			"time":           "2020-01-01T08:20:00Z",
+			"timezone":       "Etc/GMT-1",
+			"timezoneOffset": 60,
+			"type":           "basalSecurity",
+			"_userId":        userID,
+			"basalSchedule": []bson.M{
+				{
+					"rate":  1.0,
+					"start": 0,
+				},
+				{
+					"rate":  0.8,
+					"start": 43200000,
+				},
+				{
+					"rate":  1.2,
+					"start": 64800000,
+				},
+				{
+					"rate":  0.5,
+					"start": 75600000,
+				},
+			},
+		},
+		bson.M{
+			"_active":        true,
+			"guid":           "2",
+			"deviceId":       "Kaleido-fake-12345",
+			"deviceTime":     "2020-01-01T08:40:00",
+			"time":           "2020-01-01T08:40:00Z",
+			"timezone":       "Etc/GMT-1",
+			"timezoneOffset": 60,
+			"type":           "basalSecurity",
+			"_userId":        userID,
+			"basalSchedule": []bson.M{
+				{
+					"rate":  1.0,
+					"start": 0,
+				},
+				{
+					"rate":  0.8,
+					"start": 43200000,
+				},
+				{
+					"rate":  1.2,
+					"start": 64800000,
+				},
+				{
+					"rate":  0.5,
+					"start": 75600000,
+				},
+			},
+		},
+		bson.M{
+			"_active":        true,
+			"guid":           "3",
+			"deviceId":       "Kaleido-fake-12345",
+			"deviceTime":     "2020-01-01T09:00:00",
+			"time":           "2020-01-01T09:00:00Z",
+			"timezone":       "Etc/GMT-1",
+			"timezoneOffset": 60,
+			"type":           "basalSecurity",
+			"_userId":        userID,
+			"basalSchedule": []bson.M{
+				{
+					"rate":  1.0,
+					"start": 0,
+				},
+				{
+					"rate":  0.8,
+					"start": 43200000,
+				},
+				{
+					"rate":  1.2,
+					"start": 64800000,
+				},
+				{
+					"rate":  0.5,
+					"start": 75600000,
+				},
+			},
+		},
+	)
+	ctx := context.Background()
+	traceID := uuid.New().String()
+
+	data, err := store.GetLatestBasalSecurityProfile(ctx, traceID, userID)
+	if err != nil {
+		t.Fatalf("Unexpected error: %s", err)
+	}
+
+	if data.Guid != "3" {
+		t.Fatalf("Expected return id to be 3, having %s", data.Guid)
 	}
 }

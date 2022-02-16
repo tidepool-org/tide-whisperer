@@ -26,6 +26,8 @@ type (
 		basals []schema.BasalBucket
 		// parametersHistory fetched from portal database
 		parametersHistory map[string]interface{}
+		// basalSecurityProfile
+		basalSecurityProfile interface{}
 		// uploadIDs encountered during the operation
 		uploadIDs []string
 		// writeCount the number of data written
@@ -309,6 +311,7 @@ func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
 	writeParams := &params.writer
 
 	if params.includePumpSettings {
+		// Fetch LastestPumpSettings
 		iterPumpSettings, logError = a.getLatestPumpSettings(ctx, params.traceID, params.user, writeParams)
 		if logError != nil {
 			return res.WriteError(logError)
@@ -397,12 +400,23 @@ func writeFromIterV1(ctx context.Context, p *writeFromIter) error {
 					p.uploadIDs = append(p.uploadIDs, uploadID)
 				}
 			}
-			// Add the parameter history to the pump settings
-			if datumType == "pumpSettings" && p.parametersHistory != nil {
+			
+			if datumType == "pumpSettings" && (p.parametersHistory != nil || p.basalSecurityProfile != nil) {
 				payload := datum["payload"].(map[string]interface{})
-				payload["history"] = p.parametersHistory["history"]
+				
+				// Add the parameter history to the pump settings
+				if p.parametersHistory != nil {
+					payload["history"] = p.parametersHistory["history"]
+				}
+
+				// Add the basal security profile to the pump settings
+				if p.basalSecurityProfile != nil {
+					payload["basalsecurityprofile"] = p.basalSecurityProfile
+				}
+
 				datum["payload"] = payload
 			}
+
 			// Create the JSON string for this datum
 			if jsonDatum, err = json.Marshal(datum); err != nil {
 				if p.jsonError.firstError == nil {

@@ -2,10 +2,15 @@
 
 Data access API for tidepool
 
+## 0.14.0 - 2022-02-14
+### Added
+- YLP-1186 retrieve latest basal security profile info
+
 ## 0.13.1 - 2022-02-10
+### Fixed
 - YLP-1161 implement tide-whisperer call to tide-whisperer-v2 (Fix exclusions)
 
-## 0.13.0 - 2022-01-19
+## 0.13.0 - 2022-01-19
 - YLP-1161 implement tide-whisperer call to tide-whisperer-v2
 
 ## 0.12.0 - 2021-11-22

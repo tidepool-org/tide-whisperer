@@ -34,7 +34,8 @@ type MockStoreClient struct {
 	PingError   bool
 	DeviceModel string
 
-	ParametersHistory bson.M
+	ParametersHistory    bson.M
+	BasalSecurityProfile *DbProfile
 
 	DeviceData          []string
 	GetDeviceDataCall   Params
@@ -166,6 +167,13 @@ func (c *MockStoreClient) GetLatestPumpSettingsV1(ctx context.Context, traceID s
 		}, nil
 	}
 	return nil, fmt.Errorf("{%s} - [%s] - No data", traceID, userID)
+}
+
+func (c *MockStoreClient) GetLatestBasalSecurityProfile(ctx context.Context, traceID string, userID string) (*DbProfile, error) {
+	if c.BasalSecurityProfile != nil {
+		return c.BasalSecurityProfile, nil
+	}
+	return nil, nil
 }
 
 // GetUploadDataV1 Fetch upload data from theirs upload ids, using the $in query parameter
