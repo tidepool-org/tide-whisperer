@@ -1,5 +1,5 @@
 # Development
-FROM golang:1.17-alpine AS development
+FROM --platform=$BUILDPLATFORM golang:1.17-alpine AS development
 ARG GOPRIVATE
 ARG GITHUB_TOKEN
 ENV GO111MODULE=on
@@ -9,13 +9,15 @@ RUN adduser -D tidepool && \
     chown -R tidepool /go/src/github.com/tidepool-org/tide-whisperer
 USER tidepool
 COPY --chown=tidepool . .
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
 RUN git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/" && \ 
-    ./build.sh && \
+    ./build.sh $TARGETPLATFORM && \
     git config --global --unset url."https://${GITHUB_TOKEN}@github.com/".insteadOf
 CMD ["./dist/tide-whisperer"]
 
 # Production
-FROM alpine:latest AS production
+FROM --platform=$BUILDPLATFORM alpine:latest AS production
 WORKDIR /home/tidepool
 RUN apk --no-cache update && \
     apk --no-cache upgrade && \

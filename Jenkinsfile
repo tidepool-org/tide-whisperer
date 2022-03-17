@@ -71,7 +71,16 @@ pipeline {
         stage('Publish') {
             when { branch "dblp" }
             steps {
-                publish()
+                withCredentials ([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+                    publish()
+                }
+            }
+        }
+    }
+    post {
+        always {
+            script {
+                utils.closePipeline()
             }
         }
     }

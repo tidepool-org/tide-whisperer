@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## 0.14.1 - 2022-02-23
+### Engineering
+- Build multi-architecture docker images
+
 ## 0.14.0 - 2022-02-14
 ### Added
 - YLP-1186 retrieve latest basal security profile info
