@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## Unreleased
+### Fixed 
+- YLP-1266 add go context to the tideV2 calls done with http client
+
 ## 0.14.1 - 2022-02-23
 ### Engineering
 - Build multi-architecture docker images

@@ -17,7 +17,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
-	tideV2Client "github.com/mdblp/tide-whisperer-v2/client/tidewhisperer"
+	tideV2Client "github.com/mdblp/tide-whisperer-v2/v2/client/tidewhisperer"
 	"github.com/tidepool-org/go-common/clients/opa"
 	"github.com/tidepool-org/go-common/clients/shoreline"
 	"github.com/tidepool-org/go-common/clients/status"

@@ -30,7 +30,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	muxprom "gitlab.com/msvechla/mux-prometheus/pkg/middleware"
 
-	tideV2Client "github.com/mdblp/tide-whisperer-v2/client/tidewhisperer"
+	tideV2Client "github.com/mdblp/tide-whisperer-v2/v2/client/tidewhisperer"
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
 	"github.com/tidepool-org/go-common/clients/disc"

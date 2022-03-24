@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mdblp/tide-whisperer-v2/schema"
+	"github.com/mdblp/tide-whisperer-v2/v2/schema"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/tidepool-org/go-common/clients/mongo"
@@ -50,7 +50,7 @@ func (a *API) getDataFromStore(ctx context.Context, wg *sync.WaitGroup, traceID 
 func (a *API) getCbgFromTideV2(ctx context.Context, wg *sync.WaitGroup, userID string, sessionToken string, dates *store.Date, tideV2Data chan []schema.CbgBucket, logErrorDataV2 chan *detailedError) {
 	defer wg.Done()
 	start := time.Now()
-	data, err := a.tideV2Client.GetCbgV2(userID, sessionToken, dates.Start, dates.End)
+	data, err := a.tideV2Client.GetCbgV2WithContext(ctx, userID, sessionToken, dates.Start, dates.End)
 	if err != nil {
 		logErrorDataV2 <- &detailedError{
 			Status:          errorTideV2Http.Status,
@@ -70,7 +70,7 @@ func (a *API) getCbgFromTideV2(ctx context.Context, wg *sync.WaitGroup, userID s
 func (a *API) getBasalFromTideV2(ctx context.Context, wg *sync.WaitGroup, userID string, sessionToken string, dates *store.Date, v2Data chan []schema.BasalBucket, logErrorDataV2 chan *detailedError) {
 	defer wg.Done()
 	start := time.Now()
-	data, err := a.tideV2Client.GetBasalV2(userID, sessionToken, dates.Start, dates.End)
+	data, err := a.tideV2Client.GetBasalV2WithContext(ctx, userID, sessionToken, dates.Start, dates.End)
 	if err != nil {
 		logErrorDataV2 <- &detailedError{
 			Status:          errorTideV2Http.Status,

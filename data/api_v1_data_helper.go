@@ -7,7 +7,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/mdblp/tide-whisperer-v2/schema"
+	"github.com/mdblp/tide-whisperer-v2/v2/schema"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	internalSchema "github.com/tidepool-org/tide-whisperer/schema"
 	"github.com/tidepool-org/tide-whisperer/store"

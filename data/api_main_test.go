@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/gorilla/mux"
-	twV2Client "github.com/mdblp/tide-whisperer-v2/client/tidewhisperer"
+	twV2Client "github.com/mdblp/tide-whisperer-v2/v2/client/tidewhisperer"
 	"github.com/tidepool-org/go-common/clients/opa"
 	"github.com/tidepool-org/go-common/clients/shoreline"
 	"github.com/tidepool-org/go-common/clients/status"

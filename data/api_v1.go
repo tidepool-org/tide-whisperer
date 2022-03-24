@@ -8,7 +8,7 @@ import (
 	"strconv"
 
 	"github.com/gorilla/mux"
-	"github.com/mdblp/tide-whisperer-v2/schema"
+	"github.com/mdblp/tide-whisperer-v2/v2/schema"
 	"github.com/tidepool-org/go-common/clients/mongo"
 )
 
