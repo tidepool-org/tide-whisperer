@@ -22,8 +22,6 @@ const (
 	dataCollectionName  = "deviceData"
 	dataStoreAPIPrefix  = "api/data/store "
 	RFC3339NanoSortable = "2006-01-02T15:04:05.00000000Z07:00"
-	medtronicDateFormat = "2006-01-02"
-	medtronicIndexDate  = "2017-09-01"
 )
 
 type (
@@ -72,8 +70,8 @@ type (
 
 	// Date struct
 	Date struct {
-		Start time.Time
-		End   time.Time
+		Start string
+		End   string
 	}
 
 	latestIterator struct {
@@ -82,29 +80,31 @@ type (
 	}
 )
 
-func cleanDateString(dateString string) (time.Time, error) {
-	date := time.Time{}
-
+func cleanDateString(dateString string) (string, error) {
 	if dateString == "" {
-		return date, nil
+		return "", nil
 	}
-
 	date, err := time.Parse(time.RFC3339Nano, dateString)
 	if err != nil {
-		return date, err
+		return "", err
 	}
 
-	return date, nil
+	// The Golang implementation of time.RFC3339Nano does not use a fixed number of digits after the
+	// decimal point and therefore is not reliably sortable. And so we use our own custom format for
+	// database range queries that will properly sort any data with time stored as an ISO string.
+	// See https://github.com/golang/go/issues/19635
+	return date.Format(RFC3339NanoSortable), nil
 }
 
 // GetParams parses a URL to set parameters
 func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
-	startDate, err := cleanDateString(q.Get("startDate"))
+
+	startStr, err := cleanDateString(q.Get("startDate"))
 	if err != nil {
 		return nil, err
 	}
 
-	endDate, err := cleanDateString(q.Get("endDate"))
+	endStr, err := cleanDateString(q.Get("endDate"))
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +161,7 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		//by a comma e.g. "type=smbg,cbg" so split them out into an array of values
 		Types:         strings.Split(q.Get("type"), ","),
 		SubTypes:      strings.Split(q.Get("subType"), ","),
-		Date:          Date{startDate, endDate},
+		Date:          Date{startStr, endStr},
 		SchemaVersion: schema,
 		Carelink:      carelink,
 		Dexcom:        dexcom,
@@ -208,9 +208,7 @@ func (c *MongoStoreClient) WithContext(ctx context.Context) *MongoStoreClient {
 // EnsureIndexes exist for the MongoDB collection. EnsureIndexes uses the Background() context, in order
 // to pass back the MongoDB errors, rather than any context errors.
 func (c *MongoStoreClient) EnsureIndexes() error {
-	medtronicIndexDateTime, _ := time.Parse(medtronicDateFormat, medtronicIndexDate)
 	indexes := []mongo.IndexModel{
-		// BEGIN LEGACY INDEXES
 		{
 			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "deviceModel", Value: 1}},
 			Options: options.Index().
@@ -224,7 +222,7 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 							"$exists": true,
 						}},
 						{Key: "time", Value: bson.M{
-							"$gte": medtronicIndexDate,
+							"$gte": "2017-09-01",
 						}},
 					},
 				),
@@ -239,41 +237,7 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 						{Key: "_active", Value: true},
 						{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
 						{Key: "time", Value: bson.M{
-							"$gte": medtronicIndexDate,
-						}},
-					},
-				),
-		},
-		// END LEGACY INDEXES
-		{
-			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "deviceModel", Value: 1}, {Key: "fakefield", Value: 1}},
-			Options: options.Index().
-				SetName("GetLoopableMedtronicDirectUploadIdsAfter_v2_DateTime").
-				SetBackground(true).
-				SetPartialFilterExpression(
-					bson.D{
-						{Key: "_active", Value: true},
-						{Key: "type", Value: "upload"},
-						{Key: "deviceModel", Value: bson.M{
-							"$exists": true,
-						}},
-						{Key: "time", Value: bson.M{
-							"$gte": medtronicIndexDateTime,
-						}},
-					},
-				),
-		},
-		{
-			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "origin.payload.device.manufacturer", Value: 1}, {Key: "fakefield", Value: 1}},
-			Options: options.Index().
-				SetName("HasMedtronicLoopDataAfter_v2_DateTime").
-				SetBackground(true).
-				SetPartialFilterExpression(
-					bson.D{
-						{Key: "_active", Value: true},
-						{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
-						{Key: "time", Value: bson.M{
-							"$gte": medtronicIndexDateTime,
+							"$gte": "2017-09-01",
 						}},
 					},
 				),
@@ -321,28 +285,12 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["subType"] = bson.M{"$in": p.SubTypes}
 	}
 
-	// The Golang implementation of time.RFC3339Nano does not use a fixed number of digits after the
-	// decimal point and therefore is not reliably sortable. And so we use our own custom format for
-	// database range queries that will properly sort any data with time stored as an ISO string.
-	// See https://github.com/golang/go/issues/19635
-	if !p.Date.Start.IsZero() && !p.Date.End.IsZero() {
-		groupDataQuery["$or"] = bson.A{
-			bson.M{"time": bson.M{
-				"$gte": p.Date.Start.Format(RFC3339NanoSortable),
-				"$lte": p.Date.End.Format(RFC3339NanoSortable),
-			}},
-			bson.M{"time": bson.M{"$gte": p.Date.Start, "$lte": p.Date.End}},
-		}
-	} else if !p.Date.Start.IsZero() {
-		groupDataQuery["$or"] = bson.A{
-			bson.M{"time": bson.M{"$gte": p.Date.Start.Format(RFC3339NanoSortable)}},
-			bson.M{"time": bson.M{"$gte": p.Date.Start}},
-		}
-	} else if !p.Date.End.IsZero() {
-		groupDataQuery["$or"] = bson.A{
-			bson.M{"time": bson.M{"$lte": p.Date.End.Format(RFC3339NanoSortable)}},
-			bson.M{"time": bson.M{"$lte": p.Date.End}},
-		}
+	if p.Date.Start != "" && p.Date.End != "" {
+		groupDataQuery["time"] = bson.M{"$gte": p.Date.Start, "$lte": p.Date.End}
+	} else if p.Date.Start != "" {
+		groupDataQuery["time"] = bson.M{"$gte": p.Date.Start}
+	} else if p.Date.End != "" {
+		groupDataQuery["time"] = bson.M{"$lte": p.Date.End}
 	}
 
 	if !p.Carelink {
@@ -364,39 +312,16 @@ func generateMongoQuery(p *Params) bson.M {
 				{"type": bson.M{"$ne": "cbg"}},
 				{"uploadId": bson.M{"$in": p.DexcomDataSource["dataSetIds"]}},
 			}
-
-			// more redundant OR query for multiple date field types
 			earliestDataTime := p.DexcomDataSource["earliestDataTime"].(primitive.DateTime).Time().UTC()
-			dexcomQuery = append(dexcomQuery,
-				bson.M{"$or": bson.A{
-					bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}},
-					bson.M{"time": bson.M{"$lt": earliestDataTime}},
-				},
-				},
-			)
-
+			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}})
 			latestDataTime := p.DexcomDataSource["latestDataTime"].(primitive.DateTime).Time().UTC()
-			dexcomQuery = append(dexcomQuery,
-				bson.M{"$or": bson.A{
-					bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}},
-					bson.M{"time": bson.M{"$gt": latestDataTime}},
-				},
-				},
-			)
-
+			dexcomQuery = append(dexcomQuery, bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}})
 			andQuery = append(andQuery, bson.M{"$or": dexcomQuery})
 		}
 
 		if !p.Medtronic && len(p.MedtronicUploadIds) > 0 {
-			medtronicDateTime, err := time.Parse(medtronicDateFormat, p.MedtronicDate)
-			if err != nil {
-				medtronicDateTime, _ = time.Parse(time.RFC3339, p.MedtronicDate)
-			}
 			medtronicQuery := []bson.M{
-				{"$or": bson.A{
-					bson.M{"time": bson.M{"$lt": p.MedtronicDate}},
-					bson.M{"time": bson.M{"$lt": medtronicDateTime}},
-				}},
+				{"time": bson.M{"$lt": p.MedtronicDate}},
 				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
 				{"uploadId": bson.M{"$nin": p.MedtronicUploadIds}},
 			}
@@ -496,25 +421,14 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 		return false, errors.New("date is missing")
 	}
 
-	dateTime, err := time.Parse(medtronicDateFormat, date)
-	if err != nil {
-		dateTime, err = time.Parse(time.RFC3339, date)
-	}
-	if err != nil {
-		return false, errors.New("date is invalid")
-	}
-
-	query := bson.M{
-		"_active": true,
-		"_userId": userID,
-		"$or": bson.A{
-			bson.M{"time": bson.M{"$gte": dateTime}},
-			bson.M{"time": bson.M{"$gte": date}},
-		},
-		"origin.payload.device.manufacturer": "Medtronic",
+	query := bson.D{
+		{Key: "_active", Value: true},
+		{Key: "_userId", Value: userID},
+		{Key: "time", Value: bson.D{{Key: "$gte", Value: date}}},
+		{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
 	}
 
-	err = dataCollection(c).FindOne(c.context, query).Err()
+	err := dataCollection(c).FindOne(c.context, query).Err()
 	if err == mongo.ErrNoDocuments {
 		return false, nil
 	}
@@ -532,21 +446,10 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 		return nil, errors.New("date is missing")
 	}
 
-	dateTime, err := time.Parse(medtronicDateFormat, date)
-	if err != nil {
-		dateTime, err = time.Parse(time.RFC3339, date)
-	}
-	if err != nil {
-		return nil, errors.New("date is invalid")
-	}
-
 	query := bson.M{
-		"_active": true,
-		"_userId": userID,
-		"$or": bson.A{
-			bson.M{"time": bson.M{"$gte": dateTime}},
-			bson.M{"time": bson.M{"$gte": date}},
-		},
+		"_active":     true,
+		"_userId":     userID,
+		"time":        bson.M{"$gte": date},
 		"type":        "upload",
 		"deviceModel": bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
 	}

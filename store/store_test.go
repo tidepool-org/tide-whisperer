@@ -85,14 +85,11 @@ func allParams() *Params {
 	earliestDataTime, _ := time.Parse(time.RFC3339, "2015-10-07T15:00:00Z")
 	latestDataTime, _ := time.Parse(time.RFC3339, "2016-12-13T02:00:00Z")
 
-	dateStart, _ := time.Parse(time.RFC3339, "2015-10-07T15:00:00.000Z")
-	dateEnd, _ := time.Parse(time.RFC3339, "2015-10-11T15:00:00.000Z")
-
 	return &Params{
 		UserID:        "abc123",
 		DeviceID:      "device123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		Date:          Date{dateStart, dateEnd},
+		Date:          Date{"2015-10-07T15:00:00.000Z", "2015-10-11T15:00:00.000Z"},
 		Types:         []string{"smbg", "cbg"},
 		SubTypes:      []string{"stuff"},
 		Carelink:      true,
@@ -104,7 +101,7 @@ func allParams() *Params {
 		},
 		Latest:             false,
 		Medtronic:          false,
-		MedtronicDate:      "2017-01-01",
+		MedtronicDate:      "2017-01-01T00:00:00Z",
 		MedtronicUploadIds: []string{"555666777", "888999000"},
 	}
 }
@@ -128,7 +125,7 @@ func typeAndSubtypeQuery() bson.M {
 		SubTypes:           []string{"stuff"},
 		Dexcom:             true,
 		Medtronic:          false,
-		MedtronicDate:      "2017-01-01",
+		MedtronicDate:      "2017-01-01T00:00:00Z",
 		MedtronicUploadIds: []string{"555666777", "888999000"},
 	}
 	return generateMongoQuery(qParams)
@@ -282,14 +279,11 @@ func TestStore_EnsureIndexes(t *testing.T) {
 		return keySlice
 	}
 
-	medtronicIndexDateTime, _ := time.Parse(medtronicDateFormat, medtronicIndexDate)
-
 	expectedIndexes := []mongoIndex{
 		{
 			Key:  makeKeySlice("_id"),
 			Name: "_id_",
 		},
-		// BEGIN legacy indexes
 		{
 			Key:        makeKeySlice("_userId", "deviceModel"),
 			Background: true,
@@ -316,34 +310,6 @@ func TestStore_EnsureIndexes(t *testing.T) {
 				}},
 			},
 			Name: "HasMedtronicLoopDataAfter_v2",
-		},
-		// END legacy indexes
-		{
-			Key: makeKeySlice("_userId", "deviceModel", "fakefield"),
-			Background: true,
-			PartialFilterExpression: bson.D{
-				{Key: "_active", Value: true},
-				{Key: "type", Value: "upload"},
-				{Key: "deviceModel", Value: bson.D{
-					{Key: "$exists", Value: true},
-				}},
-				{Key: "time", Value: bson.D{
-					{Key: "$gte", Value: primitive.NewDateTimeFromTime(medtronicIndexDateTime)},
-				}},
-			},
-			Name: "GetLoopableMedtronicDirectUploadIdsAfter_v2_DateTime",
-		},
-		{
-			Key: makeKeySlice("_userId", "origin.payload.device.manufacturer", "fakefield"),
-			Background: true,
-			PartialFilterExpression: bson.D{
-				{Key: "_active", Value: true},
-				{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
-				{Key: "time", Value: bson.D{
-					{Key: "$gte", Value: primitive.NewDateTimeFromTime(medtronicIndexDateTime)},
-				}},
-			},
-			Name: "HasMedtronicLoopDataAfter_v2_DateTime",
 		},
 		{
 			Key:        makeKeySlice("_userId", "-time", "type"),
@@ -385,44 +351,24 @@ func TestStore_generateMongoQuery_allParams(t *testing.T) {
 
 	query := allParamsQuery()
 
-	timeStart, _ := time.Parse(time.RFC3339, "2015-10-07T15:00:00.00Z")
-	timeEnd, _ := time.Parse(time.RFC3339, "2015-10-11T15:00:00.00Z")
-
-	dexcomStart, _ := time.Parse(time.RFC3339, "2015-10-07T15:00:00Z")
-	dexcomEnd, _ := time.Parse(time.RFC3339, "2016-12-13T02:00:00Z")
-
-	medtronicEnd, _ := time.Parse(time.RFC3339, "2017-01-01T00:00:00Z")
-
 	expectedQuery := bson.M{
 		"_userId":  "abc123",
 		"deviceId": "device123",
 		"_active":  true,
 		"type":     bson.M{"$in": strings.Split("smbg,cbg", ",")},
 		"subType":  bson.M{"$in": strings.Split("stuff", ",")},
-		"$or":      bson.A{
-			bson.M{"time": bson.M{
-				"$gte": "2015-10-07T15:00:00.00000000Z",
-				"$lte": "2015-10-11T15:00:00.00000000Z"}},
-			bson.M{"time": bson.M{"$gte": timeStart, "$lte": timeEnd}},
-		},
+		"time": bson.M{
+			"$gte": "2015-10-07T15:00:00.000Z",
+			"$lte": "2015-10-11T15:00:00.000Z"},
 		"$and": []bson.M{
 			{"$or": []bson.M{
 				{"type": bson.M{"$ne": "cbg"}},
 				{"uploadId": bson.M{"$in": []string{"123", "456"}}},
-				{"$or": bson.A{
-					bson.M{"time": bson.M{"$lt": "2015-10-07T15:00:00Z"}},
-					bson.M{"time": bson.M{"$lt": dexcomStart}},
-				}},
-				{"$or": bson.A{
-					bson.M{"time": bson.M{"$gt": "2016-12-13T02:00:00Z"}},
-					bson.M{"time": bson.M{"$gt": dexcomEnd}},
-				}},
+				{"time": bson.M{"$lt": "2015-10-07T15:00:00Z"}},
+				{"time": bson.M{"$gt": "2016-12-13T02:00:00Z"}},
 			}},
 			{"$or": []bson.M{
-				{"$or": bson.A{
-					bson.M{"time": bson.M{"$lt": "2017-01-01"}},
-					bson.M{"time": bson.M{"$lt": medtronicEnd}},
-				}},
+				{"time": bson.M{"$lt": "2017-01-01T00:00:00Z"}},
 				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
 				{"uploadId": bson.M{"$nin": []string{"555666777", "888999000"}}},
 			}},
@@ -439,9 +385,6 @@ func TestStore_generateMongoQuery_allparamsWithUploadId(t *testing.T) {
 
 	query := allParamsIncludingUploadIDQuery()
 
-	timeStart, _ := time.Parse(time.RFC3339, "2015-10-07T15:00:00.00Z")
-	timeEnd, _ := time.Parse(time.RFC3339, "2015-10-11T15:00:00.00Z")
-
 	expectedQuery := bson.M{
 		"_userId":  "abc123",
 		"deviceId": "device123",
@@ -449,12 +392,9 @@ func TestStore_generateMongoQuery_allparamsWithUploadId(t *testing.T) {
 		"type":     bson.M{"$in": strings.Split("smbg,cbg", ",")},
 		"subType":  bson.M{"$in": strings.Split("stuff", ",")},
 		"uploadId": "xyz123",
-		"$or":      bson.A{
-			bson.M{"time": bson.M{
-				"$gte": "2015-10-07T15:00:00.00000000Z",
-				"$lte": "2015-10-11T15:00:00.00000000Z"}},
-			bson.M{"time": bson.M{"$gte": timeStart, "$lte": timeEnd}},
-		},
+		"time": bson.M{
+			"$gte": "2015-10-07T15:00:00.000Z",
+			"$lte": "2015-10-11T15:00:00.000Z"},
 	}
 
 	eq := reflect.DeepEqual(query, expectedQuery)
@@ -486,8 +426,6 @@ func TestStore_generateMongoQuery_noDates(t *testing.T) {
 
 	query := typeAndSubtypeQuery()
 
-	medtronicEnd, _ := time.Parse(time.RFC3339, "2017-01-01T00:00:00Z")
-
 	expectedQuery := bson.M{
 		"_userId": "abc123",
 		"_active": true,
@@ -498,10 +436,7 @@ func TestStore_generateMongoQuery_noDates(t *testing.T) {
 		},
 		"$and": []bson.M{
 			{"$or": []bson.M{
-				{"$or": bson.A{
-					bson.M{"time": bson.M{"$lt": "2017-01-01"}},
-					bson.M{"time": bson.M{"$lt": medtronicEnd}},
-				}},
+				{"time": bson.M{"$lt": "2017-01-01T00:00:00Z"}},
 				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
 				{"uploadId": bson.M{"$nin": []string{"555666777", "888999000"}}},
 			}},
@@ -526,10 +461,10 @@ func TestStore_Ping(t *testing.T) {
 
 func TestStore_cleanDateString_empty(t *testing.T) {
 
-	date, err := cleanDateString("")
+	dateStr, err := cleanDateString("")
 
-	if !date.IsZero() {
-		t.Error("the returned date should have been zero but got ", date)
+	if dateStr != "" {
+		t.Error("the returned dateStr should have been empty but got ", dateStr)
 	}
 	if err != nil {
 		t.Error("didn't expect an error but got ", err.Error())
@@ -539,10 +474,10 @@ func TestStore_cleanDateString_empty(t *testing.T) {
 
 func TestStore_cleanDateString_nonsensical(t *testing.T) {
 
-	date, err := cleanDateString("blah")
+	dateStr, err := cleanDateString("blah")
 
-	if !date.IsZero() {
-		t.Error("the returned date should have been empty zero but got ", date)
+	if dateStr != "" {
+		t.Error("the returned dateStr should have been empty but got ", dateStr)
 	}
 	if err == nil {
 		t.Error("we should have been given an error")
@@ -552,10 +487,10 @@ func TestStore_cleanDateString_nonsensical(t *testing.T) {
 
 func TestStore_cleanDateString_wrongFormat(t *testing.T) {
 
-	date, err := cleanDateString("2006-20-02T3:04pm")
+	dateStr, err := cleanDateString("2006-20-02T3:04pm")
 
-	if !date.IsZero() {
-		t.Error("the returned date should have been empty but got ", date)
+	if dateStr != "" {
+		t.Error("the returned dateStr should have been empty but got ", dateStr)
 	}
 	if err == nil {
 		t.Error("we should have been given an error")
@@ -565,15 +500,14 @@ func TestStore_cleanDateString_wrongFormat(t *testing.T) {
 
 func TestStore_cleanDateString(t *testing.T) {
 
-	date, err := cleanDateString("2015-10-10T15:00:00.000Z")
-	targetDate, _ := time.Parse(RFC3339NanoSortable, "2015-10-10T15:00:00.00000000Z")
+	dateStr, err := cleanDateString("2015-10-10T15:00:00.000Z")
 
-	if date.IsZero() {
-		t.Error("the returned date should not be empty")
+	if dateStr == "" {
+		t.Error("the returned dateStr should not be empty")
 	}
 
-	if date != targetDate {
-		t.Error("the returned date should equal 2015-10-10T15:00:00.00000000Z")
+	if dateStr != "2015-10-10T15:00:00.00000000Z" {
+		t.Error("the returned dateStr should be formatted as a sortable RFC3339Nano datetime")
 	}
 
 	if err != nil {
