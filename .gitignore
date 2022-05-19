@@ -1,7 +1,6 @@
 deploy/
 dist/
 vendor/
-.vscode/launch.json
 
 tide-whisperer
 artifact_go.sh

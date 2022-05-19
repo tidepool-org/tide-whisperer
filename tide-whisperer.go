@@ -30,15 +30,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	muxprom "gitlab.com/msvechla/mux-prometheus/pkg/middleware"
 
+	"github.com/mdblp/go-common/clients/auth"
 	tideV2Client "github.com/mdblp/tide-whisperer-v2/v2/client/tidewhisperer"
 	common "github.com/tidepool-org/go-common"
 	"github.com/tidepool-org/go-common/clients"
 	"github.com/tidepool-org/go-common/clients/disc"
-	"github.com/tidepool-org/go-common/clients/hakken"
 	"github.com/tidepool-org/go-common/clients/mongo"
 	"github.com/tidepool-org/go-common/clients/opa"
-	"github.com/tidepool-org/go-common/clients/shoreline"
-	"github.com/tidepool-org/tide-whisperer/auth"
 	"github.com/tidepool-org/tide-whisperer/data"
 	"github.com/tidepool-org/tide-whisperer/store"
 )
@@ -47,7 +45,6 @@ type (
 	// Config holds the configuration for the `tide-whisperer` service
 	Config struct {
 		clients.Config
-		Auth                *auth.Config        `json:"auth"`
 		Service             disc.ServiceListing `json:"service"`
 		Mongo               mongo.Config        `json:"mongo"`
 		store.SchemaVersion `json:"schemaVersion"`
@@ -64,16 +61,11 @@ func main() {
 	); err != nil {
 		logger.Fatal("Problem loading config: ", err)
 	}
-
-	// server secret may be passed via a separate env variable to accommodate easy secrets injection via Kubernetes
-	serverSecret, found := os.LookupEnv("SERVER_SECRET")
-	if found {
-		config.ShorelineConfig.Secret = serverSecret
-	}
 	authSecret, found := os.LookupEnv("AUTH_SECRET")
-	if found {
-		config.Auth.ServiceSecret = authSecret
+	if !found || authSecret == "" {
+		logger.Fatal("Env var AUTH_SECRET is not provided or empty")
 	}
+	authClient, err := auth.NewClient(authSecret)
 	config.Mongo.FromEnv()
 
 	tr := &http.Transport{
@@ -81,38 +73,12 @@ func main() {
 	}
 	httpClient := &http.Client{Transport: tr}
 
-	authClient, err := auth.NewClient(config.Auth, httpClient)
 	if err != nil {
 		logger.Fatal(err)
 	}
-	hakkenClient := hakken.NewHakkenBuilder().
-		WithConfig(&config.HakkenConfig).
-		Build()
-
-	if !config.HakkenConfig.SkipHakken {
-		if err := hakkenClient.Start(); err != nil {
-			logger.Fatal(err)
-		}
-		defer func() {
-			if err := hakkenClient.Close(); err != nil {
-				logger.Panic("Error closing hakkenClient, panicing to get stacks: ", err)
-			}
-		}()
-	} else {
-		logger.Print("skipping hakken service")
-	}
-
-	shorelineClient := shoreline.NewShorelineClientBuilder().
-		WithHostGetter(config.ShorelineConfig.ToHostGetter(hakkenClient)).
-		WithHttpClient(httpClient).
-		WithConfig(&config.ShorelineConfig.ShorelineClientConfig).
-		Build()
 
 	permsClient := opa.NewClientFromEnv(httpClient)
 
-	if err := shorelineClient.Start(); err != nil {
-		logger.Fatal(err)
-	}
 	tideV2Client := tideV2Client.NewTideWhispererClientFromEnv(httpClient)
 
 	/*
@@ -135,7 +101,7 @@ func main() {
 	 * Data-Api setup
 	 */
 
-	dataapi := data.InitAPI(storage, shorelineClient, authClient, permsClient, config.SchemaVersion, logger, tideV2Client)
+	dataapi := data.InitAPI(storage, authClient, permsClient, config.SchemaVersion, logger, tideV2Client)
 	dataapi.SetHandlers("", rtr)
 
 	// ability to return compressed (gzip/deflate) responses if client browser accepts it
@@ -159,7 +125,6 @@ func main() {
 	if err := start(); err != nil {
 		logger.Fatal(err)
 	}
-	hakkenClient.Publish(&config.Service)
 
 	// Wait for SIGINT (Ctrl+C) or SIGTERM to stop the service
 	sigc := make(chan os.Signal, 1)

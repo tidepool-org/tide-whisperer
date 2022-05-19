@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/mdblp/shoreline/token"
+	"github.com/stretchr/testify/mock"
 	"github.com/tidepool-org/tide-whisperer/store"
 	"go.mongodb.org/mongo-driver/bson"
 )
@@ -45,7 +47,7 @@ func getDataStoreDefaultParams() store.Params {
 // TestGetData_NoToken calling GetData route without token should be unauthorized
 func TestGetData_NoToken(t *testing.T) {
 	resetMocks()
-
+	mockAuth.On("Authenticate", mock.Anything).Return(nil)
 	urlParams := make(map[string]string)
 	request, response := getDataPrepareRequest("", urlParams)
 	tidewhisperer.GetData(response, request, defaultGetDataURLVars)
@@ -56,7 +58,7 @@ func TestGetData_NoToken(t *testing.T) {
 // TestGetData_WrongToken calling GetData route with an authorized token should be unauthorized
 func TestGetData_WrongToken(t *testing.T) {
 	resetMocks()
-	mockShoreline.Unauthorized = true
+	mockAuth.On("Authenticate", mock.Anything).Return(nil)
 
 	urlParams := make(map[string]string)
 	request, response := getDataPrepareRequest("mytoken", urlParams)
@@ -68,7 +70,7 @@ func TestGetData_WrongToken(t *testing.T) {
 // TestGetData_GoodTokenSameUser calling GetData route for the user owning the token should be authorized
 func TestGetData_GoodTokenSameUser(t *testing.T) {
 	resetMocks()
-
+	mockAuth.On("Authenticate", mock.Anything).Return(&token.TokenData{UserId: "patient", IsServer: false})
 	urlParams := make(map[string]string)
 	request, response := getDataPrepareRequest("mytoken", urlParams)
 	tidewhisperer.GetData(response, request, defaultGetDataURLVars)
@@ -80,7 +82,7 @@ func TestGetData_GoodTokenSameUser(t *testing.T) {
 // TestGetData_GoodTokenGuestUserNotInvited calling GetData route for a user who didn't invite the user owning the token should be unauthorized
 func TestGetData_GoodTokenGuestUserNotInvited(t *testing.T) {
 	resetMocks()
-	mockShoreline.UserID = "guestUninvited"
+	mockAuth.On("Authenticate", mock.Anything).Return(&token.TokenData{UserId: "guestUninvited", IsServer: false})
 	auth := mockPerms.GetMockedAuth(false, map[string]interface{}{}, "tidewhisperer-get")
 	mockPerms.SetMockOpaAuth("/patient", &auth, nil)
 
@@ -94,7 +96,7 @@ func TestGetData_GoodTokenGuestUserNotInvited(t *testing.T) {
 // TestGetData_GoodTokenGuestUserNotInvited calling GetData route for a user who invited the user owning the token should be authorized
 func TestGetData_GoodTokenGuestUserInvited(t *testing.T) {
 	resetMocks()
-	mockShoreline.UserID = "guest"
+	mockAuth.On("Authenticate", mock.Anything).Return(&token.TokenData{UserId: "guest", IsServer: false})
 
 	urlParams := make(map[string]string)
 	request, response := getDataPrepareRequest("mytoken", urlParams)
@@ -107,8 +109,7 @@ func TestGetData_GoodTokenGuestUserInvited(t *testing.T) {
 // TestGetData_ServerToken calling GetData route for any user with a server token should be authorized
 func TestGetData_ServerToken(t *testing.T) {
 	resetMocks()
-	mockShoreline.UserID = "server"
-	mockShoreline.IsServer = true
+	mockAuth.On("Authenticate", mock.Anything).Return(&token.TokenData{UserId: "server", IsServer: true})
 	auth := mockPerms.GetMockedAuth(false, map[string]interface{}{}, "tidewhisperer-get")
 	mockPerms.SetMockOpaAuth("/patient", &auth, nil)
 
@@ -123,7 +124,7 @@ func TestGetData_ServerToken(t *testing.T) {
 // TestGetData_ValueOutput calling GetData route with valid authorization should return the json values from storage
 func TestGetData_ValueOutput(t *testing.T) {
 	resetMocks()
-
+	mockAuth.On("Authenticate", mock.Anything).Return(&token.TokenData{UserId: "patient", IsServer: false})
 	urlParams := make(map[string]string)
 	request, response := getDataPrepareRequest("mytoken", urlParams)
 	tidewhisperer.GetData(response, request, defaultGetDataURLVars)
@@ -144,6 +145,7 @@ func TestGetData_ValueOutput(t *testing.T) {
 // should return the json values from storage with history of parameters injected in "pumpSettings" typed objects
 func TestGetData_ValueOutputParametersHistory(t *testing.T) {
 	resetMocks()
+	mockAuth.On("Authenticate", mock.Anything).Return(&token.TokenData{UserId: "patient", IsServer: false})
 	storage.DeviceData = make([]string, 1)
 	storage.DeviceData[0] = `{"type":"pumpSettings","payload":{"pump":"testPumpData"}}`
 	storage.ParametersHistory = bson.M{"history": "testHistoryData"}
@@ -170,7 +172,7 @@ func TestGetData_ValueOutputParametersHistory(t *testing.T) {
 
 func TestGetData_UrlParameters(t *testing.T) {
 	resetMocks()
-
+	mockAuth.On("Authenticate", mock.Anything).Return(&token.TokenData{UserId: "patient", IsServer: false})
 	// Testing boolean query paramters
 	for _, boolField := range []string{"carelink", "dexcom", "latest", "medtronic"} {
 		storage.DeviceData = make([]string, 1)

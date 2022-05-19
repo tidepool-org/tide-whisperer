@@ -40,3 +40,5 @@ export TIDEPOOL_STORE_OPT_PARAMS="authSource=admin&ssl=false"
 
 export OPA_HOST="http://localhost:8181"
 export SERVICE_NAME="tide-whisperer"
+export AUTH_SECRET="This is a local API secret for everyone. BsscSHqSHiwrBMJsEGqbvXiuIUPAjQXU"
+export AUTH0_DOMAIN="yourloops-dev.eu.auth0.com"

@@ -24,7 +24,7 @@ VERSION_FULL_COMMIT=$(git rev-parse HEAD)
 GO_COMMON_PATH="github.com/tidepool-org/go-common"
 
 echo "Build tide-whisperer $VERSION_BASE+$VERSION_FULL_COMMIT"
-go mod tidy
+go mod tidy -compat=1.17
 go build -ldflags "-X $GO_COMMON_PATH/clients/version.ReleaseNumber=$VERSION_BASE \
     -X $GO_COMMON_PATH/clients/version.FullCommit=$VERSION_FULL_COMMIT \
     -X $GO_COMMON_PATH/clients/version.ShortCommit=$VERSION_SHORT_COMMIT" \

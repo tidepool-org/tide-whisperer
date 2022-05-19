@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mdblp/shoreline/token"
+	"github.com/stretchr/testify/mock"
 	"github.com/tidepool-org/tide-whisperer/store"
 )
 
@@ -43,7 +45,7 @@ func getTimeInRangeStoreDefaultParams() store.AggParams {
 // TestGetTimeInRange_NoToken calling GetTimeInRange route without token should be unauthorized
 func TestGetTimeInRange_NoToken(t *testing.T) {
 	resetMocks()
-
+	mockAuth.On("Authenticate", mock.Anything).Return(nil)
 	urlParams := make(map[string]string)
 	urlParams["userIds"] = "patient"
 	request, response := getTimeInRangePrepareRequest("", urlParams)
@@ -55,8 +57,7 @@ func TestGetTimeInRange_NoToken(t *testing.T) {
 // TestGetTimeInRange_WrongToken calling GetTimeInRange route with an authorized token should be unauthorized
 func TestGetTimeInRange_WrongToken(t *testing.T) {
 	resetMocks()
-	mockShoreline.Unauthorized = true
-
+	mockAuth.On("Authenticate", mock.Anything).Return(nil)
 	urlParams := make(map[string]string)
 	urlParams["userIds"] = "patient"
 	request, response := getTimeInRangePrepareRequest("mytoken", urlParams)
@@ -68,7 +69,7 @@ func TestGetTimeInRange_WrongToken(t *testing.T) {
 // TestGetTimeInRange_GoodTokenGuestUserNotInvited calling GetTimeInRange route for a user who didn't invite the user owning the token should be unauthorized
 func TestGetTimeInRange_GoodTokenGuestUserNotInvited(t *testing.T) {
 	resetMocks()
-	mockShoreline.UserID = "guestUninvited"
+	mockAuth.On("Authenticate", mock.Anything).Return(&token.TokenData{UserId: "guestUninvited", IsServer: false})
 	auth := mockPerms.GetMockedAuth(false, map[string]interface{}{}, "tidewhisperer-compute")
 	mockPerms.SetMockOpaAuth("/compute/tir", &auth, nil)
 
@@ -83,8 +84,7 @@ func TestGetTimeInRange_GoodTokenGuestUserNotInvited(t *testing.T) {
 // TestGetTimeInRange_GoodTokenGuestUserInvited calling GetTimeInRange route for a user who invited the user owning the token should be authorized
 func TestGetTimeInRange_GoodTokenGuestUserInvited(t *testing.T) {
 	resetMocks()
-	mockShoreline.UserID = "guest"
-
+	mockAuth.On("Authenticate", mock.Anything).Return(&token.TokenData{UserId: "guest", IsServer: false})
 	urlParams := make(map[string]string)
 	urlParams["userIds"] = "patient"
 	request, response := getTimeInRangePrepareRequest("mytoken", urlParams)
@@ -98,8 +98,7 @@ func TestGetTimeInRange_GoodTokenGuestUserInvited(t *testing.T) {
 // TestGetTimeInRange_ServerToken calling GetTimeInRange route for any user with a server token should be authorized
 func TestGetTimeInRange_ServerToken(t *testing.T) {
 	resetMocks()
-	mockShoreline.UserID = "server"
-	mockShoreline.IsServer = true
+	mockAuth.On("Authenticate", mock.Anything).Return(&token.TokenData{UserId: "server", IsServer: true})
 	auth := mockPerms.GetMockedAuth(false, map[string]interface{}{}, "tidewhisperer-compute")
 	mockPerms.SetMockOpaAuth("/compute/tir", &auth, nil)
 
@@ -116,7 +115,7 @@ func TestGetTimeInRange_ServerToken(t *testing.T) {
 // TestGetTimeInRange_ValueOutput calling GetTimeInRange route with valid authorization should return the json values from storage
 func TestGetTimeInRange_ValueOutput(t *testing.T) {
 	resetMocks()
-
+	mockAuth.On("Authenticate", mock.Anything).Return(&token.TokenData{UserId: "patient", IsServer: false})
 	urlParams := make(map[string]string)
 	urlParams["userIds"] = "patient"
 	request, response := getTimeInRangePrepareRequest("mytoken", urlParams)
@@ -136,7 +135,7 @@ func TestGetTimeInRange_ValueOutput(t *testing.T) {
 }
 func TestGetTimeInRange_UrlParameters(t *testing.T) {
 	resetMocks()
-
+	mockAuth.On("Authenticate", mock.Anything).Return(&token.TokenData{UserId: "patient", IsServer: false})
 	// Testing date query parameters
 	for _, dateField := range []string{"endDate"} {
 		urlParams := make(map[string]string)

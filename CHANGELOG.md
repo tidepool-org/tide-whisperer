@@ -2,7 +2,10 @@
 
 Data access API for tidepool
 
-## Unreleased
+## 1.0.0 - 2022-05-12
+### Changed
+- YLP-1489: Rework the authentication logic to handle OAuth bearer tokens
+
 ### Fixed 
 - YLP-1266 add go context to the tideV2 calls done with http client
 

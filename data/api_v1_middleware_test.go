@@ -10,6 +10,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/mdblp/shoreline/token"
+	"github.com/stretchr/testify/mock"
 )
 
 func getDefaultResponseWriter(t *testing.T) *httpResponseWriter {
@@ -29,9 +31,8 @@ func getDefaultResponseWriter(t *testing.T) *httpResponseWriter {
 }
 
 func resetOPAMockRouteV1(authorized bool, route string, userID string) {
-	mockShoreline.UserID = userID
-	mockShoreline.IsServer = false
-	mockShoreline.Unauthorized = !authorized
+	mockAuth.ExpectedCalls = nil
+	mockAuth.On("Authenticate", mock.Anything).Return(&token.TokenData{UserId: userID, IsServer: false})
 	auth := mockPerms.GetMockedAuth(authorized, map[string]interface{}{}, "tidewhisperer-v1")
 	mockPerms.SetMockOpaAuth(route, &auth, nil)
 }
@@ -236,6 +237,8 @@ func TestApiV1MiddlewareNotAuthorizedWithUserID(t *testing.T) {
 	response := httptest.NewRecorder()
 
 	resetOPAMockRouteV1(false, "/test", "abcdef")
+	mockAuth.ExpectedCalls = nil
+	mockAuth.On("Authenticate", mock.Anything).Return(nil)
 	handlerLogFunc(response, request)
 
 	if handlerFuncCalled {

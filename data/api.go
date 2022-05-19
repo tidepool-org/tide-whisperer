@@ -17,11 +17,10 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/mdblp/go-common/clients/auth"
 	tideV2Client "github.com/mdblp/tide-whisperer-v2/v2/client/tidewhisperer"
 	"github.com/tidepool-org/go-common/clients/opa"
-	"github.com/tidepool-org/go-common/clients/shoreline"
 	"github.com/tidepool-org/go-common/clients/status"
-	"github.com/tidepool-org/tide-whisperer/auth"
 	"github.com/tidepool-org/tide-whisperer/schema"
 	"github.com/tidepool-org/tide-whisperer/store"
 )
@@ -29,13 +28,12 @@ import (
 type (
 	// API struct for tide-whisperer
 	API struct {
-		store           store.Storage
-		shorelineClient shoreline.Client
-		authClient      auth.ClientInterface
-		perms           opa.Client
-		schemaVersion   store.SchemaVersion
-		logger          *log.Logger
-		tideV2Client    tideV2Client.ClientInterface
+		store         store.Storage
+		authClient    auth.ClientInterface
+		perms         opa.Client
+		schemaVersion store.SchemaVersion
+		logger        *log.Logger
+		tideV2Client  tideV2Client.ClientInterface
 	}
 
 	varsHandler func(http.ResponseWriter, *http.Request, map[string]string)
@@ -71,15 +69,14 @@ var (
 	errorNotfound          = detailedError{Status: http.StatusNotFound, Code: "data_not_found", Message: "no data for specified user"}
 )
 
-func InitAPI(storage store.Storage, shoreline shoreline.Client, auth auth.ClientInterface, permsClient opa.Client, schemaV store.SchemaVersion, logger *log.Logger, V2Client tideV2Client.ClientInterface) *API {
+func InitAPI(storage store.Storage, auth auth.ClientInterface, permsClient opa.Client, schemaV store.SchemaVersion, logger *log.Logger, V2Client tideV2Client.ClientInterface) *API {
 	return &API{
-		store:           storage,
-		shorelineClient: shoreline,
-		authClient:      auth,
-		perms:           permsClient,
-		schemaVersion:   schemaV,
-		logger:          logger,
-		tideV2Client:    V2Client,
+		store:         storage,
+		authClient:    auth,
+		perms:         permsClient,
+		schemaVersion: schemaV,
+		logger:        logger,
+		tideV2Client:  V2Client,
 	}
 }
 
@@ -99,8 +96,6 @@ func (a *API) SetHandlers(prefix string, rtr *mux.Router) {
 
 	// v0 routes:
 	rtr.HandleFunc("/status", a.getStatus).Methods("GET")
-	rtr.HandleFunc("/compute/tir", a.GetTimeInRange).Methods("GET")
-	rtr.Handle("/{userID}", varsHandler(a.GetData)).Methods("GET")
 }
 
 func (h varsHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
@@ -266,7 +261,7 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 			a.jsonError(res, errorRunningQuery, start)
 			return
 		}
-		lastestProfile, basalSecurityProfileErr := a.store.GetLatestBasalSecurityProfile(ctx, requestID, queryParams.UserID);
+		lastestProfile, basalSecurityProfileErr := a.store.GetLatestBasalSecurityProfile(ctx, requestID, queryParams.UserID)
 		if basalSecurityProfileErr != nil {
 			a.logger.Printf("%s request %s user %s GetLatestBasalSecurityProfile returned error: %s", DataAPIPrefix, requestID, queryParams.UserID, basalSecurityProfileErr)
 			a.jsonError(res, errorRunningQuery, start)
@@ -296,7 +291,7 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 			results = results["latest_doc"].(map[string]interface{})
 		}
 		if len(results) > 0 {
-			if results["type"].(string) == "pumpSettings" && (parametersHistory != nil || basalSecurityProfile != nil ) {
+			if results["type"].(string) == "pumpSettings" && (parametersHistory != nil || basalSecurityProfile != nil) {
 				payload := results["payload"].(map[string]interface{})
 
 				if parametersHistory != nil {
@@ -306,7 +301,7 @@ func (a *API) GetData(res http.ResponseWriter, req *http.Request, vars map[strin
 				if basalSecurityProfile != nil {
 					payload["basalsecurityprofile"] = basalSecurityProfile
 				}
-				
+
 				results["payload"] = payload
 			}
 
@@ -424,22 +419,8 @@ func (d detailedError) setInternalMessage(internal error) detailedError {
 	return d
 }
 
-func (a *API) getTokenData(req *http.Request) *shoreline.TokenData {
-	var td *shoreline.TokenData
-	if sessionToken := req.Header.Get("x-tidepool-session-token"); sessionToken != "" {
-		td = a.shorelineClient.CheckToken(sessionToken)
-	} else if restrictedTokens, found := req.URL.Query()["restricted_token"]; found && len(restrictedTokens) == 1 {
-		restrictedToken, restrictedTokenErr := a.authClient.GetRestrictedToken(req.Context(), restrictedTokens[0])
-		if restrictedTokenErr == nil && restrictedToken != nil && restrictedToken.Authenticates(req) {
-			td = &shoreline.TokenData{UserID: restrictedToken.UserID}
-		}
-	}
-
-	return td
-}
-
 func (a *API) isAuthorized(req *http.Request, targetUserIDs []string) bool {
-	td := a.getTokenData(req)
+	td := a.authClient.Authenticate(req)
 	if td == nil {
 		a.logger.Printf("%s - %s %s HTTP/%d.%d - Missing header token", req.RemoteAddr, req.Method, req.URL.String(), req.ProtoMajor, req.ProtoMinor)
 		return false
@@ -449,7 +430,7 @@ func (a *API) isAuthorized(req *http.Request, targetUserIDs []string) bool {
 	}
 	if len(targetUserIDs) == 1 {
 		targetUserID := targetUserIDs[0]
-		if td.UserID == targetUserID {
+		if td.UserId == targetUserID {
 			return true
 		}
 	}
