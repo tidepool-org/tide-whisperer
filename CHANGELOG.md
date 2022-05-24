@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## 1.0.1 - 2022-05-24
+### Engineering
+- YLP-1561 Remove dead code
+
 ## 1.0.0 - 2022-05-12
 ### Changed
 - YLP-1489: Rework the authentication logic to handle OAuth bearer tokens

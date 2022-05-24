@@ -37,14 +37,6 @@ type MockStoreClient struct {
 	ParametersHistory    bson.M
 	BasalSecurityProfile *DbProfile
 
-	DeviceData          []string
-	GetDeviceDataCall   Params
-	GetDeviceDataCalled bool
-
-	TimeInRangeData          []string
-	GetTimeInRangeDataCall   AggParams
-	GetTimeInRangeDataCalled bool
-
 	DataRangeV1 []string
 	DataV1      []string
 	DataIDV1    []string
@@ -54,9 +46,8 @@ type MockStoreClient struct {
 
 func NewMockStoreClient() *MockStoreClient {
 	return &MockStoreClient{
-		PingError:           false,
-		DeviceModel:         "test",
-		GetDeviceDataCalled: false,
+		PingError:   false,
+		DeviceModel: "test",
 	}
 }
 
@@ -86,52 +77,11 @@ func (c *MockStoreClient) Collection(collectionName string, databaseName ...stri
 func (c *MockStoreClient) WaitUntilStarted() {}
 func (c *MockStoreClient) Start()            {}
 
-func (c *MockStoreClient) GetDeviceData(ctx context.Context, p *Params) (goComMgo.StorageIterator, error) {
-	c.GetDeviceDataCall = *p
-	c.GetDeviceDataCalled = true
-	if c.DeviceData != nil {
-		iter := &MockStoreIterator{
-			numIter: -1,
-			maxIter: 1,
-			data:    c.DeviceData,
-		}
-		return iter, nil
-	}
-	return nil, nil
-}
-func (c *MockStoreClient) GetDexcomDataSource(ctx context.Context, userID string) (bson.M, error) {
-	return nil, nil
-}
 func (c *MockStoreClient) GetDiabeloopParametersHistory(ctx context.Context, userID string, levels []int) (bson.M, error) {
 	if c.ParametersHistory != nil {
 		return c.ParametersHistory, nil
 	}
 	return nil, nil
-}
-func (c *MockStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(ctx context.Context, userID string, date string) ([]string, error) {
-	return nil, nil
-}
-func (c *MockStoreClient) GetDeviceModel(ctx context.Context, userID string) (string, error) {
-	return c.DeviceModel, nil
-}
-func (c *MockStoreClient) GetTimeInRangeData(ctx context.Context, p *AggParams, logQuery bool) (goComMgo.StorageIterator, error) {
-	c.GetTimeInRangeDataCall = *p
-	c.GetTimeInRangeDataCalled = true
-	if c.TimeInRangeData != nil {
-		iter := &MockStoreIterator{
-			numIter: -1,
-			maxIter: 1,
-			data:    c.TimeInRangeData,
-		}
-		return iter, nil
-	}
-	return nil, nil
-}
-func (c *MockStoreClient) HasMedtronicDirectData(ctx context.Context, userID string) (bool, error) {
-	return false, nil
-}
-func (c *MockStoreClient) HasMedtronicLoopDataAfter(ctx context.Context, userID string, date string) (bool, error) {
-	return false, nil
 }
 
 // GetDataRangeV1 mock func, return nil,nil
