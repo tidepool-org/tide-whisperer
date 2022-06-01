@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## 1.0.2 - 2022-06-01
+### Engineering
+- YLP-1582: New config for auth0 middleware (env var AUTH0_DOMAIN changed to AUTH0_URL)
+
 ## 1.0.1 - 2022-05-24
 ### Engineering
 - YLP-1561 Remove dead code

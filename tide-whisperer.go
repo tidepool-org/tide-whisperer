@@ -61,9 +61,9 @@ func main() {
 	); err != nil {
 		logger.Fatal("Problem loading config: ", err)
 	}
-	authSecret, found := os.LookupEnv("AUTH_API_SECRET")
+	authSecret, found := os.LookupEnv("API_SECRET")
 	if !found || authSecret == "" {
-		logger.Fatal("Env var AUTH_API_SECRET is not provided or empty")
+		logger.Fatal("Env var API_SECRET is not provided or empty")
 	}
 	authClient, err := auth.NewClient(authSecret)
 	config.Mongo.FromEnv()
