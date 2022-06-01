@@ -12,7 +12,7 @@
             "program": "${fileDirname}",
             "env": {
                 "AUTH_SECRET": "This is a local API secret for everyone.",
-                "AUTH0_DOMAIN": "yourloops-dev.eu.auth0.com",
+                "AUTH0_URL": "https://yourloops-dev.eu.auth0.com",
                 "TIDEPOOL_TIDE_WHISPERER_ENV": "{\"seagull\": {\"serviceSpec\": {\"type\": \"static\", \"hosts\": [\"http://api-public:3000/metadata\"]}},\"shoreline\": {\"name\": \"tide-whisperer\",\"secret\": \"This needs to be the same secret everywhere.\",\"serviceSpec\": {\"type\": \"static\", \"hosts\": [\"http://localhost:9107\"]},\"tokenRefreshInterval\": \"1h\"}}",
                 "TIDEPOOL_TIDE_WHISPERER_SERVICE": "{ \"schemaVersion\": {\"maximum\": 99,\"minimum\": 1},\"service\": {\"certFile\": \"config/cert.pem\",\"host\": \"localhost:9127\",\"keyFile\": \"config/key.pem\",\"protocol\": \"http\",\"service\": \"tide-whisperer\"}}",
                 "TIDEPOOL_STORE_ADDRESSES": "localhost",
