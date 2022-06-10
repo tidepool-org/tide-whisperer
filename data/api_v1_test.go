@@ -27,7 +27,7 @@ func TestAPI_GetRangeV1(t *testing.T) {
 
 	request, _ := http.NewRequest("GET", "/v1/range/"+userID, nil)
 	request.Header.Set("x-tidepool-trace-session", traceID)
-	request.Header.Set("x-tidepool-session-token", userID)
+	request.Header.Set("Authorization", "Bearer "+userID)
 	request = mux.SetURLVars(request, urlParams)
 	response := httptest.NewRecorder()
 
@@ -74,7 +74,7 @@ func TestAPI_GetDataV1(t *testing.T) {
 
 	request, _ := http.NewRequest("GET", "/v1/data/"+userID, nil)
 	request.Header.Set("x-tidepool-trace-session", traceID)
-	request.Header.Set("x-tidepool-session-token", userID)
+	request.Header.Set("Authorization", "Bearer "+userID)
 	request = mux.SetURLVars(request, urlParams)
 	response := httptest.NewRecorder()
 
@@ -128,7 +128,7 @@ func TestAPI_GetDataV1_Parameters(t *testing.T) {
 
 	request, _ := http.NewRequest("GET", "/v1/data/"+userID, nil)
 	request.Header.Set("x-tidepool-trace-session", traceID)
-	request.Header.Set("x-tidepool-session-token", userID)
+	request.Header.Set("Authorization", "Bearer "+userID)
 	request = mux.SetURLVars(request, urlParams)
 	response := httptest.NewRecorder()
 
@@ -208,7 +208,7 @@ func TestAPI_GetDataSummaryV1(t *testing.T) {
 	})
 
 	request, _ := http.NewRequest("GET", "/v1/summary/"+userID, nil)
-	request.Header.Set("x-tidepool-session-token", userID)
+	request.Header.Set("Authorization", "Bearer "+userID)
 	request = mux.SetURLVars(request, urlParams)
 	response := httptest.NewRecorder()
 

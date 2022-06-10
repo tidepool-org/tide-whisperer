@@ -95,7 +95,7 @@ func prepareGetTestRequest(route string, token string, urlParams map[string]stri
 	tidewhisperer.SetHandlers("", rtr)
 	request, _ := http.NewRequest("GET", route, nil)
 	if token != "" {
-		request.Header.Set("x-tidepool-session-token", token)
+		request.Header.Set("Authorization", "Bearer "+token)
 	}
 	if len(urlParams) > 0 {
 		q := request.URL.Query()

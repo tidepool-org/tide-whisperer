@@ -51,7 +51,7 @@ func assertRequest(apiParams map[string]string, urlParams map[string]string, exp
 	handlerLogFunc := tidewhisperer.middlewareV1(tidewhisperer.getDataV2, true, "userID")
 	request, _ := http.NewRequest("GET", "/v1/dataV2/"+userID, nil)
 	request.Header.Set("x-tidepool-trace-session", traceID)
-	request.Header.Set("x-tidepool-session-token", userID)
+	request.Header.Set("Authorization", "Bearer " +userID)
 	request = mux.SetURLVars(request, apiParams)
 	q := request.URL.Query()
 	for key, value := range urlParams {

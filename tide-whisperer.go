@@ -11,9 +11,9 @@
 // #contact.url https://www.diabeloop.com
 // @contact.email platforms@diabeloop.fr
 
-// @securityDefinitions.apikey TidepoolAuth
+// @securityDefinitions.apikey Auth0
 // @in header
-// @name x-tidepool-session-token
+// @name Authorization
 package main
 
 import (

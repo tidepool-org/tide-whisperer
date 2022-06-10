@@ -183,7 +183,7 @@ func TestApiV1MiddlewareNoErrorWithUserID(t *testing.T) {
 
 	request, _ := http.NewRequest("GET", "/test/abcdef", nil)
 	request.Header.Set("x-tidepool-trace-session", traceID)
-	request.Header.Set("x-tidepool-session-token", "123456")
+	request.Header.Set("Authorization", "Bearer 123456")
 	request = mux.SetURLVars(request, urlParams)
 	response := httptest.NewRecorder()
 
@@ -232,7 +232,7 @@ func TestApiV1MiddlewareNotAuthorizedWithUserID(t *testing.T) {
 
 	request, _ := http.NewRequest("GET", "/test/abcdef", nil)
 	request.Header.Set("x-tidepool-trace-session", traceID)
-	request.Header.Set("x-tidepool-session-token", "123456")
+	request.Header.Set("Authorization", "Bearer 123456")
 	request = mux.SetURLVars(request, urlParams)
 	response := httptest.NewRecorder()
 

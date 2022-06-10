@@ -157,7 +157,7 @@ func (a *API) getDataV2(ctx context.Context, res *httpResponseWriter) error {
 	}
 
 	// Fetch data from store and V2 API (for cbg)
-	sessionToken := res.Header.Get("x-tidepool-session-token")
+	sessionToken := getSessionToken(res)
 	chanStoreError := make(chan *detailedError, 1)
 	defer close(chanStoreError)
 	chanMongoIter := make(chan mongo.StorageIterator, 1)

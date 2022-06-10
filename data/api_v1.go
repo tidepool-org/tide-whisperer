@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/mdblp/tide-whisperer-v2/v2/schema"
@@ -102,6 +103,22 @@ func (a *API) setHandlesV1(prefix string, rtr *mux.Router) {
 func (a *API) getNotFoundV1(ctx context.Context, res *httpResponseWriter) error {
 	res.WriteHeader(http.StatusNotFound)
 	return nil
+}
+// get session token (for history the header is found in the response and not in the request because of the v1 middelware)
+// to be change of course, but for now keep it 
+func getSessionToken(res *httpResponseWriter) string {
+	// first look if old token are provided in the request
+	sessionToken := res.Header.Get("x-tidepool-session-token")
+	if sessionToken != "" {
+		return sessionToken
+	}
+	// if not then 
+	sessionToken = strings.Trim(res.Header.Get("Authorization"), " ")
+	if sessionToken != "" && strings.HasPrefix(sessionToken, "Bearer ") {
+		tokenParts := strings.Split(sessionToken, " ")
+		sessionToken = tokenParts[1]
+	}
+	return sessionToken
 }
 
 // @Summary Get the data dates range for a specific patient

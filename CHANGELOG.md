@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## 1.0.3 - 2022-06-08
+### Fixed
+- Add new Authentication header in client
+
 ## 1.0.2 - 2022-06-01
 ### Engineering
 - YLP-1582: New config for auth0 middleware (env var AUTH0_DOMAIN changed to AUTH0_URL)
