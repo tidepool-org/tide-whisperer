@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## 1.0.4 - 2022-07-04
+### Engineering
+- YLP-1644: Use a new env var to load a custom CA for SSL connections to mocked services
+
 ## 1.0.3 - 2022-06-08
 ### Fixed
 - Add new Authentication header in client

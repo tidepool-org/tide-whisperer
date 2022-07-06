@@ -293,6 +293,8 @@ github.com/mdblp/go-common v1.3.1 h1:EWnVX1tQxS8VtM5nBlfuvYOx3npamahO4Rejl9ovVRs
 github.com/mdblp/go-common v1.3.1/go.mod h1:U/6Aapha2XbFlXuwrDUHW7kdZChPvj10TElT7ybDBNU=
 github.com/mdblp/go-common v1.3.2 h1:8L9Y4tsMdHbxfpZddqoSeasRG98Ye9Tn4V2bppnvmkc=
 github.com/mdblp/go-common v1.3.2/go.mod h1:U/6Aapha2XbFlXuwrDUHW7kdZChPvj10TElT7ybDBNU=
+github.com/mdblp/go-common v1.4.1 h1:1ocqzUO/2FChhrwMaOgLO6NykG8EqbL1Tj0vhNisO0U=
+github.com/mdblp/go-common v1.4.1/go.mod h1:U/6Aapha2XbFlXuwrDUHW7kdZChPvj10TElT7ybDBNU=
 github.com/mdblp/go-routers v0.5.3 h1:MHY44YhwJWXtg+yOds4e4w7dT9UKJwoFTVlbRKL+0wM=
 github.com/mdblp/go-routers v0.5.3/go.mod h1:tPpqQGKwuHD44fb6ACK3u18ZfWNYMm5hCiFl+tGkFfs=
 github.com/mdblp/go-routers v0.5.5 h1:E3ldS0v2D7wD7Y55/UHgGVCl0I1f13DESCCP8HHsco8=
