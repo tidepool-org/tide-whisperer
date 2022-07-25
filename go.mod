@@ -18,7 +18,7 @@ require (
 require (
 	github.com/mdblp/go-common v1.4.1
 	github.com/mdblp/shoreline v1.9.2
-	github.com/mdblp/tide-whisperer-v2/v2 v2.5.4
+	github.com/mdblp/tide-whisperer-v2/v2  v2.6.0
 	github.com/stretchr/testify v1.7.1
 )
 
@@ -34,7 +34,7 @@ require (
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
-	github.com/mdblp/go-routers v0.5.5 // indirect
+	github.com/mdblp/go-routers v0.5.6 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect

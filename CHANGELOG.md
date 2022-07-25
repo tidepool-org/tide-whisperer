@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## 1.0.5 - 2022-07-25
+### Engineering
+- Update tide-whisperer-v2 client
+
 ## 1.0.4 - 2022-07-04
 ### Engineering
 - YLP-1644: Use a new env var to load a custom CA for SSL connections to mocked services
