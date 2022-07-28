@@ -18,7 +18,7 @@ require (
 require (
 	github.com/mdblp/go-common v1.4.1
 	github.com/mdblp/shoreline v1.9.2
-	github.com/mdblp/tide-whisperer-v2/v2  v2.6.0
+	github.com/mdblp/tide-whisperer-v2/v2 v2.6.1
 	github.com/stretchr/testify v1.7.1
 )
 
@@ -33,6 +33,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
+	github.com/kr/pretty v0.3.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mdblp/go-routers v0.5.6 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -40,6 +41,7 @@ require (
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
+	github.com/rogpeppe/go-internal v1.8.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/stretchr/objx v0.1.1 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
@@ -51,6 +53,7 @@ require (
 	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/square/go-jose.v2 v2.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
