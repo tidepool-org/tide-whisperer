@@ -104,15 +104,16 @@ func (a *API) getNotFoundV1(ctx context.Context, res *httpResponseWriter) error 
 	res.WriteHeader(http.StatusNotFound)
 	return nil
 }
+
 // get session token (for history the header is found in the response and not in the request because of the v1 middelware)
-// to be change of course, but for now keep it 
+// to be change of course, but for now keep it
 func getSessionToken(res *httpResponseWriter) string {
 	// first look if old token are provided in the request
 	sessionToken := res.Header.Get("x-tidepool-session-token")
 	if sessionToken != "" {
 		return sessionToken
 	}
-	// if not then 
+	// if not then
 	sessionToken = strings.Trim(res.Header.Get("Authorization"), " ")
 	if sessionToken != "" && strings.HasPrefix(sessionToken, "Bearer ") {
 		tokenParts := strings.Split(sessionToken, " ")
@@ -313,7 +314,7 @@ func (a *API) getDataSummaryV1(ctx context.Context, res *httpResponseWriter) err
 //
 // @Router /v1/data/{userID} [get]
 func (a *API) getDataV1(ctx context.Context, res *httpResponseWriter) error {
-	params, logError := getDataV1Params(res)
+	params, logError := a.getDataV1Params(res)
 	if logError != nil {
 		return res.WriteError(logError)
 	}
@@ -417,10 +418,10 @@ func writeFromIterV1(ctx context.Context, p *writeFromIter) error {
 					p.uploadIDs = append(p.uploadIDs, uploadID)
 				}
 			}
-			
+
 			if datumType == "pumpSettings" && (p.parametersHistory != nil || p.basalSecurityProfile != nil) {
 				payload := datum["payload"].(map[string]interface{})
-				
+
 				// Add the parameter history to the pump settings
 				if p.parametersHistory != nil {
 					payload["history"] = p.parametersHistory["history"]

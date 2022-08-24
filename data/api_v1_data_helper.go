@@ -24,7 +24,7 @@ type (
 	}
 )
 
-func getDataV1Params(res *httpResponseWriter) (*apiDataParams, *detailedError) {
+func (a *API) getDataV1Params(res *httpResponseWriter) (*apiDataParams, *detailedError) {
 	var err error
 	// Mongo iterators
 	userID := res.VARS["userID"]
@@ -33,13 +33,11 @@ func getDataV1Params(res *httpResponseWriter) (*apiDataParams, *detailedError) {
 	startDate := query.Get("startDate")
 	endDate := query.Get("endDate")
 	withPumpSettings := query.Get("withPumpSettings") == "true"
-	basalBucket := query.Get("basalBucket") == "true"
-	cbgBucket := (query.Get("cbgBucket") == "true" || query.Get("cbgBucket") == "")
 
 	dataSource := map[string]bool{
 		"store":       true,
-		"basalBucket": basalBucket,
-		"cbgBucket":   cbgBucket,
+		"basalBucket": a.readBasalBucket,
+		"cbgBucket":   true,
 	}
 
 	// Check startDate & endDate parameter
@@ -140,7 +138,7 @@ func TransformToExposedModel(lastestProfile *store.DbProfile) *internalSchema.Pr
 	var result *internalSchema.Profile
 
 	if lastestProfile != nil {
-		result = &internalSchema.Profile{} 
+		result = &internalSchema.Profile{}
 		// Build start and end schedule
 		// the BasalSchedule array is sorted on Start by the terminal
 		for i, value := range lastestProfile.BasalSchedule {
@@ -148,7 +146,7 @@ func TransformToExposedModel(lastestProfile *store.DbProfile) *internalSchema.Pr
 			elem.Rate = value.Rate
 			elem.Start = value.Start
 			if i == len(lastestProfile.BasalSchedule)-1 {
-				elem.End = lastestProfile.BasalSchedule[0].Start 
+				elem.End = lastestProfile.BasalSchedule[0].Start
 			} else {
 				elem.End = lastestProfile.BasalSchedule[i+1].Start
 			}
@@ -257,7 +255,7 @@ func writeCbgs(ctx context.Context, p *writeFromIter) error {
 		for i, sample := range bucket.Samples {
 			datum := make(map[string]interface{})
 			// Building a fake id (bucket.Id/range index)
-			datum["id"] = fmt.Sprintf("%s_%d", bucket.Id, i)
+			datum["id"] = fmt.Sprintf("cbg_%s_%d", bucket.Id, i)
 			datum["type"] = "cbg"
 			datum["time"] = sample.Timestamp
 			datum["timezone"] = sample.Timezone
@@ -295,7 +293,7 @@ func writeBasals(ctx context.Context, p *writeFromIter) error {
 		for i, sample := range bucket.Samples {
 			datum := make(map[string]interface{})
 			// Building a fake id (bucket.Id/range index)
-			datum["id"] = fmt.Sprintf("%s_%d", bucket.Id, i)
+			datum["id"] = fmt.Sprintf("basal_%s_%d", bucket.Id, i)
 			datum["type"] = "basal"
 			datum["time"] = sample.Timestamp
 			datum["timezone"] = sample.Timezone

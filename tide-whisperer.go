@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/gorilla/handlers"
@@ -101,7 +102,14 @@ func main() {
 	 * Data-Api setup
 	 */
 
-	dataapi := data.InitAPI(storage, authClient, permsClient, config.SchemaVersion, logger, tideV2Client)
+	envReadBasalBucket, err := strconv.ParseBool(os.Getenv("READ_BASAL_BUCKET"))
+	if err == nil && envReadBasalBucket {
+		logger.Print("environment variable READ_BASAL_BUCKET exported,started with set true")
+	} else {
+		logger.Print("environment variable READ_BASAL_BUCKET not exported, started with false")
+	}
+
+	dataapi := data.InitAPI(storage, authClient, permsClient, config.SchemaVersion, logger, tideV2Client, envReadBasalBucket)
 	dataapi.SetHandlers("", rtr)
 
 	// ability to return compressed (gzip/deflate) responses if client browser accepts it

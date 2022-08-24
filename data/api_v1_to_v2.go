@@ -117,7 +117,7 @@ func (a *API) getBasalFromTideV2(ctx context.Context, wg *sync.WaitGroup, userID
 //
 // @Router /v1/dataV2/{userID} [get]
 func (a *API) getDataV2(ctx context.Context, res *httpResponseWriter) error {
-	params, logError := getDataV1Params(res)
+	params, logError := a.getDataV1Params(res)
 	if logError != nil {
 		return res.WriteError(logError)
 	}

@@ -2,6 +2,10 @@
 
 Data access API for tidepool
 
+## 1.0.7 - 2022-08-23
+### Engineering
+- YLP-1346 show basal data in Yourloops when retrieving from buckets
+
 ## 1.0.6 - 2022-07-28
 ### Engineering
 - Update tide-whisperer-v2 client

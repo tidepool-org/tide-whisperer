@@ -31,7 +31,7 @@ var (
 	mockAuth      = auth.NewMock()
 	mockPerms     = opa.NewMock()
 	mockTideV2    = twV2Client.NewMock()
-	tidewhisperer = InitAPI(storage, mockAuth, mockPerms, schemaVersions, logger, mockTideV2)
+	tidewhisperer = InitAPI(storage, mockAuth, mockPerms, schemaVersions, logger, mockTideV2, false)
 	rtr           = mux.NewRouter()
 )
 

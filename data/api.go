@@ -20,12 +20,13 @@ import (
 type (
 	// API struct for tide-whisperer
 	API struct {
-		store         store.Storage
-		authClient    auth.ClientInterface
-		perms         opa.Client
-		schemaVersion store.SchemaVersion
-		logger        *log.Logger
-		tideV2Client  tideV2Client.ClientInterface
+		store           store.Storage
+		authClient      auth.ClientInterface
+		perms           opa.Client
+		schemaVersion   store.SchemaVersion
+		logger          *log.Logger
+		tideV2Client    tideV2Client.ClientInterface
+		readBasalBucket bool
 	}
 
 	varsHandler func(http.ResponseWriter, *http.Request, map[string]string)
@@ -61,14 +62,15 @@ var (
 	errorNotfound          = detailedError{Status: http.StatusNotFound, Code: "data_not_found", Message: "no data for specified user"}
 )
 
-func InitAPI(storage store.Storage, auth auth.ClientInterface, permsClient opa.Client, schemaV store.SchemaVersion, logger *log.Logger, V2Client tideV2Client.ClientInterface) *API {
+func InitAPI(storage store.Storage, auth auth.ClientInterface, permsClient opa.Client, schemaV store.SchemaVersion, logger *log.Logger, V2Client tideV2Client.ClientInterface, envReadBasalBucket bool) *API {
 	return &API{
-		store:         storage,
-		authClient:    auth,
-		perms:         permsClient,
-		schemaVersion: schemaV,
-		logger:        logger,
-		tideV2Client:  V2Client,
+		store:           storage,
+		authClient:      auth,
+		perms:           permsClient,
+		schemaVersion:   schemaV,
+		logger:          logger,
+		tideV2Client:    V2Client,
+		readBasalBucket: envReadBasalBucket,
 	}
 }
 
