@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
+	portalSchema "github.com/mdblp/portal-api-v2/schema"
+	log "github.com/sirupsen/logrus"
 	"math"
 	"time"
 
@@ -96,11 +99,12 @@ func (a *API) getDataV1Params(res *httpResponseWriter) (*apiDataParams, *detaile
 
 }
 
-func (a *API) getLatestPumpSettings(ctx context.Context, traceID string, userID string, writer *writeFromIter) (mongo.StorageIterator, *detailedError) {
+func (a *API) getLatestPumpSettings(ctx context.Context, traceID string, userID string, writer *writeFromIter, token string) (*schema.SettingsResult, *detailedError) {
 	// Initial query to fetch for this user, the client wants the
 	// latest pumpSettings
 	timeIt(ctx, "getLastPumpSettings")
-	iterPumpSettings, err := a.store.GetLatestPumpSettingsV1(ctx, traceID, userID)
+	//iterPumpSettings, err := a.store.GetLatestPumpSettingsV1(ctx, traceID, userID)
+	settings, err := a.tideV2Client.GetSettings(ctx, userID, token)
 	if err != nil {
 		logError := &detailedError{
 			Status:          errorRunningQuery.Status,
@@ -112,15 +116,15 @@ func (a *API) getLatestPumpSettings(ctx context.Context, traceID string, userID 
 	}
 	timeEnd(ctx, "getLastPumpSettings")
 
-	// Fetch parameters history from portal:
-	timeIt(ctx, "getParamHistory")
-	writer.parametersHistory, err = a.store.GetDiabeloopParametersHistory(ctx, userID, parameterLevelFilter[:])
-	if err != nil {
-		// Just log the problem, don't crash the query
-		writer.parametersHistory = nil
-		a.logger.Printf("{%s} - {GetDiabeloopParametersHistory:\"%s\"}", traceID, err)
-	}
-	timeEnd(ctx, "getParamHistory")
+	//// Fetch parameters history from portal:
+	//timeIt(ctx, "getParamHistory")
+	//writer.parametersHistory, err = a.store.GetDiabeloopParametersHistory(ctx, userID, parameterLevelFilter[:])
+	//if err != nil {
+	//	// Just log the problem, don't crash the query
+	//	writer.parametersHistory = nil
+	//	a.logger.Printf("{%s} - {GetDiabeloopParametersHistory:\"%s\"}", traceID, err)
+	//}
+	//timeEnd(ctx, "getParamHistory")
 
 	timeIt(ctx, "getLatestBasalSecurityProfile")
 	lastestProfile, err := a.store.GetLatestBasalSecurityProfile(ctx, traceID, userID)
@@ -131,7 +135,7 @@ func (a *API) getLatestPumpSettings(ctx context.Context, traceID string, userID 
 	writer.basalSecurityProfile = TransformToExposedModel(lastestProfile)
 	timeEnd(ctx, "getLatestBasalSecurityProfile")
 
-	return iterPumpSettings, nil
+	return settings, nil
 }
 
 func TransformToExposedModel(lastestProfile *store.DbProfile) *internalSchema.Profile {
@@ -165,7 +169,7 @@ func (a *API) writeDataV1(
 	ctx context.Context,
 	res *httpResponseWriter,
 	includePumpSettings bool,
-	iterPumpSettings mongo.StorageIterator,
+	pumpSettings *schema.SettingsResult,
 	iterUploads mongo.StorageIterator,
 	iterData mongo.StorageIterator,
 	Cbgs []schema.CbgBucket,
@@ -180,9 +184,9 @@ func (a *API) writeDataV1(
 		return err
 	}
 
-	if includePumpSettings && iterPumpSettings != nil {
-		writeParams.iter = iterPumpSettings
-		err = writeFromIterV1(ctx, writeParams)
+	if includePumpSettings && pumpSettings != nil {
+		writeParams.settings = pumpSettings
+		err = writePumpSettings(writeParams)
 		if err != nil {
 			return err
 		}
@@ -244,8 +248,82 @@ func (a *API) writeDataV1(
 		a.logger.Printf("{%s} - {nErrors:%d,jsonMarshall:\"%s\"}", res.TraceID, writeParams.jsonError.numErrors, writeParams.jsonError.firstError)
 	}
 
-	// Last JSON array charater:
+	// Last JSON array character:
 	return res.WriteString("]\n")
+}
+
+func writePumpSettings(p *writeFromIter) error {
+	settings := p.settings
+	datum := make(map[string]interface{})
+	datum["id"] = uuid.New().String()
+	datum["type"] = "pumpSettings"
+	datum["uploadId"] = uuid.New().String()
+	datum["time"] = settings.Time
+	log.Info("time : " + settings.Time.String())
+	log.Info("timezone : " + settings.Timezone)
+	datum["timezone"] = settings.Timezone
+	/*TODO fetch from somewhere*/
+	datum["activeSchedule"] = "Normal"
+	//datum["deviceTime"] = "2020-01-17T08:00:00"
+	datum["deviceId"] = settings.CurrentSettings.Device.DeviceID
+	groupedHistoryParameters := groupByChangeDate(settings.HistoryParameters)
+	payload := map[string]interface{}{
+		"basalSecurityProfile": p.basalSecurityProfile,
+		"cgm":                  settings.CurrentSettings.Cgm,
+		"device":               settings.CurrentSettings.Device,
+		"pump":                 settings.CurrentSettings.Pump,
+		"parameters":           settings.CurrentSettings.Parameters,
+		"history":              groupedHistoryParameters,
+	}
+	datum["payload"] = payload
+
+	jsonDatum, err := json.Marshal(datum)
+	if err != nil {
+		if p.jsonError.firstError == nil {
+			p.jsonError.firstError = err
+		}
+		p.jsonError.numErrors++
+	}
+	if p.writeCount > 0 {
+		// Add the coma and line return (for readability)
+		err = p.res.WriteString(",\n")
+		if err != nil {
+			return err
+		}
+	}
+	err = p.res.Write(jsonDatum)
+	if err != nil {
+		return err
+	}
+	p.writeCount++
+	return nil
+}
+
+type GroupedHistoryParameters struct {
+	ChangeDate time.Time                       `json:"changeDate"`
+	Parameters []portalSchema.HistoryParameter `json:"parameters"`
+}
+
+func groupByChangeDate(parameters []portalSchema.HistoryParameter) []GroupedHistoryParameters {
+	temporaryMap := make(map[string][]portalSchema.HistoryParameter, 0)
+	for _, p := range parameters {
+		if containsInt(parameterLevelFilter[:], p.Level) {
+			mapTime := p.EffectiveDate.Format("2006-01-02")
+			if temporaryMap[mapTime] == nil {
+				temporaryMap[mapTime] = []portalSchema.HistoryParameter{p}
+			} else {
+				temporaryMap[mapTime] = append(temporaryMap[mapTime], p)
+			}
+		}
+	}
+	finalArray := make([]GroupedHistoryParameters, 0)
+	for _, p := range temporaryMap {
+		finalArray = append(finalArray, GroupedHistoryParameters{
+			ChangeDate: *p[0].EffectiveDate,
+			Parameters: p,
+		})
+	}
+	return finalArray
 }
 
 // Mapping V2 Bucket schema to expected V1 schema + write to output

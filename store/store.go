@@ -85,12 +85,10 @@ type (
 	// Storage - Interface for our storage layer
 	Storage interface {
 		goComMgo.Storage
-		GetDiabeloopParametersHistory(ctx context.Context, userID string, levels []int) (bson.M, error)
 		// WithContext(ctx context.Context) Storage
 		// V1 API data functions:
 		GetDataRangeV1(ctx context.Context, traceID string, userID string) (*Date, error)
 		GetDataV1(ctx context.Context, traceID string, userID string, dates *Date, excludeTypes []string) (goComMgo.StorageIterator, error)
-		GetLatestPumpSettingsV1(ctx context.Context, traceID string, userID string) (goComMgo.StorageIterator, error)
 		GetLatestBasalSecurityProfile(ctx context.Context, traceID string, userID string) (*DbProfile, error)
 		GetUploadDataV1(ctx context.Context, traceID string, uploadIds []string) (goComMgo.StorageIterator, error)
 		GetCbgForSummaryV1(ctx context.Context, traceID string, userID string, startDate string) (goComMgo.StorageIterator, error)
@@ -281,92 +279,6 @@ func generateMongoQuery(p *Params) bson.M {
 	return finalQuery
 }
 
-// GetDiabeloopParametersHistory returns all of the device parameter changes for a user
-func (c *Client) GetDiabeloopParametersHistory(ctx context.Context, userID string, levels []int) (bson.M, error) {
-	if userID == "" {
-		return nil, errors.New("user id is missing")
-	}
-	if levels == nil {
-		levels = make([]int, 1)
-		levels[0] = 1
-	}
-
-	var bsonLevels = make([]interface{}, len(levels))
-	for i, d := range levels {
-		bsonLevels[i] = d
-	}
-
-	// session := d.session.Copy()
-	// defer session.Close()
-
-	query := []bson.M{
-		// Filtering on userid
-		{
-			"$match": bson.M{"userid": userID},
-		},
-		// unnesting history array (keeping index for future grouping)
-		{
-			"$unwind": bson.M{"path": "$history", "includeArrayIndex": "historyIdx"},
-		},
-		// unnesting history.parameters array
-		{
-			"$unwind": "$history.parameters",
-		},
-		// filtering level parameters
-		{
-			"$match": bson.M{
-				"history.parameters.level": bson.M{"$in": bsonLevels},
-			},
-		},
-		// removing unnecessary fields
-		{
-			"$project": bson.M{
-				"userid":     1,
-				"historyIdx": 1,
-				"_id":        0,
-				"parameters": bson.M{
-					"changeType": "$history.parameters.changeType", "name": "$history.parameters.name",
-					"value": "$history.parameters.value", "unit": "$history.parameters.unit",
-					"level": "$history.parameters.level", "effectiveDate": "$history.parameters.effectiveDate",
-				},
-			},
-		},
-		// grouping by change
-		{
-			"$group": bson.M{
-				"_id":        bson.M{"historyIdx": "$historyIdx", "userid": "$userid"},
-				"parameters": bson.M{"$addToSet": "$parameters"},
-				"changeDate": bson.M{"$max": "$parameters.effectiveDate"},
-			},
-		},
-		// grouping all changes in one array
-		{
-			"$group": bson.M{
-				"_id":     bson.M{"userid": "$userid"},
-				"history": bson.M{"$addToSet": bson.M{"parameters": "$parameters", "changeDate": "$changeDate"}},
-			},
-		},
-		// removing unnecessary fields
-		{
-			"$project": bson.M{"_id": 0},
-		},
-	}
-	dataSources := []bson.M{}
-	cursor, err := mgoParametersHistoryCollection(c).Aggregate(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-	err = cursor.All(ctx, &dataSources)
-	if err != nil {
-		return nil, err
-	} else if len(dataSources) == 0 {
-		return nil, nil
-	}
-
-	return dataSources[0], nil
-}
-
 // GetDataRangeV1 returns the time data range
 //
 // If no data for the requested user, return nil or empty string dates
@@ -441,22 +353,6 @@ func (c *Client) GetDataV1(ctx context.Context, traceID string, userID string, d
 	opts.SetHint(idxUserIDTypeTime)
 	opts.SetComment(traceID)
 
-	return dataCollection(c).Find(ctx, query, opts)
-}
-
-// GetLatestPumpSettingsV1 return the latest type == "pumpSettings"
-func (c *Client) GetLatestPumpSettingsV1(ctx context.Context, traceID string, userID string) (goComMgo.StorageIterator, error) {
-	query := bson.M{
-		"_userId": userID,
-		"type":    "pumpSettings",
-	}
-
-	opts := options.Find()
-	opts.SetProjection(unwantedPumpSettingsFields)
-	opts.SetSort(bson.M{"time": -1})
-	opts.SetLimit(1)
-	opts.SetHint(idxUserIDTypeTime)
-	opts.SetComment(traceID)
 	return dataCollection(c).Find(ctx, query, opts)
 }
 

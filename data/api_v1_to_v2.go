@@ -122,7 +122,7 @@ func (a *API) getDataV2(ctx context.Context, res *httpResponseWriter) error {
 		return res.WriteError(logError)
 	}
 	// Mongo iterators
-	var iterPumpSettings mongo.StorageIterator
+	var pumpSettings *schema.SettingsResult
 	var iterUploads mongo.StorageIterator
 	var chanApiCbgs chan []schema.CbgBucket
 	var chanApiBasals chan []schema.BasalBucket
@@ -148,16 +148,16 @@ func (a *API) getDataV2(ctx context.Context, res *httpResponseWriter) error {
 
 	writeParams := &params.writer
 
+	sessionToken := getSessionToken(res)
+
 	if params.includePumpSettings {
-		iterPumpSettings, logError = a.getLatestPumpSettings(ctx, res.TraceID, params.user, writeParams)
+		pumpSettings, logError = a.getLatestPumpSettings(ctx, res.TraceID, params.user, writeParams, sessionToken)
 		if logError != nil {
 			return res.WriteError(logError)
 		}
-		defer iterPumpSettings.Close(ctx)
 	}
 
 	// Fetch data from store and V2 API (for cbg)
-	sessionToken := getSessionToken(res)
 	chanStoreError := make(chan *detailedError, 1)
 	defer close(chanStoreError)
 	chanMongoIter := make(chan mongo.StorageIterator, 1)
@@ -215,7 +215,7 @@ func (a *API) getDataV2(ctx context.Context, res *httpResponseWriter) error {
 		ctx,
 		res,
 		params.includePumpSettings,
-		iterPumpSettings,
+		pumpSettings,
 		iterUploads,
 		iterData,
 		Cbgs,

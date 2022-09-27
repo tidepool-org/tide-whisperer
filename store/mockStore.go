@@ -77,13 +77,6 @@ func (c *MockStoreClient) Collection(collectionName string, databaseName ...stri
 func (c *MockStoreClient) WaitUntilStarted() {}
 func (c *MockStoreClient) Start()            {}
 
-func (c *MockStoreClient) GetDiabeloopParametersHistory(ctx context.Context, userID string, levels []int) (bson.M, error) {
-	if c.ParametersHistory != nil {
-		return c.ParametersHistory, nil
-	}
-	return nil, nil
-}
-
 // GetDataRangeV1 mock func, return nil,nil
 func (c *MockStoreClient) GetDataRangeV1(ctx context.Context, traceID string, userID string) (*Date, error) {
 	if c.DataRangeV1 != nil && len(c.DataRangeV1) == 2 {
@@ -102,18 +95,6 @@ func (c *MockStoreClient) GetDataV1(ctx context.Context, traceID string, userID 
 			numIter: -1,
 			maxIter: len(c.DataV1),
 			data:    c.DataV1,
-		}, nil
-	}
-	return nil, fmt.Errorf("{%s} - [%s] - No data", traceID, userID)
-}
-
-// GetLatestPumpSettingsV1 return the latest type == "pumpSettings"
-func (c *MockStoreClient) GetLatestPumpSettingsV1(ctx context.Context, traceID string, userID string) (goComMgo.StorageIterator, error) {
-	if c.DataPSV1 != nil {
-		return &MockStoreIterator{
-			numIter: -1,
-			maxIter: 1,
-			data:    []string{*c.DataPSV1},
 		}, nil
 	}
 	return nil, fmt.Errorf("{%s} - [%s] - No data", traceID, userID)
