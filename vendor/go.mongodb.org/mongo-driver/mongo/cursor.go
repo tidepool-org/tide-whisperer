@@ -15,13 +15,15 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
+	"go.mongodb.org/mongo-driver/x/bsonx"
 	"go.mongodb.org/mongo-driver/x/bsonx/bsoncore"
 	"go.mongodb.org/mongo-driver/x/mongo/driver"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/session"
 )
 
 // Cursor is used to iterate over a stream of documents. Each document can be decoded into a Go type via the Decode
-// method or accessed as raw BSON via the Current field.
+// method or accessed as raw BSON via the Current field. This type is not goroutine safe and must not be used
+// concurrently by multiple goroutines.
 type Cursor struct {
 	// Current contains the BSON bytes of the current change document. This property is only valid until the next call
 	// to Next or TryNext. If continued access is required, a copy must be made.
@@ -66,6 +68,47 @@ func newEmptyCursor() *Cursor {
 	return &Cursor{bc: driver.NewEmptyBatchCursor()}
 }
 
+// NewCursorFromDocuments creates a new Cursor pre-loaded with the provided documents, error and registry. If no registry is provided,
+// bson.DefaultRegistry will be used.
+//
+// The documents parameter must be a slice of documents. The slice may be nil or empty, but all elements must be non-nil.
+func NewCursorFromDocuments(documents []interface{}, err error, registry *bsoncodec.Registry) (*Cursor, error) {
+	if registry == nil {
+		registry = bson.DefaultRegistry
+	}
+
+	// Convert documents slice to a sequence-style byte array.
+	var docsBytes []byte
+	for _, doc := range documents {
+		switch t := doc.(type) {
+		case nil:
+			return nil, ErrNilDocument
+		case bsonx.Doc:
+			doc = t.Copy()
+		case []byte:
+			// Slight optimization so we'll just use MarshalBSON and not go through the codec machinery.
+			doc = bson.Raw(t)
+		}
+		var marshalErr error
+		docsBytes, marshalErr = bson.MarshalAppendWithRegistry(registry, docsBytes, doc)
+		if marshalErr != nil {
+			return nil, marshalErr
+		}
+	}
+
+	c := &Cursor{
+		bc:       driver.NewBatchCursorFromDocuments(docsBytes),
+		registry: registry,
+		err:      err,
+	}
+
+	// Initialize batch and batchLength here. The underlying batch cursor will be preloaded with the
+	// provided contents, and thus already has a batch before calls to Next/TryNext.
+	c.batch = c.bc.Batch()
+	c.batchLength = c.bc.Batch().DocumentCount()
+	return c, nil
+}
+
 // ID returns the ID of this cursor, or 0 if the cursor has been closed or exhausted.
 func (c *Cursor) ID() int64 { return c.bc.ID() }
 
@@ -82,7 +125,7 @@ func (c *Cursor) Next(ctx context.Context) bool {
 
 // TryNext attempts to get the next document for this cursor. It returns true if there were no errors and the next
 // document is available. This is only recommended for use with tailable cursors as a non-blocking alternative to
-// Next. See https://docs.mongodb.com/manual/core/tailable-cursors/ for more information about tailable cursors.
+// Next. See https://www.mongodb.com/docs/manual/core/tailable-cursors/ for more information about tailable cursors.
 //
 // TryNext returns false if the cursor is exhausted, an error occurs when getting results from the server, the next
 // document is not yet available, or ctx expires. If ctx expires, the error will be set to ctx.Err().
@@ -124,7 +167,7 @@ func (c *Cursor) next(ctx context.Context, nonBlocking bool) bool {
 		// If we don't have a next batch
 		if !c.bc.Next(ctx) {
 			// Do we have an error? If so we return false.
-			c.err = c.bc.Err()
+			c.err = replaceErrors(c.bc.Err())
 			if c.err != nil {
 				return false
 			}
@@ -176,7 +219,7 @@ func (c *Cursor) Err() error { return c.err }
 // the first call, any subsequent calls will not change the state.
 func (c *Cursor) Close(ctx context.Context) error {
 	defer c.closeImplicitSession()
-	return c.bc.Close(ctx)
+	return replaceErrors(c.bc.Close(ctx))
 }
 
 // All iterates the cursor and decodes each document into results. The results parameter must be a pointer to a slice.
@@ -203,7 +246,10 @@ func (c *Cursor) All(ctx context.Context, results interface{}) error {
 	var index int
 	var err error
 
-	defer c.Close(ctx)
+	// Defer a call to Close to try to clean up the cursor server-side when all
+	// documents have not been exhausted. Use context.Background() to ensure Close
+	// completes even if the context passed to All has errored.
+	defer c.Close(context.Background())
 
 	batch := c.batch // exhaust the current batch before iterating the batch cursor
 	for {
@@ -219,7 +265,7 @@ func (c *Cursor) All(ctx context.Context, results interface{}) error {
 		batch = c.bc.Batch()
 	}
 
-	if err = c.bc.Err(); err != nil {
+	if err = replaceErrors(c.bc.Err()); err != nil {
 		return err
 	}
 
@@ -269,8 +315,10 @@ func (c *Cursor) closeImplicitSession() {
 }
 
 // BatchCursorFromCursor returns a driver.BatchCursor for the given Cursor. If there is no underlying
-// driver.BatchCursor, nil is returned. This method is deprecated and does not have any stability guarantees. It may be
-// removed in the future.
+// driver.BatchCursor, nil is returned.
+//
+// Deprecated: This is an unstable function because the driver.BatchCursor type exists in the "x" package. Neither this
+// function nor the driver.BatchCursor type should be used by applications and may be changed or removed in any release.
 func BatchCursorFromCursor(c *Cursor) *driver.BatchCursor {
 	bc, _ := c.bc.(*driver.BatchCursor)
 	return bc
