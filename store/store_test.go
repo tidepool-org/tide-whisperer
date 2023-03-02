@@ -47,10 +47,23 @@ func before(t *testing.T, docs ...interface{}) *MongoStoreClient {
 	//INIT THE TEST - we use a clean copy of the collection before we start
 	//just drop and don't worry about any errors
 	dataCollection(store).Drop(context.TODO())
+	dataSetsCollection(store).Drop(context.TODO())
 
 	if len(docs) > 0 {
 		if _, err := dataCollection(store).InsertMany(store.context, docs); err != nil {
 			t.Error("Unable to insert documents", err)
+		}
+		// Insert into dataSetsCollection as well if type == "upload" Note
+		// still inserting into dataCollection to mimick data type upload
+		// being in both collections as migration happens.
+		for _, docRaw := range docs {
+			doc, ok := docRaw.(bson.M)
+			if !ok || doc["type"] != "upload" {
+				continue
+			}
+			if _, err := dataSetsCollection(store).InsertOne(store.context, doc); err != nil {
+				t.Error("Unable to insert document", err)
+			}
 		}
 	}
 
