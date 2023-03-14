@@ -187,7 +187,11 @@ func main() {
 
 	storage := store.NewMongoStoreClient(&config.Mongo)
 	defer storage.Disconnect()
-	storage.EnsureIndexes()
+
+	disableIndexCreation, found := os.LookupEnv("TIDEPOOL_DISABLE_INDEX_CREATION")
+	if !found || disableIndexCreation != "true" {
+		storage.EnsureIndexes()
+	}
 
 	router := pat.New()
 
