@@ -12,16 +12,15 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsontype"
+	"go.mongodb.org/mongo-driver/mongo/description"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 	"go.mongodb.org/mongo-driver/x/bsonx/bsoncore"
 	"go.mongodb.org/mongo-driver/x/mongo/driver"
-	"go.mongodb.org/mongo-driver/x/mongo/driver/description"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/operation"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/session"
 )
@@ -45,7 +44,7 @@ type IndexView struct {
 // IndexModel represents a new index to be created.
 type IndexModel struct {
 	// A document describing which keys should be used for the index. It cannot be nil. This must be an order-preserving
-	// type such as bson.D. Map types such as bson.M are not valid. See https://docs.mongodb.com/manual/indexes/#indexes
+	// type such as bson.D. Map types such as bson.M are not valid. See https://www.mongodb.com/docs/manual/indexes/#indexes
 	// for examples of valid documents.
 	Keys interface{}
 
@@ -65,7 +64,7 @@ func isNamespaceNotFoundError(err error) bool {
 // The opts parameter can be used to specify options for this operation (see the options.ListIndexesOptions
 // documentation).
 //
-// For more information about the command, see https://docs.mongodb.com/manual/reference/command/listIndexes/.
+// For more information about the command, see https://www.mongodb.com/docs/manual/reference/command/listIndexes/.
 func (iv IndexView) List(ctx context.Context, opts ...*options.ListIndexesOptions) (*Cursor, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -95,17 +94,16 @@ func (iv IndexView) List(ctx context.Context, opts ...*options.ListIndexesOption
 		Session(sess).CommandMonitor(iv.coll.client.monitor).
 		ServerSelector(selector).ClusterClock(iv.coll.client.clock).
 		Database(iv.coll.db.name).Collection(iv.coll.name).
-		Deployment(iv.coll.client.deployment)
+		Deployment(iv.coll.client.deployment).ServerAPI(iv.coll.client.serverAPI).
+		Timeout(iv.coll.client.timeout)
 
-	var cursorOpts driver.CursorOptions
+	cursorOpts := iv.coll.client.createBaseCursorOptions()
 	lio := options.MergeListIndexesOptions(opts...)
 	if lio.BatchSize != nil {
 		op = op.BatchSize(*lio.BatchSize)
 		cursorOpts.BatchSize = *lio.BatchSize
 	}
-	if lio.MaxTime != nil {
-		op = op.MaxTimeMS(int64(*lio.MaxTime / time.Millisecond))
-	}
+	op = op.MaxTime(lio.MaxTime)
 	retry := driver.RetryNone
 	if iv.coll.client.retryReads {
 		retry = driver.RetryOncePerCommand
@@ -132,6 +130,29 @@ func (iv IndexView) List(ctx context.Context, opts ...*options.ListIndexesOption
 	return cursor, replaceErrors(err)
 }
 
+// ListSpecifications executes a List command and returns a slice of returned IndexSpecifications
+func (iv IndexView) ListSpecifications(ctx context.Context, opts ...*options.ListIndexesOptions) ([]*IndexSpecification, error) {
+	cursor, err := iv.List(ctx, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []*IndexSpecification
+	err = cursor.All(ctx, &results)
+	if err != nil {
+		return nil, err
+	}
+
+	ns := iv.coll.db.Name() + "." + iv.coll.Name()
+	for _, res := range results {
+		// Pre-4.4 servers report a namespace in their responses, so we only set Namespace manually if it was not in
+		// the response.
+		res.Namespace = ns
+	}
+
+	return results, nil
+}
+
 // CreateOne executes a createIndexes command to create an index on the collection and returns the name of the new
 // index. See the IndexView.CreateMany documentation for more information and an example.
 func (iv IndexView) CreateOne(ctx context.Context, model IndexModel, opts ...*options.CreateIndexesOptions) (string, error) {
@@ -152,7 +173,7 @@ func (iv IndexView) CreateOne(ctx context.Context, model IndexModel, opts ...*op
 // The opts parameter can be used to specify options for this operation (see the options.CreateIndexesOptions
 // documentation).
 //
-// For more information about the command, see https://docs.mongodb.com/manual/reference/command/createIndexes/.
+// For more information about the command, see https://www.mongodb.com/docs/manual/reference/command/createIndexes/.
 func (iv IndexView) CreateMany(ctx context.Context, models []IndexModel, opts ...*options.CreateIndexesOptions) ([]string, error) {
 	names := make([]string, 0, len(models))
 
@@ -164,7 +185,7 @@ func (iv IndexView) CreateMany(ctx context.Context, models []IndexModel, opts ..
 			return nil, fmt.Errorf("index model keys cannot be nil")
 		}
 
-		keys, err := transformBsoncoreDocument(iv.coll.registry, model.Keys)
+		keys, err := transformBsoncoreDocument(iv.coll.registry, model.Keys, false, "keys")
 		if err != nil {
 			return nil, err
 		}
@@ -233,13 +254,10 @@ func (iv IndexView) CreateMany(ctx context.Context, models []IndexModel, opts ..
 	op := operation.NewCreateIndexes(indexes).
 		Session(sess).WriteConcern(wc).ClusterClock(iv.coll.client.clock).
 		Database(iv.coll.db.name).Collection(iv.coll.name).CommandMonitor(iv.coll.client.monitor).
-		Deployment(iv.coll.client.deployment).ServerSelector(selector)
-
-	if option.MaxTime != nil {
-		op.MaxTimeMS(int64(*option.MaxTime / time.Millisecond))
-	}
+		Deployment(iv.coll.client.deployment).ServerSelector(selector).ServerAPI(iv.coll.client.serverAPI).
+		Timeout(iv.coll.client.timeout).MaxTime(option.MaxTime)
 	if option.CommitQuorum != nil {
-		commitQuorum, err := transformValue(iv.coll.registry, option.CommitQuorum)
+		commitQuorum, err := transformValue(iv.coll.registry, option.CommitQuorum, true, "commitQuorum")
 		if err != nil {
 			return nil, err
 		}
@@ -249,6 +267,7 @@ func (iv IndexView) CreateMany(ctx context.Context, models []IndexModel, opts ..
 
 	err = op.Execute(ctx)
 	if err != nil {
+		_, err = processWriteError(err)
 		return nil, err
 	}
 
@@ -270,7 +289,7 @@ func (iv IndexView) createOptionsDoc(opts *options.IndexOptions) (bsoncore.Docum
 		optsDoc = bsoncore.AppendBooleanElement(optsDoc, "sparse", *opts.Sparse)
 	}
 	if opts.StorageEngine != nil {
-		doc, err := transformBsoncoreDocument(iv.coll.registry, opts.StorageEngine)
+		doc, err := transformBsoncoreDocument(iv.coll.registry, opts.StorageEngine, true, "storageEngine")
 		if err != nil {
 			return nil, err
 		}
@@ -293,7 +312,7 @@ func (iv IndexView) createOptionsDoc(opts *options.IndexOptions) (bsoncore.Docum
 		optsDoc = bsoncore.AppendInt32Element(optsDoc, "textIndexVersion", *opts.TextVersion)
 	}
 	if opts.Weights != nil {
-		doc, err := transformBsoncoreDocument(iv.coll.registry, opts.Weights)
+		doc, err := transformBsoncoreDocument(iv.coll.registry, opts.Weights, true, "weights")
 		if err != nil {
 			return nil, err
 		}
@@ -316,7 +335,7 @@ func (iv IndexView) createOptionsDoc(opts *options.IndexOptions) (bsoncore.Docum
 		optsDoc = bsoncore.AppendInt32Element(optsDoc, "bucketSize", *opts.BucketSize)
 	}
 	if opts.PartialFilterExpression != nil {
-		doc, err := transformBsoncoreDocument(iv.coll.registry, opts.PartialFilterExpression)
+		doc, err := transformBsoncoreDocument(iv.coll.registry, opts.PartialFilterExpression, true, "partialFilterExpression")
 		if err != nil {
 			return nil, err
 		}
@@ -327,7 +346,7 @@ func (iv IndexView) createOptionsDoc(opts *options.IndexOptions) (bsoncore.Docum
 		optsDoc = bsoncore.AppendDocumentElement(optsDoc, "collation", bsoncore.Document(opts.Collation.ToDocument()))
 	}
 	if opts.WildcardProjection != nil {
-		doc, err := transformBsoncoreDocument(iv.coll.registry, opts.WildcardProjection)
+		doc, err := transformBsoncoreDocument(iv.coll.registry, opts.WildcardProjection, true, "wildcardProjection")
 		if err != nil {
 			return nil, err
 		}
@@ -376,10 +395,8 @@ func (iv IndexView) drop(ctx context.Context, name string, opts ...*options.Drop
 		Session(sess).WriteConcern(wc).CommandMonitor(iv.coll.client.monitor).
 		ServerSelector(selector).ClusterClock(iv.coll.client.clock).
 		Database(iv.coll.db.name).Collection(iv.coll.name).
-		Deployment(iv.coll.client.deployment)
-	if dio.MaxTime != nil {
-		op.MaxTimeMS(int64(*dio.MaxTime / time.Millisecond))
-	}
+		Deployment(iv.coll.client.deployment).ServerAPI(iv.coll.client.serverAPI).
+		Timeout(iv.coll.client.timeout).MaxTime(dio.MaxTime)
 
 	err = op.Execute(ctx)
 	if err != nil {
@@ -403,7 +420,7 @@ func (iv IndexView) drop(ctx context.Context, name string, opts ...*options.Drop
 // The opts parameter can be used to specify options for this operation (see the options.DropIndexesOptions
 // documentation).
 //
-// For more information about the command, see https://docs.mongodb.com/manual/reference/command/dropIndexes/.
+// For more information about the command, see https://www.mongodb.com/docs/manual/reference/command/dropIndexes/.
 func (iv IndexView) DropOne(ctx context.Context, name string, opts ...*options.DropIndexesOptions) (bson.Raw, error) {
 	if name == "*" {
 		return nil, ErrMultipleIndexDrop
@@ -419,7 +436,7 @@ func (iv IndexView) DropOne(ctx context.Context, name string, opts ...*options.D
 // The opts parameter can be used to specify options for this operation (see the options.DropIndexesOptions
 // documentation).
 //
-// For more information about the command, see https://docs.mongodb.com/manual/reference/command/dropIndexes/.
+// For more information about the command, see https://www.mongodb.com/docs/manual/reference/command/dropIndexes/.
 func (iv IndexView) DropAll(ctx context.Context, opts ...*options.DropIndexesOptions) (bson.Raw, error) {
 	return iv.drop(ctx, "*", opts...)
 }
