@@ -210,41 +210,6 @@ func (c *MongoStoreClient) WithContext(ctx context.Context) *MongoStoreClient {
 func (c *MongoStoreClient) EnsureIndexes() error {
 	medtronicIndexDateTime, _ := time.Parse(medtronicDateFormat, medtronicIndexDate)
 	indexes := []mongo.IndexModel{
-		// BEGIN LEGACY INDEXES
-		{
-			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "deviceModel", Value: 1}},
-			Options: options.Index().
-				SetName("GetLoopableMedtronicDirectUploadIdsAfter_v2").
-				SetBackground(true).
-				SetPartialFilterExpression(
-					bson.D{
-						{Key: "_active", Value: true},
-						{Key: "type", Value: "upload"},
-						{Key: "deviceModel", Value: bson.M{
-							"$exists": true,
-						}},
-						{Key: "time", Value: bson.M{
-							"$gte": medtronicIndexDate,
-						}},
-					},
-				),
-		},
-		{
-			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "origin.payload.device.manufacturer", Value: 1}},
-			Options: options.Index().
-				SetName("HasMedtronicLoopDataAfter_v2").
-				SetBackground(true).
-				SetPartialFilterExpression(
-					bson.D{
-						{Key: "_active", Value: true},
-						{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
-						{Key: "time", Value: bson.M{
-							"$gte": medtronicIndexDate,
-						}},
-					},
-				),
-		},
-		// END LEGACY INDEXES
 		{
 			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "deviceModel", Value: 1}, {Key: "fakefield", Value: 1}},
 			Options: options.Index().
@@ -326,23 +291,11 @@ func generateMongoQuery(p *Params) bson.M {
 	// database range queries that will properly sort any data with time stored as an ISO string.
 	// See https://github.com/golang/go/issues/19635
 	if !p.Date.Start.IsZero() && !p.Date.End.IsZero() {
-		groupDataQuery["$or"] = bson.A{
-			bson.M{"time": bson.M{
-				"$gte": p.Date.Start.Format(RFC3339NanoSortable),
-				"$lte": p.Date.End.Format(RFC3339NanoSortable),
-			}},
-			bson.M{"time": bson.M{"$gte": p.Date.Start, "$lte": p.Date.End}},
-		}
+		groupDataQuery["time"] = bson.M{"$gte": p.Date.Start, "$lte": p.Date.End}
 	} else if !p.Date.Start.IsZero() {
-		groupDataQuery["$or"] = bson.A{
-			bson.M{"time": bson.M{"$gte": p.Date.Start.Format(RFC3339NanoSortable)}},
-			bson.M{"time": bson.M{"$gte": p.Date.Start}},
-		}
+		groupDataQuery["time"] = bson.M{"$gte": p.Date.Start}
 	} else if !p.Date.End.IsZero() {
-		groupDataQuery["$or"] = bson.A{
-			bson.M{"time": bson.M{"$lte": p.Date.End.Format(RFC3339NanoSortable)}},
-			bson.M{"time": bson.M{"$lte": p.Date.End}},
-		}
+		groupDataQuery["time"] = bson.M{"$lte": p.Date.End}
 	}
 
 	if !p.Carelink {
@@ -368,20 +321,12 @@ func generateMongoQuery(p *Params) bson.M {
 			// more redundant OR query for multiple date field types
 			earliestDataTime := p.DexcomDataSource["earliestDataTime"].(primitive.DateTime).Time().UTC()
 			dexcomQuery = append(dexcomQuery,
-				bson.M{"$or": bson.A{
-					bson.M{"time": bson.M{"$lt": earliestDataTime.Format(time.RFC3339)}},
-					bson.M{"time": bson.M{"$lt": earliestDataTime}},
-				},
-				},
+				bson.M{"time": bson.M{"$lt": earliestDataTime}},
 			)
 
 			latestDataTime := p.DexcomDataSource["latestDataTime"].(primitive.DateTime).Time().UTC()
 			dexcomQuery = append(dexcomQuery,
-				bson.M{"$or": bson.A{
-					bson.M{"time": bson.M{"$gt": latestDataTime.Format(time.RFC3339)}},
-					bson.M{"time": bson.M{"$gt": latestDataTime}},
-				},
-				},
+				bson.M{"time": bson.M{"$gt": latestDataTime}},
 			)
 
 			andQuery = append(andQuery, bson.M{"$or": dexcomQuery})
@@ -393,10 +338,7 @@ func generateMongoQuery(p *Params) bson.M {
 				medtronicDateTime, _ = time.Parse(time.RFC3339, p.MedtronicDate)
 			}
 			medtronicQuery := []bson.M{
-				{"$or": bson.A{
-					bson.M{"time": bson.M{"$lt": p.MedtronicDate}},
-					bson.M{"time": bson.M{"$lt": medtronicDateTime}},
-				}},
+				{"time": bson.M{"$lt": medtronicDateTime}},
 				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
 				{"uploadId": bson.M{"$nin": p.MedtronicUploadIds}},
 			}
@@ -504,17 +446,7 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 		return false, errors.New("date is invalid")
 	}
 
-	legacyOpts := options.FindOne()
-	legacyOpts.SetHint("HasMedtronicLoopDataAfter_v2")
-	legacyQuery := bson.M{
-		"_active":                            true,
-		"_userId":                            userID,
-		"time":                               bson.M{"$gte": date},
-		"origin.payload.device.manufacturer": "Medtronic",
-	}
-
 	opts := options.FindOne()
-	opts.SetHint("HasMedtronicLoopDataAfter_v2_DateTime")
 	query := bson.M{
 		"_active":                            true,
 		"_userId":                            userID,
@@ -522,23 +454,13 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 		"origin.payload.device.manufacturer": "Medtronic",
 	}
 
-	err = dataCollection(c).FindOne(c.context, legacyQuery, legacyOpts).Err()
-	if err == nil {
-		return true, nil
-	}
-	if err != mongo.ErrNoDocuments {
-		return false, err
-	}
-
 	err = dataCollection(c).FindOne(c.context, query, opts).Err()
-	if err == nil {
-		return true, nil
-	}
-	if err != mongo.ErrNoDocuments {
-		return false, err
+
+	if err == mongo.ErrNoDocuments {
+		return false, nil
 	}
 
-	return false, nil
+	return err == nil, err
 }
 
 // GetLoopableMedtronicDirectUploadIdsAfter returns all Upload IDs for `userID` where Loop data was found
@@ -559,18 +481,6 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 		return nil, errors.New("date is invalid")
 	}
 
-	legacyOpts := options.Find()
-	legacyOpts.SetHint("GetLoopableMedtronicDirectUploadIdsAfter_v2")
-	legacyOpts.SetProjection(bson.M{"_id": 0, "uploadId": 1})
-
-	legacyQuery := bson.M{
-		"_active":     true,
-		"_userId":     userID,
-		"time":        bson.M{"$gte": date},
-		"type":        "upload",
-		"deviceModel": bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
-	}
-
 	opts := options.Find()
 	opts.SetHint("GetLoopableMedtronicDirectUploadIdsAfter_v2_DateTime")
 	opts.SetProjection(bson.M{"_id": 0, "uploadId": 1})
@@ -583,50 +493,31 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 		"deviceModel": bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
 	}
 
-	legacyObjects := []struct {
+	var objects []struct {
 		UploadID string `bson:"uploadId"`
-	}{}
-
-	objects := []struct {
-		UploadID string `bson:"uploadId"`
-	}{}
+	}
 
 	cursor, err := dataCollection(c).Find(c.context, query, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	legacyCursor, err := dataCollection(c).Find(c.context, legacyQuery, legacyOpts)
-	if err != nil {
-		return nil, err
-	}
-
 	defer cursor.Close(c.context)
-	defer legacyCursor.Close(c.context)
-
-	err = legacyCursor.All(c.context, &legacyObjects)
-	if err != nil {
-		return nil, err
-	}
 
 	err = cursor.All(c.context, &objects)
 	if err != nil {
 		return nil, err
 	}
 
-	uploadIds := make([]string, len(legacyObjects)+len(objects))
-	for index, object := range legacyObjects {
-		uploadIds[index] = object.UploadID
-	}
-	legacyLen := len(legacyObjects)
+	uploadIds := make([]string, len(objects))
 	for index, object := range objects {
-		uploadIds[legacyLen+index] = object.UploadID
+		uploadIds[index] = object.UploadID
 	}
 
 	return uploadIds, nil
 }
 
-// GetDeviceData returns all of the device data for a user
+// GetDeviceData returns all the device data for a user
 func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 
 	// _schemaVersion is still in the list of fields to remove. Although we don't query for it, data can still exist for it
@@ -649,10 +540,13 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 			query := generateMongoQuery(p)
 			query["type"] = theType
 			opts := options.FindOne().SetProjection(removeFieldsForReturn).SetSort(bson.M{"time": -1})
+			fmt.Println(query)
 			result, resultErr := dataCollection(c).
 				FindOne(c.context, query, opts).
 				DecodeBytes()
+			fmt.Println(result)
 			if resultErr != nil {
+				fmt.Println(resultErr)
 				if resultErr == mongo.ErrNoDocuments {
 					continue
 				}
