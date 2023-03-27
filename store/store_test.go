@@ -211,8 +211,8 @@ func testDataForLatestTests() map[string]TestDataSchema {
 			Time:          ptr(date4),
 			Type:          ptr("cbg"),
 			Units:         ptr("mmol/L"),
-			DeviceId:      ptr("zzz4bb16e27c4973c2f37af81784a05d"),
-			UploadId:      ptr("dev456"),
+			DeviceId:      ptr("dev456"),
+			UploadId:      ptr("zzz4bb16e27c4973c2f37af81784a05d"),
 			Value:         ptr(9.7213),
 		},
 		"upload3": {
@@ -231,8 +231,8 @@ func testDataForLatestTests() map[string]TestDataSchema {
 			Time:          ptr(date6),
 			Type:          ptr("cbg"),
 			Units:         ptr("mmol/L"),
-			DeviceId:      ptr("xxx4bb16e27c4973c2f37af81784a05d"),
-			UploadId:      ptr("dev789"),
+			DeviceId:      ptr("dev789"),
+			UploadId:      ptr("xxx4bb16e27c4973c2f37af81784a05d"),
 			Value:         ptr(7.1237),
 		},
 	}
@@ -1341,7 +1341,6 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 		if err != nil {
 			t.Error("Mongo Decode error")
 		}
-		fmt.Println(*result.Type)
 		switch dataType := *result.Type; dataType {
 		case "cbg":
 			compareResult := dropInternalKeys(testData["cbg2"])

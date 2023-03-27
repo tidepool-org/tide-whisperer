@@ -540,13 +540,10 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 			query := generateMongoQuery(p)
 			query["type"] = theType
 			opts := options.FindOne().SetProjection(removeFieldsForReturn).SetSort(bson.M{"time": -1})
-			fmt.Println(query)
 			result, resultErr := dataCollection(c).
 				FindOne(c.context, query, opts).
 				DecodeBytes()
-			fmt.Println(result)
 			if resultErr != nil {
-				fmt.Println(resultErr)
 				if resultErr == mongo.ErrNoDocuments {
 					continue
 				}
