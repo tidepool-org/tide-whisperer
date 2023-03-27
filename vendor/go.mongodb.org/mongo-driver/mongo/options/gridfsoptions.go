@@ -225,6 +225,10 @@ type GridFSFindOptions struct {
 
 	// The maximum amount of time that the query can run on the server. The default value is nil, meaning that there
 	// is no time limit for query execution.
+	//
+	// NOTE(benjirewis): MaxTime will be deprecated in a future release. The more general Timeout option may be used
+	// in its place to control the amount of time that a single operation can run before returning an error. MaxTime
+	// is ignored if Timeout is set on the client.
 	MaxTime *time.Duration
 
 	// If true, the cursor created by the operation will not timeout after a period of inactivity. The default value
@@ -234,7 +238,8 @@ type GridFSFindOptions struct {
 	// The number of documents to skip before adding documents to the result. The default value is 0.
 	Skip *int32
 
-	// A document specifying the order in which documents should be returned.
+	// A document specifying the order in which documents should be returned.  The driver will return an error if the
+	// sort parameter is a multi-key map.
 	Sort interface{}
 }
 
@@ -262,6 +267,10 @@ func (f *GridFSFindOptions) SetLimit(i int32) *GridFSFindOptions {
 }
 
 // SetMaxTime sets the value for the MaxTime field.
+//
+// NOTE(benjirewis): MaxTime will be deprecated in a future release. The more general Timeout
+// option may be used in its place to control the amount of time that a single operation can
+// run before returning an error. MaxTime is ignored if Timeout is set on the client.
 func (f *GridFSFindOptions) SetMaxTime(d time.Duration) *GridFSFindOptions {
 	f.MaxTime = &d
 	return f

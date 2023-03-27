@@ -10,11 +10,11 @@ import (
 	"context"
 
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
+	"go.mongodb.org/mongo-driver/mongo/description"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 	"go.mongodb.org/mongo-driver/x/bsonx/bsoncore"
 	"go.mongodb.org/mongo-driver/x/mongo/driver"
-	"go.mongodb.org/mongo-driver/x/mongo/driver/description"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/operation"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/session"
 )
@@ -27,6 +27,7 @@ type bulkWriteBatch struct {
 
 // bulkWrite perfoms a bulkwrite operation
 type bulkWrite struct {
+	comment                  interface{}
 	ordered                  *bool
 	bypassDocumentValidation *bool
 	models                   []WriteModel
@@ -35,6 +36,7 @@ type bulkWrite struct {
 	selector                 description.ServerSelector
 	writeConcern             *writeconcern.WriteConcern
 	result                   BulkWriteResult
+	let                      interface{}
 }
 
 func (bw *bulkWrite) execute(ctx context.Context) error {
@@ -57,11 +59,6 @@ func (bw *bulkWrite) execute(ctx context.Context) error {
 	for _, batch := range batches {
 		if len(batch.models) == 0 {
 			continue
-		}
-
-		bypassDocValidation := bw.bypassDocumentValidation
-		if bypassDocValidation != nil && !*bypassDocValidation {
-			bypassDocValidation = nil
 		}
 
 		batchRes, batchErr, err := bw.runBatch(ctx, batch)
@@ -118,7 +115,7 @@ func (bw *bulkWrite) runBatch(ctx context.Context, batch bulkWriteBatch) (BulkWr
 			batchErr.Labels = writeErr.Labels
 			batchErr.WriteConcernError = convertDriverWriteConcernError(writeErr.WriteConcernError)
 		}
-		batchRes.InsertedCount = int64(res.N)
+		batchRes.InsertedCount = res.N
 	case *DeleteOneModel, *DeleteManyModel:
 		res, err := bw.runDelete(ctx, batch)
 		if err != nil {
@@ -130,7 +127,7 @@ func (bw *bulkWrite) runBatch(ctx context.Context, batch bulkWriteBatch) (BulkWr
 			batchErr.Labels = writeErr.Labels
 			batchErr.WriteConcernError = convertDriverWriteConcernError(writeErr.WriteConcernError)
 		}
-		batchRes.DeletedCount = int64(res.N)
+		batchRes.DeletedCount = res.N
 	case *ReplaceOneModel, *UpdateOneModel, *UpdateManyModel:
 		res, err := bw.runUpdate(ctx, batch)
 		if err != nil {
@@ -142,8 +139,8 @@ func (bw *bulkWrite) runBatch(ctx context.Context, batch bulkWriteBatch) (BulkWr
 			batchErr.Labels = writeErr.Labels
 			batchErr.WriteConcernError = convertDriverWriteConcernError(writeErr.WriteConcernError)
 		}
-		batchRes.MatchedCount = int64(res.N)
-		batchRes.ModifiedCount = int64(res.NModified)
+		batchRes.MatchedCount = res.N
+		batchRes.ModifiedCount = res.NModified
 		batchRes.UpsertedCount = int64(len(res.Upserted))
 		for _, upsert := range res.Upserted {
 			batchRes.UpsertedIDs[int64(batch.indexes[upsert.Index])] = upsert.ID
@@ -168,7 +165,7 @@ func (bw *bulkWrite) runInsert(ctx context.Context, batch bulkWriteBatch) (opera
 	var i int
 	for _, model := range batch.models {
 		converted := model.(*InsertOneModel)
-		doc, _, err := transformAndEnsureIDv2(bw.collection.registry, converted.Document)
+		doc, _, err := transformAndEnsureID(bw.collection.registry, converted.Document)
 		if err != nil {
 			return operation.InsertResult{}, err
 		}
@@ -181,7 +178,15 @@ func (bw *bulkWrite) runInsert(ctx context.Context, batch bulkWriteBatch) (opera
 		Session(bw.session).WriteConcern(bw.writeConcern).CommandMonitor(bw.collection.client.monitor).
 		ServerSelector(bw.selector).ClusterClock(bw.collection.client.clock).
 		Database(bw.collection.db.name).Collection(bw.collection.name).
-		Deployment(bw.collection.client.deployment).Crypt(bw.collection.client.crypt)
+		Deployment(bw.collection.client.deployment).Crypt(bw.collection.client.cryptFLE).
+		ServerAPI(bw.collection.client.serverAPI).Timeout(bw.collection.client.timeout)
+	if bw.comment != nil {
+		comment, err := transformValue(bw.collection.registry, bw.comment, true, "comment")
+		if err != nil {
+			return op.Result(), err
+		}
+		op.Comment(comment)
+	}
 	if bw.bypassDocumentValidation != nil && *bw.bypassDocumentValidation {
 		op = op.BypassDocumentValidation(*bw.bypassDocumentValidation)
 	}
@@ -230,7 +235,22 @@ func (bw *bulkWrite) runDelete(ctx context.Context, batch bulkWriteBatch) (opera
 		Session(bw.session).WriteConcern(bw.writeConcern).CommandMonitor(bw.collection.client.monitor).
 		ServerSelector(bw.selector).ClusterClock(bw.collection.client.clock).
 		Database(bw.collection.db.name).Collection(bw.collection.name).
-		Deployment(bw.collection.client.deployment).Crypt(bw.collection.client.crypt).Hint(hasHint)
+		Deployment(bw.collection.client.deployment).Crypt(bw.collection.client.cryptFLE).Hint(hasHint).
+		ServerAPI(bw.collection.client.serverAPI).Timeout(bw.collection.client.timeout)
+	if bw.comment != nil {
+		comment, err := transformValue(bw.collection.registry, bw.comment, true, "comment")
+		if err != nil {
+			return op.Result(), err
+		}
+		op.Comment(comment)
+	}
+	if bw.let != nil {
+		let, err := transformBsoncoreDocument(bw.collection.registry, bw.let, true, "let")
+		if err != nil {
+			return operation.DeleteResult{}, err
+		}
+		op = op.Let(let)
+	}
 	if bw.ordered != nil {
 		op = op.Ordered(*bw.ordered)
 	}
@@ -248,7 +268,7 @@ func (bw *bulkWrite) runDelete(ctx context.Context, batch bulkWriteBatch) (opera
 func createDeleteDoc(filter interface{}, collation *options.Collation, hint interface{}, deleteOne bool,
 	registry *bsoncodec.Registry) (bsoncore.Document, error) {
 
-	f, err := transformBsoncoreDocument(registry, filter)
+	f, err := transformBsoncoreDocument(registry, filter, true, "filter")
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +284,7 @@ func createDeleteDoc(filter interface{}, collation *options.Collation, hint inte
 		doc = bsoncore.AppendDocumentElement(doc, "collation", collation.ToDocument())
 	}
 	if hint != nil {
-		hintVal, err := transformValue(registry, hint)
+		hintVal, err := transformValue(registry, hint, false, "hint")
 		if err != nil {
 			return nil, err
 		}
@@ -310,8 +330,22 @@ func (bw *bulkWrite) runUpdate(ctx context.Context, batch bulkWriteBatch) (opera
 		Session(bw.session).WriteConcern(bw.writeConcern).CommandMonitor(bw.collection.client.monitor).
 		ServerSelector(bw.selector).ClusterClock(bw.collection.client.clock).
 		Database(bw.collection.db.name).Collection(bw.collection.name).
-		Deployment(bw.collection.client.deployment).Crypt(bw.collection.client.crypt).Hint(hasHint).
-		ArrayFilters(hasArrayFilters)
+		Deployment(bw.collection.client.deployment).Crypt(bw.collection.client.cryptFLE).Hint(hasHint).
+		ArrayFilters(hasArrayFilters).ServerAPI(bw.collection.client.serverAPI).Timeout(bw.collection.client.timeout)
+	if bw.comment != nil {
+		comment, err := transformValue(bw.collection.registry, bw.comment, true, "comment")
+		if err != nil {
+			return op.Result(), err
+		}
+		op.Comment(comment)
+	}
+	if bw.let != nil {
+		let, err := transformBsoncoreDocument(bw.collection.registry, bw.let, true, "let")
+		if err != nil {
+			return operation.UpdateResult{}, err
+		}
+		op = op.Let(let)
+	}
 	if bw.ordered != nil {
 		op = op.Ordered(*bw.ordered)
 	}
@@ -339,7 +373,7 @@ func createUpdateDoc(
 	checkDollarKey bool,
 	registry *bsoncodec.Registry,
 ) (bsoncore.Document, error) {
-	f, err := transformBsoncoreDocument(registry, filter)
+	f, err := transformBsoncoreDocument(registry, filter, true, "filter")
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +409,7 @@ func createUpdateDoc(
 	}
 
 	if hint != nil {
-		hintVal, err := transformValue(registry, hint)
+		hintVal, err := transformValue(registry, hint, false, "hint")
 		if err != nil {
 			return nil, err
 		}
@@ -383,7 +417,6 @@ func createUpdateDoc(
 	}
 
 	updateDoc, _ = bsoncore.AppendDocumentEnd(updateDoc, uidx)
-
 	return updateDoc, nil
 }
 
