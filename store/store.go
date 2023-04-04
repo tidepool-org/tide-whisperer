@@ -448,8 +448,6 @@ func (c *MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 		return true, nil
 	}
 
-	// deviceDataSets collection is always a type="upload"
-	delete(query, "type")
 	err = dataSetsCollection(c).FindOne(c.context, query).Err()
 	if err != nil && err != mongo.ErrNoDocuments {
 		return false, err
@@ -642,11 +640,6 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 				}
 			}
 			for _, collection := range collections {
-				if collection.Name() == dataSetsCollectionName {
-					delete(query, "type")
-				} else {
-					query["type"] = theType
-				}
 				result, resultErr := collection.
 					FindOne(c.context, query, opts).
 					DecodeBytes()
