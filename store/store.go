@@ -528,15 +528,12 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 	if err == nil {
 		return true, nil
 	}
-	if err != mongo.ErrNoDocuments {
+	if err != nil && err != mongo.ErrNoDocuments {
 		return false, err
 	}
 	err = dataSetsCollection(c).FindOne(c.context, query, opts).Err()
-	if err == nil {
-		return true, nil
-	}
-	if err != mongo.ErrNoDocuments {
-		return false, err
+	if err == mongo.ErrNoDocuments {
+		return false, nil
 	}
 
 	return err == nil, err
@@ -608,7 +605,7 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 
 	// _schemaVersion is still in the list of fields to remove. Although we don't query for it, data can still exist for it
 	// until BACK-1281 is done.
-	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
+	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0, "_migrationMarker": 0}
 
 	if p.Latest {
 		latest := &latestIterator{pos: -1}
