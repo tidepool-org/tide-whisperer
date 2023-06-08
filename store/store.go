@@ -565,32 +565,23 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 		"_active":     true,
 		"_userId":     userID,
 		"time":        bson.M{"$gte": dateTime},
-		"type":        "upload",
+		"type":        "upload", // redundant since all types in collection is deviceDataSets is upload but just leaving the original query here.
 		"deviceModel": bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
 	}
 
-	type Object struct {
+	var objects []struct {
 		UploadID string `bson:"uploadId"`
 	}
-	var objects []Object
 
-	collections := []*mongo.Collection{
-		dataCollection(c),
-		dataSetsCollection(c),
+	cursor, err := dataSetsCollection(c).Find(c.context, query, opts)
+	if err != nil {
+		return nil, err
 	}
-	for _, collection := range collections {
-		cursor, err := collection.Find(c.context, query, opts)
-		if err != nil {
-			return nil, err
-		}
+	defer cursor.Close(c.context)
 
-		defer cursor.Close(c.context)
-		var tempObjects []Object
-		err = cursor.All(c.context, &tempObjects)
-		if err != nil {
-			return nil, err
-		}
-		objects = append(objects, tempObjects...)
+	err = cursor.All(c.context, &objects)
+	if err != nil {
+		return nil, err
 	}
 
 	uploadIds := make([]string, len(objects))
@@ -624,38 +615,23 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 			query["type"] = theType
 			opts := options.FindOne().SetProjection(removeFieldsForReturn).SetSort(bson.M{"time": -1})
 			// collections to search. stop at first collection that has data.
-			collections := []*mongo.Collection{
-				dataCollection(c),
-			}
+			collection := dataCollection(c)
 			if theType == "upload" {
-				// If type is "upload", try both the dataSetsCollection, then
-				// dataCollection as it may exist in both, or just the
-				// original as the migration happens.
-				collections = []*mongo.Collection{
-					dataSetsCollection(c),
-					dataCollection(c),
-				}
+				// Uploads are only in the deviceDataSets collection after migration completes.
+				collection = dataSetsCollection(c)
 			}
-			for _, collection := range collections {
-				result, resultErr := collection.
-					FindOne(c.context, query, opts).
-					DecodeBytes()
-				if resultErr != nil {
-					if resultErr == mongo.ErrNoDocuments {
-						continue
-					}
-					err = resultErr
-					break
+			result, resultErr := collection.
+				FindOne(c.context, query, opts).
+				DecodeBytes()
+			if resultErr != nil {
+				if resultErr == mongo.ErrNoDocuments {
+					continue
 				}
+				err = resultErr
+				break
+			}
 
-				latest.results = append(latest.results, result)
-				// Stop at first collection that has data to avoid adding
-				// document twice if it exists.
-				break
-			}
-			if err != nil {
-				break
-			}
+			latest.results = append(latest.results, result)
 		}
 		return latest, err
 	}
