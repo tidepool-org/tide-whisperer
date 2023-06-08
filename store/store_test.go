@@ -4,19 +4,41 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/google/go-cmp/cmp"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"net/url"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-
 	tpMongo "github.com/tidepool-org/go-common/clients/mongo"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 var testingConfig = &tpMongo.Config{ConnectionString: "mongodb://127.0.0.1/data_test", Database: "data_test"}
+
+func ptr[T any](v T) *T {
+	return &v
+}
+
+type TestDataSchema struct {
+	Active              *bool      `bson:"_active,omitempty"`
+	UserId              *string    `bson:"_userId,omitempty"`
+	State               *string    `bson:"_state,omitempty"`
+	DeviceManufacturers *string    `bson:"deviceManufacturers,omitempty"`
+	DeviceModel         *string    `bson:"deviceModel,omitempty"`
+	Index               *string    `bson:"index,omitempty"`
+	SchemaVersion       *int       `bson:"_schemaVersion,omitempty"`
+	Time                *time.Time `bson:"time,omitempty"`
+	DeletedTime         *time.Time `bson:"deletedTime,omitempty"`
+	Type                *string    `bson:"type,omitempty"`
+	Units               *string    `bson:"units,omitempty"`
+	DeviceId            *string    `bson:"deviceId,omitempty"`
+	UploadId            *string    `bson:"uploadId,omitempty"`
+	Value               *float64   `bson:"value,omitempty"`
+	Origin              *bson.M    `bson:"origin,omitempty"`
+}
 
 func before(t *testing.T, docs ...interface{}) *MongoStoreClient {
 
@@ -143,81 +165,90 @@ func uploadIDQuery() bson.M {
 	return generateMongoQuery(qParams)
 }
 
-func testDataForLatestTests() map[string]bson.M {
+func testDataForLatestTests() map[string]TestDataSchema {
+	date1, _ := time.Parse(time.RFC3339, "2019-03-15T01:24:28.000Z")
+	date2, _ := time.Parse(time.RFC3339, "2019-03-15T00:42:51.902Z")
+	date3, _ := time.Parse(time.RFC3339, "2019-03-14T01:24:28.000Z")
+	date4, _ := time.Parse(time.RFC3339, "2019-03-14T00:42:51.902Z")
+	date5, _ := time.Parse(time.RFC3339, "2019-03-19T01:24:28.000Z")
+	date6, _ := time.Parse(time.RFC3339, "2019-03-19T00:42:51.902Z")
+
 	// We keep _schemaVersion in the test data until BACK-1281 is completed.
-	testData := map[string]bson.M{
+	testData := map[string]TestDataSchema{
 		"upload1": {
-			"_active":        true,
-			"_userId":        "abc123",
-			"_schemaVersion": int32(1),
-			"time":           "2019-03-15T01:24:28.000Z",
-			"type":           "upload",
-			"deviceId":       "dev123",
-			"uploadId":       "9244bb16e27c4973c2f37af81784a05d",
+			Active:        ptr(true),
+			UserId:        ptr("abc123"),
+			SchemaVersion: ptr(1),
+			Time:          ptr(date1),
+			Type:          ptr("upload"),
+			DeviceId:      ptr("dev123"),
+			UploadId:      ptr("9244bb16e27c4973c2f37af81784a05d"),
 		},
 		"cbg1": {
-			"_active":        true,
-			"_userId":        "abc123",
-			"_schemaVersion": int32(1),
-			"time":           "2019-03-15T00:42:51.902Z",
-			"type":           "cbg",
-			"units":          "mmol/L",
-			"deviceId":       "dev123",
-			"uploadId":       "9244bb16e27c4973c2f37af81784a05d",
-			"value":          12.82223,
+			Active:        ptr(true),
+			UserId:        ptr("abc123"),
+			SchemaVersion: ptr(1),
+			Time:          ptr(date2),
+			Type:          ptr("cbg"),
+			Units:         ptr("mmol/L"),
+			DeviceId:      ptr("dev123"),
+			UploadId:      ptr("9244bb16e27c4973c2f37af81784a05d"),
+			Value:         ptr(12.82223),
 		},
 		"upload2": {
-			"_active":        true,
-			"_userId":        "abc123",
-			"_schemaVersion": int32(1),
-			"time":           "2019-03-14T01:24:28.000Z",
-			"type":           "upload",
-			"deviceId":       "dev456",
-			"uploadId":       "zzz4bb16e27c4973c2f37af81784a05d",
+			Active:        ptr(true),
+			UserId:        ptr("abc123"),
+			SchemaVersion: ptr(1),
+			Time:          ptr(date3),
+			Type:          ptr("upload"),
+			DeviceId:      ptr("dev456"),
+			UploadId:      ptr("zzz4bb16e27c4973c2f37af81784a05d"),
 		},
 		"cbg2": {
-			"_active":        true,
-			"_userId":        "abc123",
-			"_schemaVersion": int32(1),
-			"time":           "2019-03-14T00:42:51.902Z",
-			"type":           "cbg",
-			"units":          "mmol/L",
-			"uploadId":       "zzz4bb16e27c4973c2f37af81784a05d",
-			"deviceId":       "dev456",
-			"value":          9.7213,
+			Active:        ptr(true),
+			UserId:        ptr("abc123"),
+			SchemaVersion: ptr(1),
+			Time:          ptr(date4),
+			Type:          ptr("cbg"),
+			Units:         ptr("mmol/L"),
+			DeviceId:      ptr("dev456"),
+			UploadId:      ptr("zzz4bb16e27c4973c2f37af81784a05d"),
+			Value:         ptr(9.7213),
 		},
 		"upload3": {
-			"_active":        true,
-			"_userId":        "xyz123",
-			"_schemaVersion": int32(1),
-			"time":           "2019-03-19T01:24:28.000Z",
-			"type":           "upload",
-			"deviceId":       "dev789",
-			"uploadId":       "xxx4bb16e27c4973c2f37af81784a05d",
+			Active:        ptr(true),
+			UserId:        ptr("xyz123"),
+			SchemaVersion: ptr(1),
+			Time:          ptr(date5),
+			Type:          ptr("upload"),
+			DeviceId:      ptr("dev789"),
+			UploadId:      ptr("xxx4bb16e27c4973c2f37af81784a05d"),
 		},
 		"cbg3": {
-			"_active":        true,
-			"_userId":        "xyz123",
-			"_schemaVersion": int32(1),
-			"time":           "2019-03-19T00:42:51.902Z",
-			"type":           "cbg",
-			"units":          "mmol/L",
-			"uploadId":       "xxx4bb16e27c4973c2f37af81784a05d",
-			"deviceId":       "dev789",
-			"value":          7.1237,
+			Active:        ptr(true),
+			UserId:        ptr("xyz123"),
+			SchemaVersion: ptr(1),
+			Time:          ptr(date6),
+			Type:          ptr("cbg"),
+			Units:         ptr("mmol/L"),
+			DeviceId:      ptr("dev789"),
+			UploadId:      ptr("xxx4bb16e27c4973c2f37af81784a05d"),
+			Value:         ptr(7.1237),
 		},
 	}
 
 	return testData
 }
 
-func dropInternalKeys(inputData bson.M) bson.M {
-	outputData := bson.M{}
-	for k, v := range inputData {
-		if !strings.HasPrefix(k, "_") {
-			outputData[k] = v
-		}
-	}
+func dropInternalKeys(inputData TestDataSchema) TestDataSchema {
+	// NOTE we do not deep copy here, as we don't need the internal data to not be the same
+	// we just need the ability to set some of them to nil independently of the source
+	outputData := inputData
+	outputData.UserId = nil
+	outputData.Active = nil
+	outputData.SchemaVersion = nil
+	outputData.State = nil
+
 	return outputData
 }
 
@@ -289,35 +320,6 @@ func TestStore_EnsureIndexes(t *testing.T) {
 			Key:  makeKeySlice("_id"),
 			Name: "_id_",
 		},
-		// BEGIN legacy indexes
-		{
-			Key:        makeKeySlice("_userId", "deviceModel"),
-			Background: true,
-			PartialFilterExpression: bson.D{
-				{Key: "_active", Value: true},
-				{Key: "type", Value: "upload"},
-				{Key: "deviceModel", Value: bson.D{
-					{Key: "$exists", Value: true},
-				}},
-				{Key: "time", Value: bson.D{
-					{Key: "$gte", Value: "2017-09-01"},
-				}},
-			},
-			Name: "GetLoopableMedtronicDirectUploadIdsAfter_v2",
-		},
-		{
-			Key:        makeKeySlice("_userId", "origin.payload.device.manufacturer"),
-			Background: true,
-			PartialFilterExpression: bson.D{
-				{Key: "_active", Value: true},
-				{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
-				{Key: "time", Value: bson.D{
-					{Key: "$gte", Value: "2017-09-01"},
-				}},
-			},
-			Name: "HasMedtronicLoopDataAfter_v2",
-		},
-		// END legacy indexes
 		{
 			Key:        makeKeySlice("_userId", "deviceModel", "fakefield"),
 			Background: true,
@@ -399,30 +401,16 @@ func TestStore_generateMongoQuery_allParams(t *testing.T) {
 		"_active":  true,
 		"type":     bson.M{"$in": strings.Split("smbg,cbg", ",")},
 		"subType":  bson.M{"$in": strings.Split("stuff", ",")},
-		"$or": bson.A{
-			bson.M{"time": bson.M{
-				"$gte": "2015-10-07T15:00:00.00000000Z",
-				"$lte": "2015-10-11T15:00:00.00000000Z"}},
-			bson.M{"time": bson.M{"$gte": timeStart, "$lte": timeEnd}},
-		},
+		"time":     bson.M{"$gte": timeStart, "$lte": timeEnd},
 		"$and": []bson.M{
 			{"$or": []bson.M{
 				{"type": bson.M{"$ne": "cbg"}},
 				{"uploadId": bson.M{"$in": []string{"123", "456"}}},
-				{"$or": bson.A{
-					bson.M{"time": bson.M{"$lt": "2015-10-07T15:00:00Z"}},
-					bson.M{"time": bson.M{"$lt": dexcomStart}},
-				}},
-				{"$or": bson.A{
-					bson.M{"time": bson.M{"$gt": "2016-12-13T02:00:00Z"}},
-					bson.M{"time": bson.M{"$gt": dexcomEnd}},
-				}},
+				{"time": bson.M{"$lt": dexcomStart}},
+				{"time": bson.M{"$gt": dexcomEnd}},
 			}},
 			{"$or": []bson.M{
-				{"$or": bson.A{
-					bson.M{"time": bson.M{"$lt": "2017-01-01"}},
-					bson.M{"time": bson.M{"$lt": medtronicEnd}},
-				}},
+				{"time": bson.M{"$lt": medtronicEnd}},
 				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
 				{"uploadId": bson.M{"$nin": []string{"555666777", "888999000"}}},
 			}},
@@ -449,12 +437,7 @@ func TestStore_generateMongoQuery_allparamsWithUploadId(t *testing.T) {
 		"type":     bson.M{"$in": strings.Split("smbg,cbg", ",")},
 		"subType":  bson.M{"$in": strings.Split("stuff", ",")},
 		"uploadId": "xyz123",
-		"$or": bson.A{
-			bson.M{"time": bson.M{
-				"$gte": "2015-10-07T15:00:00.00000000Z",
-				"$lte": "2015-10-11T15:00:00.00000000Z"}},
-			bson.M{"time": bson.M{"$gte": timeStart, "$lte": timeEnd}},
-		},
+		"time":     bson.M{"$gte": timeStart, "$lte": timeEnd},
 	}
 
 	eq := reflect.DeepEqual(query, expectedQuery)
@@ -498,10 +481,7 @@ func TestStore_generateMongoQuery_noDates(t *testing.T) {
 		},
 		"$and": []bson.M{
 			{"$or": []bson.M{
-				{"$or": bson.A{
-					bson.M{"time": bson.M{"$lt": "2017-01-01"}},
-					bson.M{"time": bson.M{"$lt": medtronicEnd}},
-				}},
+				{"time": bson.M{"$lt": medtronicEnd}},
 				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
 				{"uploadId": bson.M{"$nin": []string{"555666777", "888999000"}}},
 			}},
@@ -688,42 +668,43 @@ func TestStore_HasMedtronicDirectData_Found(t *testing.T) {
 }
 
 func TestStore_HasMedtronicDirectData_Found_Multiple(t *testing.T) {
-	store := before(t, bson.M{
-		"_userId":             "0000000000",
-		"type":                "upload",
-		"_state":              "closed",
-		"_active":             true,
-		"deviceManufacturers": "Medtronic",
-		"index":               "0",
-	}, bson.M{
-		"_userId":             "1234567890",
-		"type":                "upload",
-		"_state":              "closed",
-		"_active":             true,
-		"deviceManufacturers": "Medtronic",
-		"index":               "1",
-	}, bson.M{
-		"_userId":             "1234567890",
-		"type":                "upload",
-		"_state":              "open",
-		"_active":             true,
-		"deviceManufacturers": "Medtronic",
-		"index":               "2",
-	}, bson.M{
-		"_userId":             "1234567890",
-		"type":                "upload",
-		"_state":              "closed",
-		"_active":             true,
-		"deviceManufacturers": "Medtronic",
-		"index":               "3",
-	}, bson.M{
-		"_userId":             "1234567890",
-		"type":                "upload",
-		"_state":              "closed",
-		"_active":             true,
-		"deletedTime":         "2017-05-17T20:13:32.064-0700",
-		"deviceManufacturers": "Medtronic",
-		"index":               "4",
+	date1, _ := time.Parse(time.RFC3339, "2017-05-17T20:13:32.064-0700")
+	store := before(t, TestDataSchema{
+		UserId:              ptr("0000000000"),
+		Type:                ptr("upload"),
+		State:               ptr("closed"),
+		Active:              ptr(true),
+		DeviceManufacturers: ptr("Medtronic"),
+		Index:               ptr("0"),
+	}, TestDataSchema{
+		UserId:              ptr("1234567890"),
+		Type:                ptr("upload"),
+		State:               ptr("closed"),
+		Active:              ptr(true),
+		DeviceManufacturers: ptr("Medtronic"),
+		Index:               ptr("1"),
+	}, TestDataSchema{
+		UserId:              ptr("1234567890"),
+		Type:                ptr("upload"),
+		State:               ptr("open"),
+		Active:              ptr(true),
+		DeviceManufacturers: ptr("Medtronic"),
+		Index:               ptr("2"),
+	}, TestDataSchema{
+		UserId:              ptr("1234567890"),
+		Type:                ptr("upload"),
+		State:               ptr("closed"),
+		Active:              ptr(true),
+		DeviceManufacturers: ptr("Medtronic"),
+		Index:               ptr("3"),
+	}, TestDataSchema{
+		UserId:              ptr("1234567890"),
+		Type:                ptr("upload"),
+		State:               ptr("closed"),
+		Active:              ptr(true),
+		DeletedTime:         ptr(date1),
+		DeviceManufacturers: ptr("Medtronic"),
+		Index:               ptr("4"),
 	})
 
 	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
@@ -813,12 +794,13 @@ func TestStore_HasMedtronicDirectData_NotFound_Active(t *testing.T) {
 }
 
 func TestStore_HasMedtronicDirectData_NotFound_DeletedTime(t *testing.T) {
+	date1, _ := time.Parse(time.RFC3339, "2017-05-17T20:10:26.607-0700")
 	store := before(t, bson.M{
 		"_userId":             "1234567890",
 		"type":                "upload",
 		"_state":              "closed",
 		"_active":             true,
-		"deletedTime":         "2017-05-17T20:10:26.607-0700",
+		"deletedTime":         date1,
 		"deviceManufacturers": "Medtronic",
 	})
 
@@ -852,42 +834,43 @@ func TestStore_HasMedtronicDirectData_NotFound_DeviceManufacturer(t *testing.T) 
 }
 
 func TestStore_HasMedtronicDirectData_NotFound_Multiple(t *testing.T) {
-	store := before(t, bson.M{
-		"_userId":             "0000000000",
-		"type":                "upload",
-		"_state":              "closed",
-		"_active":             true,
-		"deviceManufacturers": "Medtronic",
-		"index":               "0",
-	}, bson.M{
-		"_userId":             "1234567890",
-		"type":                "cgm",
-		"_state":              "closed",
-		"_active":             true,
-		"deviceManufacturers": "Medtronic",
-		"index":               "1",
-	}, bson.M{
-		"_userId":             "1234567890",
-		"type":                "upload",
-		"_state":              "open",
-		"_active":             true,
-		"deviceManufacturers": "Medtronic",
-		"index":               "2",
-	}, bson.M{
-		"_userId":             "1234567890",
-		"type":                "upload",
-		"_state":              "closed",
-		"_active":             false,
-		"deviceManufacturers": "Medtronic",
-		"index":               "3",
-	}, bson.M{
-		"_userId":             "1234567890",
-		"type":                "upload",
-		"_state":              "closed",
-		"_active":             true,
-		"deletedTime":         "2017-05-17T20:13:32.064-0700",
-		"deviceManufacturers": "Medtronic",
-		"index":               "4",
+	date1, _ := time.Parse(time.RFC3339Nano, "2017-05-17T20:13:32.064-07:00")
+	store := before(t, TestDataSchema{
+		UserId:              ptr("0000000000"),
+		Type:                ptr("upload"),
+		State:               ptr("closed"),
+		Active:              ptr(true),
+		DeviceManufacturers: ptr("Medtronic"),
+		Index:               ptr("0"),
+	}, TestDataSchema{
+		UserId:              ptr("1234567890"),
+		Type:                ptr("cgm"),
+		State:               ptr("closed"),
+		Active:              ptr(true),
+		DeviceManufacturers: ptr("Medtronic"),
+		Index:               ptr("1"),
+	}, TestDataSchema{
+		UserId:              ptr("1234567890"),
+		Type:                ptr("upload"),
+		State:               ptr("open"),
+		Active:              ptr(true),
+		DeviceManufacturers: ptr("Medtronic"),
+		Index:               ptr("2"),
+	}, TestDataSchema{
+		UserId:              ptr("1234567890"),
+		Type:                ptr("upload"),
+		State:               ptr("closed"),
+		Active:              ptr(false),
+		DeviceManufacturers: ptr("Medtronic"),
+		Index:               ptr("3"),
+	}, TestDataSchema{
+		UserId:              ptr("1234567890"),
+		Type:                ptr("upload"),
+		State:               ptr("closed"),
+		Active:              ptr(true),
+		DeletedTime:         ptr(date1),
+		DeviceManufacturers: ptr("Medtronic"),
+		Index:               ptr("4"),
 	})
 
 	hasMedtronicDirectData, err := store.HasMedtronicDirectData("1234567890")
@@ -901,25 +884,28 @@ func TestStore_HasMedtronicDirectData_NotFound_Multiple(t *testing.T) {
 }
 
 func TestStore_HasMedtronicLoopDataAfter_NotFound_UserID(t *testing.T) {
+	date1, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date2, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date3, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
 	// We keep _schemaVersion in the test data until BACK-1281 is completed.
-	store := before(t, bson.M{
-		"_active":        true,
-		"_userId":        "0000000000",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Animas"}}},
-	}, bson.M{
-		"_active":        false,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	store := before(t, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("0000000000"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date1),
+		Origin:        ptr(bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}}),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date2),
+		Origin:        ptr(bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Animas"}}}),
+	}, TestDataSchema{
+		Active:        ptr(false),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date3),
+		Origin:        ptr(bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}}),
 	})
 
 	// we need indexes here as the following queries rely on working index hints for performance
@@ -939,31 +925,35 @@ func TestStore_HasMedtronicLoopDataAfter_NotFound_UserID(t *testing.T) {
 }
 
 func TestStore_HasMedtronicLoopDataAfter_NotFound_Time(t *testing.T) {
+	date1, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date2, _ := time.Parse(time.RFC3339, "2016-12-31T23:59:59Z")
+	date3, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date4, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
 	// We keep _schemaVersion in the test data until BACK-1281 is completed.
-	store := before(t, bson.M{
-		"_active":        true,
-		"_userId":        "0000000000",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2016-12-31T23:59:59Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Animas"}}},
-	}, bson.M{
-		"_active":        false,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	store := before(t, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("0000000000"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date1),
+		Origin:        ptr(bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}}),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date2),
+		Origin:        ptr(bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}}),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date3),
+		Origin:        ptr(bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Animas"}}}),
+	}, TestDataSchema{
+		Active:        ptr(false),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date4),
+		Origin:        ptr(bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}}),
 	})
 
 	// we need indexes here as the following queries rely on working index hints for performance
@@ -983,37 +973,42 @@ func TestStore_HasMedtronicLoopDataAfter_NotFound_Time(t *testing.T) {
 }
 
 func TestStore_HasMedtronicLoopDataAfter_Found(t *testing.T) {
+	date1, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date2, _ := time.Parse(time.RFC3339, "2016-12-31T23:59:59Z")
+	date3, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date4, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date5, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
 	// We keep _schemaVersion in the test data until BACK-1281 is completed.
-	store := before(t, bson.M{
-		"_active":        true,
-		"_userId":        "0000000000",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2016-12-31T23:59:59Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Animas"}}},
-	}, bson.M{
-		"_active":        false,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"origin":         bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}},
+	store := before(t, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("0000000000"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date1),
+		Origin:        ptr(bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}}),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date2),
+		Origin:        ptr(bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}}),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date3),
+		Origin:        ptr(bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}}),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date4),
+		Origin:        ptr(bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Animas"}}}),
+	}, TestDataSchema{
+		Active:        ptr(false),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date5),
+		Origin:        ptr(bson.M{"payload": bson.M{"device": bson.M{"manufacturer": "Medtronic"}}}),
 	})
 
 	// we need indexes here as the following queries rely on working index hints for performance
@@ -1033,35 +1028,39 @@ func TestStore_HasMedtronicLoopDataAfter_Found(t *testing.T) {
 }
 
 func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testing.T) {
+	date1, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date2, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date3, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date4, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
 	// We keep _schemaVersion in the test data until BACK-1281 is completed.
-	store := before(t, bson.M{
-		"_active":        true,
-		"_userId":        "0000000000",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "523",
-	}, bson.M{
-		"_active":        false,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "523",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "cgm",
-		"deviceModel":    "523",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "Another Model",
+	store := before(t, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("0000000000"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date1),
+		Type:          ptr("upload"),
+		DeviceModel:   ptr("523"),
+	}, TestDataSchema{
+		Active:        ptr(false),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date2),
+		Type:          ptr("upload"),
+		DeviceModel:   ptr("523"),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date3),
+		Type:          ptr("cgm"),
+		DeviceModel:   ptr("523"),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date4),
+		Type:          ptr("upload"),
+		DeviceModel:   ptr("Another Model"),
 	})
 
 	// we need indexes here as the following queries rely on working index hints for performance
@@ -1081,42 +1080,47 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_UserID(t *testi
 }
 
 func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing.T) {
+	date1, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date2, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date3, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date4, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date5, _ := time.Parse(time.RFC3339, "2016-12-31T23:59:59Z")
 	// We keep _schemaVersion in the test data until BACK-1281 is completed.
-	store := before(t, bson.M{
-		"_active":        true,
-		"_userId":        "0000000000",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "723",
-	}, bson.M{
-		"_active":        false,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "523",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "cgm",
-		"deviceModel":    "523",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "Another Model",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2016-12-31T23:59:59Z",
-		"type":           "upload",
-		"deviceModel":    "523",
+	store := before(t, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("0000000000"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date1),
+		Type:          ptr("upload"),
+		DeviceModel:   ptr("723"),
+	}, TestDataSchema{
+		Active:        ptr(false),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date2),
+		Type:          ptr("upload"),
+		DeviceModel:   ptr("523"),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date3),
+		Type:          ptr("cgm"),
+		DeviceModel:   ptr("523"),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date4),
+		Type:          ptr("upload"),
+		DeviceModel:   ptr("Another Model"),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date5),
+		Type:          ptr("upload"),
+		DeviceModel:   ptr("523"),
 	})
 
 	// we need indexes here as the following queries rely on working index hints for performance
@@ -1136,58 +1140,65 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_NotFound_Time(t *testing
 }
 
 func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
+	date1, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date2, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date3, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date4, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date5, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date6, _ := time.Parse(time.RFC3339, "2018-02-03T04:05:06Z")
+	date7, _ := time.Parse(time.RFC3339, "2016-12-31T23:59:59Z")
 	// We keep _schemaVersion in the test data until BACK-1281 is completed.
-	store := before(t, bson.M{
-		"_active":        true,
-		"_userId":        "0000000000",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "723",
-	}, bson.M{
-		"_active":        false,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "523",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "554",
-		"uploadId":       "11223344",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "cgm",
-		"deviceModel":    "523",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "523K",
-		"uploadId":       "55667788",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2018-02-03T04:05:06Z",
-		"type":           "upload",
-		"deviceModel":    "Another Model",
-	}, bson.M{
-		"_active":        true,
-		"_userId":        "1234567890",
-		"_schemaVersion": 1,
-		"time":           "2016-12-31T23:59:59Z",
-		"type":           "upload",
-		"deviceModel":    "523",
+	store := before(t, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("0000000000"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date1),
+		Type:          ptr("upload"),
+		DeviceModel:   ptr("723"),
+	}, TestDataSchema{
+		Active:        ptr(false),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date2),
+		Type:          ptr("upload"),
+		DeviceModel:   ptr("523"),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date3),
+		Type:          ptr("upload"),
+		DeviceModel:   ptr("554"),
+		UploadId:      ptr("11223344"),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date4),
+		Type:          ptr("cgm"),
+		DeviceModel:   ptr("523"),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date5),
+		Type:          ptr("upload"),
+		DeviceModel:   ptr("523K"),
+		UploadId:      ptr("55667788"),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date6),
+		Type:          ptr("upload"),
+		DeviceModel:   ptr("Another Model"),
+	}, TestDataSchema{
+		Active:        ptr(true),
+		UserId:        ptr("1234567890"),
+		SchemaVersion: ptr(1),
+		Time:          ptr(date7),
+		Type:          ptr("upload"),
+		DeviceModel:   ptr("523"),
 	})
 
 	// we need indexes here as the following queries rely on working index hints for performance
@@ -1227,25 +1238,26 @@ func TestStore_LatestNoFilter(t *testing.T) {
 		cbg    bool
 		upload bool
 	}{}
+
 	for iter.Next(store.context) {
-		var result bson.M
+		var result TestDataSchema
 		err := iter.Decode(&result)
 		if err != nil {
 			t.Error("Mongo Decode error")
 		}
-		switch dataType := result["type"]; dataType {
+		switch dataType := *result.Type; dataType {
 		case "cbg":
-			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
 			compareResult := dropInternalKeys(testData["cbg1"])
-			if !reflect.DeepEqual(result, compareResult) {
-				t.Error("Unexpected 'cbg' result when requesting latest data")
+			diff := cmp.Diff(compareResult, result)
+			if diff != "" {
+				t.Errorf("Unexpected 'cbg' result when requesting latest data (-want +have):\n%s", diff)
 			}
 			processedResults.cbg = true
 		case "upload":
-			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
 			compareResult := dropInternalKeys(testData["upload1"])
-			if !reflect.DeepEqual(result, compareResult) {
-				t.Error("Unexpected 'upload' result when requesting latest data")
+			diff := cmp.Diff(compareResult, result)
+			if diff != "" {
+				t.Errorf("Unexpected 'upload' result when requesting latest data (-want +have):\n%s", diff)
 			}
 			processedResults.upload = true
 		}
@@ -1277,18 +1289,19 @@ func TestStore_LatestTypeFilter(t *testing.T) {
 	processedResults := struct {
 		cbg bool
 	}{}
+
 	for iter.Next(store.context) {
-		var result bson.M
+		var result TestDataSchema
 		err := iter.Decode(&result)
 		if err != nil {
 			t.Error("Mongo Decode error")
 		}
-		switch dataType := result["type"]; dataType {
+		switch dataType := *result.Type; dataType {
 		case "cbg":
-			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
 			compareResult := dropInternalKeys(testData["cbg1"])
-			if !reflect.DeepEqual(result, compareResult) {
-				t.Error("Unexpected 'cbg' result when requesting latest data")
+			diff := cmp.Diff(compareResult, result)
+			if diff != "" {
+				t.Errorf("Unexpected 'cbg' result when requesting latest data (-want +have):\n%s", diff)
 			}
 			processedResults.cbg = true
 		}
@@ -1321,25 +1334,26 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 		cbg    bool
 		upload bool
 	}{}
+
 	for iter.Next(store.context) {
-		var result bson.M
+		var result TestDataSchema
 		err := iter.Decode(&result)
 		if err != nil {
 			t.Error("Mongo Decode error")
 		}
-		switch dataType := result["type"]; dataType {
+		switch dataType := *result.Type; dataType {
 		case "cbg":
-			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
 			compareResult := dropInternalKeys(testData["cbg2"])
-			if !reflect.DeepEqual(result, compareResult) {
-				t.Error("Unexpected 'cbg' result when requesting latest data")
+			diff := cmp.Diff(compareResult, result)
+			if diff != "" {
+				t.Errorf("Unexpected 'cbg' result when requesting latest data (-want +have):\n%s", diff)
 			}
 			processedResults.cbg = true
 		case "upload":
-			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
 			compareResult := dropInternalKeys(testData["upload2"])
-			if !reflect.DeepEqual(result, compareResult) {
-				t.Error("Unexpected 'upload' result when requesting latest data")
+			diff := cmp.Diff(compareResult, result)
+			if diff != "" {
+				t.Errorf("Unexpected 'upload' result when requesting latest data (-want +have):\n%s", diff)
 			}
 			processedResults.upload = true
 		}
@@ -1372,25 +1386,26 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 		cbg    bool
 		upload bool
 	}{}
+
 	for iter.Next(store.context) {
-		var result bson.M
+		var result TestDataSchema
 		err := iter.Decode(&result)
 		if err != nil {
 			t.Error("Mongo Decode error")
 		}
-		switch dataType := result["type"]; dataType {
+		switch dataType := *result.Type; dataType {
 		case "cbg":
-			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
 			compareResult := dropInternalKeys(testData["cbg3"])
-			if !reflect.DeepEqual(result, compareResult) {
-				t.Error("Unexpected 'cbg' result when requesting latest data")
+			diff := cmp.Diff(compareResult, result)
+			if diff != "" {
+				t.Errorf("Unexpected 'cbg' result when requesting latest data (-want +have):\n%s", diff)
 			}
 			processedResults.cbg = true
 		case "upload":
-			delete(result, "_id") // _id is assigned by MongoDB. We don't know it up front
 			compareResult := dropInternalKeys(testData["upload3"])
-			if !reflect.DeepEqual(result, compareResult) {
-				t.Error("Unexpected 'upload' result when requesting latest data")
+			diff := cmp.Diff(compareResult, result)
+			if diff != "" {
+				t.Errorf("Unexpected 'upload' result when requesting latest data (-want +have):\n%s", diff)
 			}
 			processedResults.upload = true
 		}

@@ -4,6 +4,7 @@ go 1.19
 
 require (
 	github.com/daaku/go.httpgzip v0.0.0-20180202095102-86d27ccd810b
+	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/pat v1.0.1
 	github.com/prometheus/client_golang v1.14.0
