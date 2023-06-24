@@ -651,7 +651,8 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 	switch {
 	case len(p.Types) == 1 && p.Types[0] == "upload":
 		return dataSetsCollection(c).Find(c.context, generateMongoQuery(p), opts)
-	case len(p.Types) > 0 && !contains("upload", p.Types):
+	// Have to check for empty string as sometimes that is the type sent.
+	case len(p.Types) > 0 && !contains("upload", p.Types) && p.Types[0] != "":
 		return dataCollection(c).Find(c.context, generateMongoQuery(p), opts)
 	}
 
