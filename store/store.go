@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"strconv"
@@ -80,6 +81,14 @@ type (
 	latestIterator struct {
 		results []bson.Raw
 		pos     int
+	}
+
+	// multiStorageIterator is a StorageIterator reads from multiple iterators
+	// until there is no more data this is needed in the case that we are
+	// reading multiple types and need to read both uploads and data.
+	multiStorageIterator struct {
+		iters          []StorageIterator
+		currentIterIdx int
 	}
 )
 
@@ -637,8 +646,30 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 	}
 
 	opts := options.Find().SetProjection(removeFieldsForReturn)
-	return dataCollection(c).
-		Find(c.context, generateMongoQuery(p), opts)
+
+	// If query only needs to read from one collection use the collection directly.
+	switch {
+	case len(p.Types) == 1 && p.Types[0] == "upload":
+		return dataSetsCollection(c).Find(c.context, generateMongoQuery(p), opts)
+	case len(p.Types) > 0 && !contains("upload", p.Types):
+		return dataCollection(c).Find(c.context, generateMongoQuery(p), opts)
+	}
+
+	// Otherwise query needs to read from both deviceData and deviceDataSets collection.
+	dataIter, err := dataCollection(c).Find(c.context, generateMongoQuery(p), opts)
+	if err != nil {
+		return nil, err
+	}
+	dataSetIter, err := dataSetsCollection(c).Find(c.context, generateMongoQuery(p), opts)
+	if err != nil {
+		return nil, err
+	}
+	return &multiStorageIterator{
+		iters: []StorageIterator{
+			dataIter,
+			dataSetIter,
+		},
+	}, nil
 }
 
 func (l *latestIterator) Next(context.Context) bool {
@@ -652,4 +683,42 @@ func (l *latestIterator) Decode(result interface{}) error {
 
 func (l *latestIterator) Close(context.Context) error {
 	return nil
+}
+
+func (l *multiStorageIterator) Next(ctx context.Context) bool {
+	if l.currentIterIdx >= len(l.iters) {
+		return false
+	}
+	hasNext := l.iters[l.currentIterIdx].Next(ctx)
+	if hasNext {
+		return true
+	}
+	l.currentIterIdx++
+	return l.Next(ctx)
+}
+
+func (l *multiStorageIterator) Decode(result interface{}) error {
+	if l.currentIterIdx >= len(l.iters) {
+		return io.EOF
+	}
+
+	return l.iters[l.currentIterIdx].Decode(result)
+}
+
+func (l *multiStorageIterator) Close(ctx context.Context) error {
+	for _, iter := range l.iters {
+		if err := iter.Close(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func contains(needle string, haystack []string) bool {
+	for _, x := range haystack {
+		if needle == x {
+			return true
+		}
+	}
+	return false
 }

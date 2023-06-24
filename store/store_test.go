@@ -106,15 +106,6 @@ func getCursors(exPlans interface{}) []string {
 	return cursors
 }
 
-func contains(s []string, e string) bool {
-	for _, a := range s {
-		if strings.Contains(a, e) {
-			return true
-		}
-	}
-	return false
-}
-
 func basicQuery() bson.M {
 	qParams := &Params{
 		UserID:        "abc123",
