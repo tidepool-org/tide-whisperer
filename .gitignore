@@ -3,3 +3,4 @@ dist/
 tide-whisperer
 artifact_go.sh
 .DS_Store
+.idea

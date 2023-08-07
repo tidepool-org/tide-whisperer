@@ -19,11 +19,12 @@ import (
 )
 
 const (
-	dataCollectionName  = "deviceData"
-	dataStoreAPIPrefix  = "api/data/store "
-	RFC3339NanoSortable = "2006-01-02T15:04:05.00000000Z07:00"
-	medtronicDateFormat = "2006-01-02"
-	medtronicIndexDate  = "2017-09-01"
+	dataCollectionName     = "deviceData"
+	dataSetsCollectionName = "deviceDataSets" // all datum with type == "upload" go in this collection as opposed to the deviceData collection. These act as the root/parent for all other data.
+	dataStoreAPIPrefix     = "api/data/store "
+	RFC3339NanoSortable    = "2006-01-02T15:04:05.00000000Z07:00"
+	medtronicDateFormat    = "2006-01-02"
+	medtronicIndexDate     = "2017-09-01"
 )
 
 type (
@@ -209,7 +210,7 @@ func (c *MongoStoreClient) WithContext(ctx context.Context) *MongoStoreClient {
 // to pass back the MongoDB errors, rather than any context errors.
 func (c *MongoStoreClient) EnsureIndexes() error {
 	medtronicIndexDateTime, _ := time.Parse(medtronicDateFormat, medtronicIndexDate)
-	indexes := []mongo.IndexModel{
+	dataIndexes := []mongo.IndexModel{
 		{
 			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "deviceModel", Value: 1}, {Key: "fakefield", Value: 1}},
 			Options: options.Index().
@@ -256,7 +257,59 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 		},
 	}
 
-	if _, err := dataCollection(c).Indexes().CreateMany(context.Background(), indexes); err != nil {
+	if _, err := dataCollection(c).Indexes().CreateMany(context.Background(), dataIndexes); err != nil {
+		log.Fatal(dataStoreAPIPrefix, fmt.Sprintf("Unable to create indexes: %s", err))
+	}
+
+	// Not sure if all these indexes need to also be on the deviceDataSets collection.
+	dataSetsIndexes := []mongo.IndexModel{
+		{
+			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "deviceModel", Value: 1}, {Key: "fakefield", Value: 1}},
+			Options: options.Index().
+				SetName("GetLoopableMedtronicDirectUploadIdsAfter_v2_DateTime").
+				SetBackground(true).
+				SetPartialFilterExpression(
+					bson.D{
+						{Key: "_active", Value: true},
+						{Key: "type", Value: "upload"},
+						{Key: "deviceModel", Value: bson.M{
+							"$exists": true,
+						}},
+						{Key: "time", Value: bson.M{
+							"$gte": medtronicIndexDateTime,
+						}},
+					},
+				),
+		},
+		{
+			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "origin.payload.device.manufacturer", Value: 1}, {Key: "fakefield", Value: 1}},
+			Options: options.Index().
+				SetName("HasMedtronicLoopDataAfter_v2_DateTime").
+				SetBackground(true).
+				SetPartialFilterExpression(
+					bson.D{
+						{Key: "_active", Value: true},
+						{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
+						{Key: "time", Value: bson.M{
+							"$gte": medtronicIndexDateTime,
+						}},
+					},
+				),
+		},
+		{
+			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "time", Value: -1}, {Key: "type", Value: 1}},
+			Options: options.Index().
+				SetName("UserIdTimeWeighted_v2").
+				SetBackground(true).
+				SetPartialFilterExpression(
+					bson.D{
+						{Key: "_active", Value: true},
+					},
+				),
+		},
+	}
+
+	if _, err := dataSetsCollection(c).Indexes().CreateMany(context.Background(), dataSetsIndexes); err != nil {
 		log.Fatal(dataStoreAPIPrefix, fmt.Sprintf("Unable to create indexes: %s", err))
 	}
 
@@ -265,6 +318,10 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 
 func dataCollection(msc *MongoStoreClient) *mongo.Collection {
 	return msc.client.Database(msc.database).Collection(dataCollectionName)
+}
+
+func dataSetsCollection(msc *MongoStoreClient) *mongo.Collection {
+	return msc.client.Database(msc.database).Collection(dataSetsCollectionName)
 }
 
 // generateMongoQuery takes in a number of parameters and constructs a mongo query
@@ -381,7 +438,20 @@ func (c *MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 		"deviceManufacturers": "Medtronic",
 	}
 
+	// Try reading from both collections until migration from type=upload from
+	// deviceData to deviceDataSets is complete.
 	err := dataCollection(c).FindOne(c.context, query).Err()
+	if err != nil && err != mongo.ErrNoDocuments {
+		return false, err
+	}
+	if err == nil {
+		return true, nil
+	}
+
+	err = dataSetsCollection(c).FindOne(c.context, query).Err()
+	if err != nil && err != mongo.ErrNoDocuments {
+		return false, err
+	}
 	if err == mongo.ErrNoDocuments {
 		return false, nil
 	}
@@ -455,7 +525,13 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 	}
 
 	err = dataCollection(c).FindOne(c.context, query, opts).Err()
-
+	if err == nil {
+		return true, nil
+	}
+	if err != nil && err != mongo.ErrNoDocuments {
+		return false, err
+	}
+	err = dataSetsCollection(c).FindOne(c.context, query, opts).Err()
 	if err == mongo.ErrNoDocuments {
 		return false, nil
 	}
@@ -493,27 +569,34 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 		"deviceModel": bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
 	}
 
-	var objects []struct {
+	type Object struct {
 		UploadID string `bson:"uploadId"`
 	}
+	var objects []Object
 
-	cursor, err := dataCollection(c).Find(c.context, query, opts)
-	if err != nil {
-		return nil, err
+	collections := []*mongo.Collection{
+		dataCollection(c),
+		dataSetsCollection(c),
 	}
+	for _, collection := range collections {
+		cursor, err := collection.Find(c.context, query, opts)
+		if err != nil {
+			return nil, err
+		}
 
-	defer cursor.Close(c.context)
-
-	err = cursor.All(c.context, &objects)
-	if err != nil {
-		return nil, err
+		defer cursor.Close(c.context)
+		var tempObjects []Object
+		err = cursor.All(c.context, &tempObjects)
+		if err != nil {
+			return nil, err
+		}
+		objects = append(objects, tempObjects...)
 	}
 
 	uploadIds := make([]string, len(objects))
 	for index, object := range objects {
 		uploadIds[index] = object.UploadID
 	}
-
 	return uploadIds, nil
 }
 
@@ -522,7 +605,7 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 
 	// _schemaVersion is still in the list of fields to remove. Although we don't query for it, data can still exist for it
 	// until BACK-1281 is done.
-	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0}
+	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0, "_migrationMarker": 0}
 
 	if p.Latest {
 		latest := &latestIterator{pos: -1}
@@ -540,18 +623,39 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 			query := generateMongoQuery(p)
 			query["type"] = theType
 			opts := options.FindOne().SetProjection(removeFieldsForReturn).SetSort(bson.M{"time": -1})
-			result, resultErr := dataCollection(c).
-				FindOne(c.context, query, opts).
-				DecodeBytes()
-			if resultErr != nil {
-				if resultErr == mongo.ErrNoDocuments {
-					continue
+			// collections to search. stop at first collection that has data.
+			collections := []*mongo.Collection{
+				dataCollection(c),
+			}
+			if theType == "upload" {
+				// If type is "upload", try both the dataSetsCollection, then
+				// dataCollection as it may exist in both, or just the
+				// original as the migration happens.
+				collections = []*mongo.Collection{
+					dataSetsCollection(c),
+					dataCollection(c),
 				}
-				err = resultErr
+			}
+			for _, collection := range collections {
+				result, resultErr := collection.
+					FindOne(c.context, query, opts).
+					DecodeBytes()
+				if resultErr != nil {
+					if resultErr == mongo.ErrNoDocuments {
+						continue
+					}
+					err = resultErr
+					break
+				}
+
+				latest.results = append(latest.results, result)
+				// Stop at first collection that has data to avoid adding
+				// document twice if it exists.
 				break
 			}
-
-			latest.results = append(latest.results, result)
+			if err != nil {
+				break
+			}
 		}
 		return latest, err
 	}
