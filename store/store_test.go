@@ -50,18 +50,28 @@ func before(t *testing.T, docs ...interface{}) *MongoStoreClient {
 	dataSetsCollection(store).Drop(context.TODO())
 
 	if len(docs) > 0 {
-		if _, err := dataCollection(store).InsertMany(store.context, docs); err != nil {
-			t.Error("Unable to insert documents", err)
-		}
-		// Insert into dataSetsCollection as well if type == "upload" Note
-		// still inserting into dataCollection to mimick data type upload
-		// being in both collections as migration happens.
+		// Once uploads are migrated, we have to mimic the behaviour of the
+		// production services where they write uploads to the deviceDataSets
+		// collection and data to the deviceData collection
 		for _, docRaw := range docs {
-			doc, ok := docRaw.(bson.M)
-			if !ok || doc["type"] != "upload" {
-				continue
+			var datumType string
+			switch typedDoc := docRaw.(type) {
+			case TestDataSchema:
+				if typedDoc.Type != nil {
+					datumType = *typedDoc.Type
+				}
+			case bson.M:
+				if typ, ok := typedDoc["type"].(string); ok {
+					datumType = typ
+				}
+			default:
+				t.Errorf("Could not insert unhandled type %T into appropriate collection", docRaw)
 			}
-			if _, err := dataSetsCollection(store).InsertOne(store.context, doc); err != nil {
+			collection := dataCollection(store)
+			if datumType == "upload" {
+				collection = dataSetsCollection(store)
+			}
+			if _, err := collection.InsertOne(store.context, docRaw); err != nil {
 				t.Error("Unable to insert document", err)
 			}
 		}
@@ -94,15 +104,6 @@ func getCursors(exPlans interface{}) []string {
 		}
 	}
 	return cursors
-}
-
-func contains(s []string, e string) bool {
-	for _, a := range s {
-		if strings.Contains(a, e) {
-			return true
-		}
-	}
-	return false
 }
 
 func basicQuery() bson.M {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"strconv"
@@ -80,6 +81,14 @@ type (
 	latestIterator struct {
 		results []bson.Raw
 		pos     int
+	}
+
+	// multiStorageIterator is a StorageIterator reads from multiple iterators
+	// until there is no more data this is needed in the case that we are
+	// reading multiple types and need to read both uploads and data.
+	multiStorageIterator struct {
+		iters          []StorageIterator
+		currentIterIdx int
 	}
 )
 
@@ -565,32 +574,23 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 		"_active":     true,
 		"_userId":     userID,
 		"time":        bson.M{"$gte": dateTime},
-		"type":        "upload",
+		"type":        "upload", // redundant since all types in collection is deviceDataSets is upload but just leaving the original query here.
 		"deviceModel": bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
 	}
 
-	type Object struct {
+	var objects []struct {
 		UploadID string `bson:"uploadId"`
 	}
-	var objects []Object
 
-	collections := []*mongo.Collection{
-		dataCollection(c),
-		dataSetsCollection(c),
+	cursor, err := dataSetsCollection(c).Find(c.context, query, opts)
+	if err != nil {
+		return nil, err
 	}
-	for _, collection := range collections {
-		cursor, err := collection.Find(c.context, query, opts)
-		if err != nil {
-			return nil, err
-		}
+	defer cursor.Close(c.context)
 
-		defer cursor.Close(c.context)
-		var tempObjects []Object
-		err = cursor.All(c.context, &tempObjects)
-		if err != nil {
-			return nil, err
-		}
-		objects = append(objects, tempObjects...)
+	err = cursor.All(c.context, &objects)
+	if err != nil {
+		return nil, err
 	}
 
 	uploadIds := make([]string, len(objects))
@@ -624,45 +624,53 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 			query["type"] = theType
 			opts := options.FindOne().SetProjection(removeFieldsForReturn).SetSort(bson.M{"time": -1})
 			// collections to search. stop at first collection that has data.
-			collections := []*mongo.Collection{
-				dataCollection(c),
-			}
+			collection := dataCollection(c)
 			if theType == "upload" {
-				// If type is "upload", try both the dataSetsCollection, then
-				// dataCollection as it may exist in both, or just the
-				// original as the migration happens.
-				collections = []*mongo.Collection{
-					dataSetsCollection(c),
-					dataCollection(c),
-				}
+				// Uploads are only in the deviceDataSets collection after migration completes.
+				collection = dataSetsCollection(c)
 			}
-			for _, collection := range collections {
-				result, resultErr := collection.
-					FindOne(c.context, query, opts).
-					DecodeBytes()
-				if resultErr != nil {
-					if resultErr == mongo.ErrNoDocuments {
-						continue
-					}
-					err = resultErr
-					break
+			result, resultErr := collection.
+				FindOne(c.context, query, opts).
+				DecodeBytes()
+			if resultErr != nil {
+				if resultErr == mongo.ErrNoDocuments {
+					continue
 				}
+				err = resultErr
+				break
+			}
 
-				latest.results = append(latest.results, result)
-				// Stop at first collection that has data to avoid adding
-				// document twice if it exists.
-				break
-			}
-			if err != nil {
-				break
-			}
+			latest.results = append(latest.results, result)
 		}
 		return latest, err
 	}
 
 	opts := options.Find().SetProjection(removeFieldsForReturn)
-	return dataCollection(c).
-		Find(c.context, generateMongoQuery(p), opts)
+
+	// If query only needs to read from one collection use the collection directly.
+	switch {
+	case len(p.Types) == 1 && p.Types[0] == "upload":
+		return dataSetsCollection(c).Find(c.context, generateMongoQuery(p), opts)
+	// Have to check for empty string as sometimes that is the type sent.
+	case len(p.Types) > 0 && !contains("upload", p.Types) && p.Types[0] != "":
+		return dataCollection(c).Find(c.context, generateMongoQuery(p), opts)
+	}
+
+	// Otherwise query needs to read from both deviceData and deviceDataSets collection.
+	dataIter, err := dataCollection(c).Find(c.context, generateMongoQuery(p), opts)
+	if err != nil {
+		return nil, err
+	}
+	dataSetIter, err := dataSetsCollection(c).Find(c.context, generateMongoQuery(p), opts)
+	if err != nil {
+		return nil, err
+	}
+	return &multiStorageIterator{
+		iters: []StorageIterator{
+			dataIter,
+			dataSetIter,
+		},
+	}, nil
 }
 
 func (l *latestIterator) Next(context.Context) bool {
@@ -676,4 +684,42 @@ func (l *latestIterator) Decode(result interface{}) error {
 
 func (l *latestIterator) Close(context.Context) error {
 	return nil
+}
+
+func (l *multiStorageIterator) Next(ctx context.Context) bool {
+	if l.currentIterIdx >= len(l.iters) {
+		return false
+	}
+	hasNext := l.iters[l.currentIterIdx].Next(ctx)
+	if hasNext {
+		return true
+	}
+	l.currentIterIdx++
+	return l.Next(ctx)
+}
+
+func (l *multiStorageIterator) Decode(result interface{}) error {
+	if l.currentIterIdx >= len(l.iters) {
+		return io.EOF
+	}
+
+	return l.iters[l.currentIterIdx].Decode(result)
+}
+
+func (l *multiStorageIterator) Close(ctx context.Context) error {
+	for _, iter := range l.iters {
+		if err := iter.Close(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func contains(needle string, haystack []string) bool {
+	for _, x := range haystack {
+		if needle == x {
+			return true
+		}
+	}
+	return false
 }
