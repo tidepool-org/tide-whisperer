@@ -33,6 +33,14 @@ func (mock *GatekeeperMock) UsersInGroup(groupID string) (UsersPermissions, erro
 	}
 }
 
+func (mock *GatekeeperMock) GroupsForUser(userID string) (UsersPermissions, error) {
+	if mock.expectedPermissions != nil || mock.expectedError != nil {
+		return UsersPermissions{userID: mock.expectedPermissions}, mock.expectedError
+	} else {
+		return UsersPermissions{userID: Permissions{userID: Allowed}}, nil
+	}
+}
+
 func (mock *GatekeeperMock) SetPermissions(userID, groupID string, permissions Permissions) (Permissions, error) {
 	return Permissions{userID: Allowed}, nil
 }
@@ -48,5 +56,9 @@ func (mock *SeagullMock) GetPrivatePair(userID, hashName, token string) *Private
 
 func (mock *SeagullMock) GetCollection(userID, collectionName, token string, v interface{}) error {
 	json.Unmarshal([]byte(`{"Something":"anit no thing", "patient": {"birthday": "2016-01-01"}}`), &v)
+	return nil
+}
+
+func (mock *SeagullMock) UpdateCollection(userID, collectionName, token string, v interface{}) error {
 	return nil
 }

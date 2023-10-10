@@ -1,23 +1,32 @@
-sudo: false
-
-dist: focal
+dist: jammy
 
 language: go
 
 go:
-  - 1.19
+  - 1.21.3
+
+services:
+  - docker
 
 env:
   global:
-    - MONGODB=5.3.2
+    - MONGODB=mongodb-linux-x86_64-ubuntu2204-6.0.10
+    - MONGOSH=mongosh-2.0.2-linux-x64
+
+cache:
+  directories:
+    - $HOME/.cache/go-build
 
 before_install:
   - sudo apt-get remove -y mongodb-org mongodb-org-mongos mongodb-org-server mongodb-org-shell mongodb-org-tools
-  - wget https://fastdl.mongodb.org/linux/mongodb-linux-x86_64-ubuntu2004-${MONGODB}.tgz -O /tmp/mongodb.tgz
+  - wget https://fastdl.mongodb.org/linux/${MONGODB}.tgz -O /tmp/mongodb.tgz
   - tar -xf /tmp/mongodb.tgz
+  - wget https://downloads.mongodb.com/compass/${MONGOSH}.tgz -O /tmp/mongosh.tgz
+  - tar -xf /tmp/mongosh.tgz
   - mkdir /tmp/data
-  - ${PWD}/mongodb-linux-x86_64-ubuntu2004-${MONGODB}/bin/mongod --dbpath /tmp/data --bind_ip 127.0.0.1 --logpath ${PWD}/mongod.log &> /dev/null &
+  - ${PWD}/${MONGODB}/bin/mongod --dbpath /tmp/data --bind_ip 127.0.0.1 --replSet rs0 --logpath ${PWD}/mongod.log &> /dev/null &
   - until nc -z localhost 27017; do echo Waiting for MongoDB; sleep 1; done
+  - ${PWD}/${MONGOSH}/bin/mongosh --eval 'rs.initiate(); while (rs.status().startupStatus || (rs.status().hasOwnProperty("myState") && rs.status().myState != 1)) { printjson( rs.status() ); sleep(1000); }; printjson( rs.status() );'
 
 addons:
   artifacts:
@@ -26,9 +35,6 @@ addons:
       - $(git ls-files -o deploy/*/*-*.tar.gz | tr "\n" ":")
     target_paths:
       - /
-
-services:
-  - docker
 
 script:
   - ./build.sh

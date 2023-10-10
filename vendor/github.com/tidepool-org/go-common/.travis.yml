@@ -1,11 +1,13 @@
+dist: jammy
+
 language: go
 
 go:
- - 1.11.4
+  - 1.21.3
 
-before_install:
-  npm install -g snyk
+cache:
+  directories:
+    - $HOME/.cache/go-build
 
 script:
-  - snyk test --dev --org=tidepool
-  - snyk monitor --org=tidepool
+  - ./test.sh
