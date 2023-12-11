@@ -3,11 +3,11 @@ dist: jammy
 language: go
 
 go:
-  - 1.21.3
+  - 1.21.5
 
 cache:
   directories:
     - $HOME/.cache/go-build
 
 script:
-  - ./test.sh
+  - make build test-cover

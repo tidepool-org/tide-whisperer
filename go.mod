@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.4.0
 	github.com/gorilla/pat v1.0.1
 	github.com/prometheus/client_golang v1.17.0
-	github.com/tidepool-org/go-common v0.11.1-0.20231027024255-3e797fc79ea1
+	github.com/tidepool-org/go-common v0.11.1-0.20231210182759-3e443cc94b9f
 	go.mongodb.org/mongo-driver v1.12.1
 )
 
