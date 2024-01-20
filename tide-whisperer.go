@@ -357,8 +357,10 @@ func main() {
 			// XXX use metrics
 			//log.Printf("%s request %s user %s GetDeviceData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 		}
+		if writeCount > 0 {
+			log.Printf("%s request %s user %s params: %#v", dataAPIPrefix, requestID, userID, *queryParams)
+		}
 		log.Printf("%s request %s user %s took %.3fs returned %d records", dataAPIPrefix, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
-		log.Printf("%s request %s user %s params: %#v", dataAPIPrefix, requestID, userID, *queryParams)
 	}))
 
 	// The /data/userId endpoint retrieves device/health data for a user based on a set of parameters
