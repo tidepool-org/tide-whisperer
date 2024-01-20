@@ -204,7 +204,7 @@ func NewMongoStoreClient(config *tpMongo.Config) *MongoStoreClient {
 }
 
 // WithContext returns a shallow copy of c with its context changed
-// to ctx. The provided ctx must be non-nil.
+// to ctx. The provided ctx must be no-nil.
 func (c *MongoStoreClient) WithContext(ctx context.Context) *MongoStoreClient {
 	if ctx == nil {
 		panic("nil context")
@@ -646,7 +646,11 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 	}
 
 	opts := options.Find().SetProjection(removeFieldsForReturn)
-
+	if p.UploadID != "" {
+		// Fix the bad totalKeysExamined / nReturned ratio of bad planning when
+		// uploadId is set
+		opts = opts.SetHint("UploadId")
+	}
 	// If query only needs to read from one collection use the collection directly.
 	switch {
 	case len(p.Types) == 1 && p.Types[0] == "upload":
@@ -722,4 +726,40 @@ func contains(needle string, haystack []string) bool {
 		}
 	}
 	return false
+}
+
+// DebugString returns a simple "shape" of a Params used for debugging requests.
+func (p *Params) DebugString() string {
+	var parts []string
+
+	if p.UserID != "" {
+		parts = append(parts, "[hasUserId]")
+	} else {
+		parts = append(parts, "[noUserId]")
+	}
+
+	if len(p.Types) > 0 {
+		parts = append(parts, "[hasTypes]")
+	} else {
+		parts = append(parts, "[noTypes]")
+	}
+
+	if !p.Date.Start.IsZero() || !p.Date.End.IsZero() {
+		parts = append(parts, "[hasDate]")
+	} else {
+		parts = append(parts, "[noHasDate]")
+	}
+
+	if p.Latest {
+		parts = append(parts, "[hasLatest]")
+	} else {
+		parts = append(parts, "[noLatest]")
+	}
+
+	if p.UploadID != "" {
+		parts = append(parts, "[hasUploadID]")
+	} else {
+		parts = append(parts, "[noUploadID]")
+	}
+	return strings.Join(parts, "")
 }
