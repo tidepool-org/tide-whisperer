@@ -645,8 +645,12 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 		return latest, err
 	}
 
-	opts := options.Find().SetProjection(removeFieldsForReturn).SetBatchSize(20000)
-
+	opts := options.Find().SetProjection(removeFieldsForReturn)
+	if p.UploadID != "" {
+		// Fix the bad totalKeysExamined / nReturned ratio of bad planning when
+		// uploadId is set
+		opts = opts.SetHint("UploadID")
+	}
 	// If query only needs to read from one collection use the collection directly.
 	switch {
 	case len(p.Types) == 1 && p.Types[0] == "upload":
