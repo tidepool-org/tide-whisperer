@@ -645,7 +645,7 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 		return latest, err
 	}
 
-	opts := options.Find().SetProjection(removeFieldsForReturn)
+	opts := options.Find().SetProjection(removeFieldsForReturn).SetBatchSize(20000)
 
 	// If query only needs to read from one collection use the collection directly.
 	switch {
