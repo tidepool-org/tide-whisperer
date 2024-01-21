@@ -649,7 +649,7 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 	if p.UploadID != "" {
 		// Fix the bad totalKeysExamined / nReturned ratio of bad planning when
 		// uploadId is set
-		opts = opts.SetHint("UploadID")
+		opts = opts.SetHint("UploadId")
 	}
 	// If query only needs to read from one collection use the collection directly.
 	switch {
