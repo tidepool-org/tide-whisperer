@@ -3,7 +3,7 @@ dist: jammy
 language: go
 
 go:
-  - 1.21.5
+  - 1.21.6
 
 cache:
   directories:
