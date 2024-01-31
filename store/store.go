@@ -727,3 +727,81 @@ func contains(needle string, haystack []string) bool {
 	}
 	return false
 }
+
+// DebugString returns a simple "shape" of a Params used for debugging requests.
+func (p *Params) DebugString() string {
+	var parts []string
+
+	if p.UserID != "" {
+		parts = append(parts, "[hasUserId]")
+	} else {
+		parts = append(parts, "[nonUserId]")
+	}
+
+	if len(p.Types) > 0 {
+		parts = append(parts, "[hasTypes]")
+	} else {
+		parts = append(parts, "[nonTypes]")
+	}
+
+	if !p.Date.Start.IsZero() {
+		parts = append(parts, "[hasStartDate]")
+	} else {
+		parts = append(parts, "[nonStartDate]")
+	}
+
+	if !p.Date.End.IsZero() {
+		parts = append(parts, "[hasEndDate]")
+	} else {
+		parts = append(parts, "[nonEndDate]")
+	}
+
+	if p.Carelink {
+		parts = append(parts, "[hasCarelink]")
+	} else {
+		parts = append(parts, "[nonCarelink]")
+	}
+
+	if p.Dexcom {
+		parts = append(parts, "[hasDexcom]")
+	} else {
+		parts = append(parts, "[nonDexcom]")
+	}
+
+	if p.DeviceID != "" {
+		parts = append(parts, "[hasDeviceID]")
+	} else {
+		parts = append(parts, "[nonDeviceID]")
+	}
+
+	if p.Latest {
+		parts = append(parts, "[hasLatest]")
+	} else {
+		parts = append(parts, "[nonLatest]")
+	}
+
+	if p.Medtronic {
+		parts = append(parts, "[hasMedtronic]")
+	} else {
+		parts = append(parts, "[nonMedtronic]")
+	}
+
+	if p.MedtronicDate != "" {
+		parts = append(parts, "[hasMedtronicDate]")
+	} else {
+		parts = append(parts, "[nonMedtronicDate]")
+	}
+
+	if len(p.MedtronicUploadIds) > 0 {
+		parts = append(parts, "[hasMedtronicUploadIds]")
+	} else {
+		parts = append(parts, "[nonMedtronicUploadIds]")
+	}
+
+	if p.UploadID != "" {
+		parts = append(parts, "[hasUploadID]")
+	} else {
+		parts = append(parts, "[nonUploadID]")
+	}
+	return strings.Join(parts, "")
+}

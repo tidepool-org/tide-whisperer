@@ -74,6 +74,16 @@ var (
 		Name: "tidepool_tide_mongo_error_count",
 		Help: "Counts Mongo errors.",
 	}, []string{"type"})
+
+	paramsShapeCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "tidepool_tide_params_count",
+		Help: "Count of different shape of query Params.",
+	}, []string{"params"})
+
+	paramsShapeDuration = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "tidepool_tide_params_duration",
+		Help: "Duration in seconds of different shape of query Params.",
+	}, []string{"params"})
 )
 
 const (
@@ -358,7 +368,8 @@ func main() {
 			//log.Printf("%s request %s user %s GetDeviceData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 		}
 		if writeCount > 0 {
-			log.Printf("%s request %s user %s params: %#v", dataAPIPrefix, requestID, userID, *queryParams)
+			paramsShapeCount.WithLabelValues(queryParams.DebugString()).Inc()
+			paramsShapeDuration.WithLabelValues(queryParams.DebugString()).Add(time.Now().Sub(queryStart).Seconds())
 		}
 		log.Printf("%s request %s user %s took %.3fs returned %d records", dataAPIPrefix, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
 	}))
