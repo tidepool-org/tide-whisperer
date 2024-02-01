@@ -84,6 +84,12 @@ var (
 		Name: "tidepool_tide_params_duration",
 		Help: "Duration in seconds of different shape of query Params.",
 	}, []string{"params"})
+
+	dbRetrievalLatencies = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "tidepool_tide_db_latencies",
+		Help:    "Tide-Whisperer database retrieval latencies only, ignoring sending of data to client or proxying.",
+		Buckets: prometheus.ExponentialBuckets(.010, 2, 21),
+	})
 )
 
 const (
@@ -370,6 +376,7 @@ func main() {
 		if writeCount > 0 {
 			paramsShapeCount.WithLabelValues(queryParams.DebugString()).Inc()
 			paramsShapeDuration.WithLabelValues(queryParams.DebugString()).Add(time.Now().Sub(queryStart).Seconds())
+			dbRetrievalLatencies.Observe(time.Now().Sub(queryStart).Seconds())
 		}
 		log.Printf("%s request %s user %s took %.3fs returned %d records", dataAPIPrefix, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
 	}))
