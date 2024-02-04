@@ -85,10 +85,10 @@ var (
 		Help: "Duration in seconds of different shape of query Params.",
 	}, []string{"params"})
 
-	dbRetrievalLatencies = prometheus.NewHistogram(prometheus.HistogramOpts{
+	dbRetrievalLatencies = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name:    "tidepool_tide_db_latencies",
 		Help:    "Tide-Whisperer database retrieval latencies only, ignoring sending of data to client or proxying.",
-		Buckets: prometheus.ExponentialBuckets(.010, 2, 21),
+		Buckets: prometheus.ExponentialBuckets(.01, 1.75, 20),
 	})
 )
 
