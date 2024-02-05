@@ -88,7 +88,7 @@ var (
 	dbRetrievalLatencies = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name:    "tidepool_tide_db_latencies",
 		Help:    "Tide-Whisperer database retrieval latencies only, ignoring sending of data to client or proxying.",
-		Buckets: prometheus.ExponentialBuckets(.01, 1.75, 20),
+		Buckets: []float64{0.5, 1, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000, 30_000, 60_000, 300_000, 600_000, 1_800_000, 3_600_000},
 	})
 )
 
@@ -376,7 +376,7 @@ func main() {
 		if writeCount > 0 {
 			paramsShapeCount.WithLabelValues(queryParams.DebugString()).Inc()
 			paramsShapeDuration.WithLabelValues(queryParams.DebugString()).Add(time.Now().Sub(queryStart).Seconds())
-			dbRetrievalLatencies.Observe(time.Now().Sub(queryStart).Seconds())
+			dbRetrievalLatencies.Observe(float64(time.Now().Sub(queryStart).Milliseconds()))
 		}
 		log.Printf("%s request %s user %s took %.3fs returned %d records", dataAPIPrefix, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
 	}))
