@@ -75,20 +75,16 @@ var (
 		Help: "Counts Mongo errors.",
 	}, []string{"type"})
 
-	paramsShapeCount = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "tidepool_tide_params_count",
-		Help: "Count of different shape of query Params.",
-	}, []string{"params"})
-
-	paramsShapeDuration = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "tidepool_tide_params_duration",
-		Help: "Duration in seconds of different shape of query Params.",
-	}, []string{"params"})
-
-	dbRetrievalLatencies = promauto.NewHistogram(prometheus.HistogramOpts{
-		Name:    "tidepool_tide_db_latencies",
-		Help:    "Tide-Whisperer database retrieval latencies only, ignoring sending of data to client or proxying.",
+	dbLatenciesHistEnvoy = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "tidepool_tide_db_latencies_envoy_buckets",
+		Help:    "Tide-Whisperer database retrieval latencies only, ignoring sending of data to client or proxying, using the same bucket ranges as envoy. This allows a closer comparison to the envoy metrics.",
 		Buckets: []float64{0.5, 1, 5, 10, 25, 50, 100, 250, 500, 1_000, 2_500, 5_000, 10_000, 30_000, 60_000, 300_000, 600_000, 1_800_000, 3_600_000},
+	})
+
+	dbLatenciesHist = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "tidepool_tide_db_latencies",
+		Help:    "Tide-Whisperer database retrieval latencies only, ignoring sending of data to client or proxying, uses a tighter range towards the higher end of the buckets for a more accurate approximation of the true top latencies.",
+		Buckets: prometheus.ExponentialBuckets(10, 1.75, 20),
 	})
 )
 
@@ -341,12 +337,18 @@ func main() {
 
 		res.Write([]byte("["))
 
+		// queryOnlyStart will be used to determine how much time it takes to read data from the DB,
+		// but not how long it takes to serialize or send the data to the user.
+		queryOnlyStart := time.Now()
+		var queryOnlyDuration time.Duration
 		for iter.Next(req.Context()) {
 			var results map[string]interface{}
 			err := iter.Decode(&results)
 			if err != nil {
 				mongoErrorCount.WithLabelValues("decode").Inc()
 				log.Printf("%s request %s user %s Mongo Decode returned error: %s", dataAPIPrefix, requestID, userID, err)
+			} else {
+				queryOnlyDuration += time.Now().Sub(queryOnlyStart)
 			}
 
 			if len(results) > 0 {
@@ -362,6 +364,7 @@ func main() {
 					writeCount++
 				}
 			}
+			queryOnlyStart = time.Now()
 		}
 
 		if writeCount > 0 {
@@ -374,9 +377,8 @@ func main() {
 			//log.Printf("%s request %s user %s GetDeviceData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 		}
 		if writeCount > 0 {
-			paramsShapeCount.WithLabelValues(queryParams.DebugString()).Inc()
-			paramsShapeDuration.WithLabelValues(queryParams.DebugString()).Add(time.Now().Sub(queryStart).Seconds())
-			dbRetrievalLatencies.Observe(float64(time.Now().Sub(queryStart).Milliseconds()))
+			dbLatenciesHist.Observe(float64(queryOnlyDuration.Milliseconds()))
+			dbLatenciesHistEnvoy.Observe(float64(queryOnlyDuration.Milliseconds()))
 		}
 		log.Printf("%s request %s user %s took %.3fs returned %d records", dataAPIPrefix, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
 	}))
