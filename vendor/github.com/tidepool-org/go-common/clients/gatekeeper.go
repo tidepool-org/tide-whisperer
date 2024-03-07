@@ -28,6 +28,11 @@ type (
 		UsersInGroup(groupID string) (UsersPermissions, error)
 
 		//userID  -- the Tidepool-assigned userID
+		//
+		// returns the map of user id to Permissions
+		GroupsForUser(userId string) (UsersPermissions, error)
+
+		//userID  -- the Tidepool-assigned userID
 		//groupID  -- the Tidepool-assigned groupID
 		//permissions -- the permisson we want to give the user for the group
 		SetPermissions(userID, groupID string, permissions Permissions) (Permissions, error)
@@ -46,13 +51,43 @@ type (
 	}
 
 	Permission       map[string]interface{}
-	Permissions      map[string]Permission
+	Permissions      map[PermissionScope]Permission
 	UsersPermissions map[string]Permissions
+)
+
+// PermissionScope represents the specific permissions granted to a user.
+//
+// PermissionScope is a type alias rather than a user-defined type, because
+// the implementation of the gatekeeper client is inconsistent in its use of
+// UserPermissions and Permissions. Specifically, the UserInGroup function
+// returns Permissions, but it should be returning UserPermissions. As a
+// result, the Permissions type's keys have to include both strings (user ids)
+// in addition to PermissionScope.
+//
+// If a future update migrates UserInGroup to return UserPermissions, then
+// PermissionScope could be migrated to a user-defined type, and provide a
+// little more compile-time type checking.
+type PermissionScope = string
+
+const (
+	// PermissionFollow indicates that the user is permitted to follow another
+	// user via the Care Partner app.
+	PermissionFollow PermissionScope = "follow"
+	PermissionNote   PermissionScope = "note"
+	PermissionUpload PermissionScope = "upload"
+	PermissionView   PermissionScope = "view"
 )
 
 var (
 	Allowed Permission = Permission{}
 )
+
+// Has performs a lookup, returning true if permission is granted.
+//
+// ... and false otherwise.
+func (p Permissions) Has(scope PermissionScope) bool {
+	return p[scope] != nil
+}
 
 func NewGatekeeperClientBuilder() *gatekeeperClientBuilder {
 	return &gatekeeperClientBuilder{}
@@ -92,6 +127,14 @@ func (b *gatekeeperClientBuilder) Build() *GatekeeperClient {
 	}
 }
 
+// UserInGroup reports the permissions granted to a user.
+//
+// The permissions are grouped by the user to which they apply. The user's
+// permissions to their own data are included.
+//
+// This should really be returning UserPermissions, as the response from the
+// server is a JSON object with user ids as keys, and permissions nested under
+// them.
 func (client *GatekeeperClient) UserInGroup(userID, groupID string) (Permissions, error) {
 	host := client.getHost()
 	if host == nil {
@@ -128,6 +171,36 @@ func (client *GatekeeperClient) UsersInGroup(groupID string) (UsersPermissions, 
 		return nil, errors.New("No known gatekeeper hosts")
 	}
 	host.Path = path.Join(host.Path, "access", groupID)
+
+	req, _ := http.NewRequest("GET", host.String(), nil)
+	req.Header.Add("x-tidepool-session-token", client.tokenProvider.TokenProvide())
+
+	res, err := client.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode == 200 {
+		retVal := make(UsersPermissions)
+		if err := json.NewDecoder(res.Body).Decode(&retVal); err != nil {
+			log.Println(err)
+			return nil, &status.StatusError{status.NewStatus(500, "UserInGroup Unable to parse response.")}
+		}
+		return retVal, nil
+	} else if res.StatusCode == 404 {
+		return nil, nil
+	} else {
+		return nil, &status.StatusError{status.NewStatusf(res.StatusCode, "Unknown response code from service[%s]", req.URL)}
+	}
+}
+
+func (client *GatekeeperClient) GroupsForUser(userID string) (UsersPermissions, error) {
+	host := client.getHost()
+	if host == nil {
+		return nil, errors.New("No known gatekeeper hosts")
+	}
+	host.Path = path.Join(host.Path, "access", "groups", userID)
 
 	req, _ := http.NewRequest("GET", host.String(), nil)
 	req.Header.Add("x-tidepool-session-token", client.tokenProvider.TokenProvide())

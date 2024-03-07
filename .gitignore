@@ -1,6 +1,6 @@
 deploy/
 dist/
 tide-whisperer
-artifact_go.sh
+artifact_docker.sh
 .DS_Store
 .idea

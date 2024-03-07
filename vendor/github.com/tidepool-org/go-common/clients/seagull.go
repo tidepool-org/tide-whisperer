@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"bytes"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -26,6 +27,13 @@ type (
 		// token -- a server token or the user token
 		// v - the interface to return the value in
 		GetCollection(userID, collectionName, token string, v interface{}) error
+		// Updates arbitrary collection information
+		//
+		// userID -- the Tidepool-assigned userId
+		// collectionName -- the collection being retrieved
+		// token -- a server token or the user token
+		// v - the interface to return the value in
+		UpdateCollection(userID, collectionName, token string, v interface{}) error
 	}
 
 	SeagullClient struct {
@@ -125,6 +133,41 @@ func (client *SeagullClient) GetCollection(userID, collectionName, token string,
 			log.Println("Error parsing JSON results", err)
 			return err
 		}
+		return nil
+	case http.StatusNotFound:
+		log.Printf("No [%s] collection found for [%s]", collectionName, userID)
+		return nil
+	default:
+		return &status.StatusError{status.NewStatusf(res.StatusCode, "Unknown response code from service[%s]", req.URL)}
+	}
+
+}
+
+func (client *SeagullClient) UpdateCollection(userID, collectionName, token string, v interface{}) error {
+	host := client.getHost()
+	if host == nil {
+		return nil
+	}
+	host.Path = path.Join(host.Path, userID, collectionName)
+
+	body, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	req, _ := http.NewRequest("POST", host.String(), bytes.NewBuffer(body))
+	req.Header.Add("content-type", "application/json")
+	req.Header.Add("x-tidepool-session-token", token)
+
+	res, err := client.httpClient.Do(req)
+	if err != nil {
+		log.Printf("Problem when looking up collection for userID[%s]. %s", userID, err)
+		return err
+	}
+	defer res.Body.Close()
+
+	switch res.StatusCode {
+	case http.StatusOK:
 		return nil
 	case http.StatusNotFound:
 		log.Printf("No [%s] collection found for [%s]", collectionName, userID)
