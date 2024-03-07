@@ -1,5 +1,5 @@
 # Development
-FROM golang:1.21.6-alpine AS development
+FROM golang:1.22.1-alpine AS development
 WORKDIR /go/src/github.com/tidepool-org/tide-whisperer
 RUN adduser -D tidepool && \
     apk add --no-cache gcc musl-dev && \

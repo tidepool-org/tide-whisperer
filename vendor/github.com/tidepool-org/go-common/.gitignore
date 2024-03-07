@@ -1,2 +1,4 @@
+/node_modules/
+/tools/
 .idea
 cover.out

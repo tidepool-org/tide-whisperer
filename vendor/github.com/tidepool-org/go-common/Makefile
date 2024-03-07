@@ -1,4 +1,13 @@
-# go-common Makefile
+SHELL = /bin/sh
+
+TOOLS_BIN = tools/bin
+NPM_BIN = node_modules/.bin
+
+OAPI_CODEGEN = $(TOOLS_BIN)/oapi-codegen
+SWAGGER_CLI = $(NPM_BIN)/swagger-cli
+
+NPM_PKG_SPECS = \
+	@apidevtools/swagger-cli@^4.0.4
 
 ifeq ($(CI),)
 GO_BUILD_FLAGS =
@@ -20,9 +29,22 @@ test:
 test-cover:
 	go test -coverprofile cover.out $(GO_TEST_FLAGS) ./...
 
-# Generates client files
-generate:
-	swagger-cli bundle ../TidepoolApi/reference/summary.v1.yaml -o ./spec/summary.v1.yaml -t yaml
-	oapi-codegen -package=api -generate=types spec/summary.v1.yaml > clients/summary/types.go
-	oapi-codegen -package=api -generate=client spec/summary.v1.yaml > clients/summary/client.go
+.PHONY: generate
+# Generates client api
+generate: $(SWAGGER_CLI) $(OAPI_CODEGEN)
+	$(SWAGGER_CLI) bundle ../TidepoolApi/reference/summary.v1.yaml -o ./spec/summary.v1.yaml -t yaml
+	$(OAPI_CODEGEN) -package=api -generate=types spec/summary.v1.yaml > clients/summary/types.go
+	$(OAPI_CODEGEN) -package=api -generate=client spec/summary.v1.yaml > clients/summary/client.go
 	cd clients/summary && go generate ./...
+
+$(OAPI_CODEGEN):
+	GOBIN=$(shell pwd)/$(TOOLS_BIN) go install github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@v2.0.0
+
+$(SWAGGER_CLI): npm-tools
+
+.PHONY: npm-tools
+npm-tools:
+# When using --no-save, any dependencies not included will be deleted, so one
+# has to install all the packages all at the same time. But it saves us from
+# having to muck with packages.json.
+	npm install --no-save --local $(NPM_PKG_SPECS)
