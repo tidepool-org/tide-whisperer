@@ -259,6 +259,22 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 					},
 				),
 		},
+		{
+			Keys: bson.D{
+				{Key: "_userId", Value: 1},
+				{Key: "deviceManufacturers", Value: 1},
+				{Key: "type", Value: 1},
+				{Key: "deletedTime", Value: 1},
+			},
+			Options: options.Index().
+				SetName("HasMedtronicDirectData").
+				SetPartialFilterExpression(
+					bson.D{
+						{Key: "_active", Value: true},
+						{Key: "_state", Value: "closed"},
+					},
+				),
+		},
 	}
 
 	if _, err := dataSetsCollection(c).Indexes().CreateMany(context.Background(), dataSetsIndexes); err != nil {
@@ -390,21 +406,11 @@ func (c *MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 		"deviceManufacturers": "Medtronic",
 	}
 
-	// Try reading from both collections until migration from type=upload from
-	// deviceData to deviceDataSets is complete.
-	err := dataCollection(c).FindOne(c.context, query).Err()
-	if err != nil && err != mongo.ErrNoDocuments {
+	err := dataSetsCollection(c).FindOne(c.context, query).Err()
+	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
 		return false, err
 	}
-	if err == nil {
-		return true, nil
-	}
-
-	err = dataSetsCollection(c).FindOne(c.context, query).Err()
-	if err != nil && err != mongo.ErrNoDocuments {
-		return false, err
-	}
-	if err == mongo.ErrNoDocuments {
+	if errors.Is(err, mongo.ErrNoDocuments) {
 		return false, nil
 	}
 
@@ -477,7 +483,7 @@ func (c *MongoStoreClient) HasMedtronicLoopDataAfter(userID string, date string)
 	}
 
 	err = dataCollection(c).FindOne(c.context, query, opts).Err()
-	if  err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
+	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
 		return false, err
 	}
 

@@ -335,7 +335,7 @@ func TestStore_EnsureIndexes(t *testing.T) {
 			Name: "_id_",
 		},
 		{
-			Key:        makeKeySlice("_userId", "origin.payload.device.manufacturer", "fakefield"),
+			Key: makeKeySlice("_userId", "origin.payload.device.manufacturer", "fakefield"),
 			PartialFilterExpression: bson.D{
 				{Key: "_active", Value: true},
 				{Key: "origin.payload.device.manufacturer", Value: "Medtronic"},
@@ -409,7 +409,7 @@ func TestStore_EnsureDataSetsIndexes(t *testing.T) {
 			Name: "_id_",
 		},
 		{
-			Key:        makeKeySlice("_userId", "deviceModel", "fakefield"),
+			Key: makeKeySlice("_userId", "deviceModel", "fakefield"),
 			PartialFilterExpression: bson.D{
 				{Key: "_active", Value: true},
 				{Key: "type", Value: "upload"},
@@ -421,6 +421,14 @@ func TestStore_EnsureDataSetsIndexes(t *testing.T) {
 				}},
 			},
 			Name: "GetLoopableMedtronicDirectUploadIdsAfter_v2_DateTime",
+		},
+		{
+			Key: makeKeySlice("_userId", "deviceManufacturers", "type", "deletedTime"),
+			PartialFilterExpression: bson.D{
+				{Key: "_active", Value: true},
+				{Key: "_state", Value: "closed"},
+			},
+			Name: "HasMedtronicDirectData",
 		},
 	}
 
