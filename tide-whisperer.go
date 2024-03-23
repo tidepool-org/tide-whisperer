@@ -75,6 +75,16 @@ var (
 		Help: "Counts Mongo errors.",
 	}, []string{"type"})
 
+	paramsShapeCount = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "tidepool_tide_params_count",
+		Help: "Count of different shape of query Params.",
+	}, []string{"params"})
+
+	paramsShapeDuration = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "tidepool_tide_params_duration",
+		Help: "Duration in seconds of different shape of query Params.",
+	}, []string{"params"})
+
 	dbLatenciesHistEnvoy = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name:    "tidepool_tide_db_latencies_envoy_buckets",
 		Help:    "Tide-Whisperer database retrieval latencies only, ignoring sending of data to client or proxying, using the same bucket ranges as envoy. This allows a closer comparison to the envoy metrics.",
@@ -372,7 +382,8 @@ func main() {
 		}
 		res.Write([]byte("]"))
 
-		if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
+		queryDurationSecs := time.Now().Sub(queryStart).Seconds()
+		if queryDurationSecs > slowQueryDuration {
 			// XXX use metrics
 			//log.Printf("%s request %s user %s GetDeviceData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 		}
@@ -381,6 +392,9 @@ func main() {
 			dbLatenciesHistEnvoy.Observe(float64(queryOnlyDuration.Milliseconds()))
 		}
 		log.Printf("%s request %s user %s took %.3fs returned %d records", dataAPIPrefix, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
+
+		paramsShapeCount.WithLabelValues(queryParams.DebugString()).Inc()
+		paramsShapeDuration.WithLabelValues(queryParams.DebugString()).Add(queryDurationSecs)
 	}))
 
 	// The /data/userId endpoint retrieves device/health data for a user based on a set of parameters
