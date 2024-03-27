@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.5.0
 	github.com/gorilla/pat v1.0.2
 	github.com/prometheus/client_golang v1.18.0
-	github.com/tidepool-org/go-common v0.11.1-0.20240306185825-1ddb2b762e00
+	github.com/tidepool-org/go-common v0.12.0
 	go.mongodb.org/mongo-driver v1.12.1
 )
 
@@ -18,7 +18,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cloudevents/sdk-go/protocol/kafka_sarama/v2 v2.14.0 // indirect
-	github.com/cloudevents/sdk-go/v2 v2.14.0 // indirect
+	github.com/cloudevents/sdk-go/v2 v2.15.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/eapache/go-resiliency v1.5.0 // indirect
 	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect

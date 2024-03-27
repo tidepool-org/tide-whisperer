@@ -4,3 +4,6 @@ tide-whisperer
 artifact_docker.sh
 .DS_Store
 .idea
+.vscode/
+*.envrc
+*.env

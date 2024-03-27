@@ -2,3 +2,6 @@
 /tools/
 .idea
 cover.out
+.vscode/
+*.envrc
+*.env
