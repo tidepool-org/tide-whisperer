@@ -183,7 +183,7 @@ github.com/prometheus/procfs/internal/util
 github.com/rcrowley/go-metrics
 # github.com/stretchr/testify v1.8.4
 ## explicit; go 1.20
-# github.com/tidepool-org/go-common v0.12.0
+# github.com/tidepool-org/go-common v0.12.1
 ## explicit; go 1.22
 github.com/tidepool-org/go-common
 github.com/tidepool-org/go-common/clients
@@ -270,13 +270,13 @@ go.uber.org/zap/internal/exit
 go.uber.org/zap/internal/pool
 go.uber.org/zap/internal/stacktrace
 go.uber.org/zap/zapcore
-# golang.org/x/crypto v0.18.0
+# golang.org/x/crypto v0.21.0
 ## explicit; go 1.18
 golang.org/x/crypto/md4
 golang.org/x/crypto/ocsp
 golang.org/x/crypto/pbkdf2
 golang.org/x/crypto/scrypt
-# golang.org/x/net v0.20.0
+# golang.org/x/net v0.23.0
 ## explicit; go 1.18
 golang.org/x/net/http2/hpack
 golang.org/x/net/internal/socks
@@ -285,7 +285,7 @@ golang.org/x/net/proxy
 ## explicit; go 1.18
 golang.org/x/sync/errgroup
 golang.org/x/sync/singleflight
-# golang.org/x/sys v0.16.0
+# golang.org/x/sys v0.18.0
 ## explicit; go 1.18
 golang.org/x/sys/unix
 golang.org/x/sys/windows
