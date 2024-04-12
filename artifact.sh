@@ -1,6 +1,6 @@
 #!/bin/sh -e
 
-wget -q -O artifact_go.sh 'https://raw.githubusercontent.com/tidepool-org/tools/master/artifact/artifact.sh'
-chmod +x artifact_go.sh
+wget -q -O artifact_docker.sh 'https://raw.githubusercontent.com/tidepool-org/tools/master/artifact/artifact.sh'
+chmod +x artifact_docker.sh
 
-./artifact_go.sh go
+./artifact_docker.sh

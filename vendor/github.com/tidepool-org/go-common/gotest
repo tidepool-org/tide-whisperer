@@ -1,8 +1,0 @@
-#! /bin/bash -eu
-
-TESTDIRS=$(find . -name "*_test.go" -and ! -path "./src/*" |sed s@/[^/]*go@@ |sed s@./@@ |uniq)
-
-for i in $TESTDIRS; do
-    echo Testing in $i:
-    (cd $i; go test -v)
-done

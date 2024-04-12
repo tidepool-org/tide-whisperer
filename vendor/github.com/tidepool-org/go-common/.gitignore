@@ -1,1 +1,8 @@
+/node_modules/
+/tools/
 .idea
+cover.out
+.vscode/
+*.envrc
+*.env
+*.test
