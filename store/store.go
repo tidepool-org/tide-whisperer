@@ -280,13 +280,24 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 				SetPartialFilterExpression(
 					bson.D{
 						{Key: "_active", Value: true},
-						{Key: "type", Value: "upload"},
 						{Key: "deviceModel", Value: bson.M{
 							"$exists": true,
 						}},
 						{Key: "time", Value: bson.M{
 							"$gte": medtronicIndexDateTime,
 						}},
+					},
+				),
+		},
+		{
+			Keys: bson.D{{Key: "_userId", Value: 1}, {Key: "deletedTime", Value: 1}},
+			Options: options.Index().
+				SetName("HasMedtronicDirectData").
+				SetPartialFilterExpression(
+					bson.D{
+						{Key: "_state", Value: "closed"},
+						{Key: "_active", Value: true},
+						{Key: "deviceManufacturers", Value: "Medtronic"},
 					},
 				),
 		},
@@ -438,7 +449,6 @@ func (c *MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 
 	query := bson.M{
 		"_userId": userID,
-		"type":    "upload",
 		"_state":  "closed",
 		"_active": true,
 		"deletedTime": bson.M{
@@ -447,17 +457,8 @@ func (c *MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 		"deviceManufacturers": "Medtronic",
 	}
 
-	// Try reading from both collections until migration from type=upload from
-	// deviceData to deviceDataSets is complete.
-	err := dataCollection(c).FindOne(c.context, query).Err()
-	if err != nil && err != mongo.ErrNoDocuments {
-		return false, err
-	}
-	if err == nil {
-		return true, nil
-	}
-
-	err = dataSetsCollection(c).FindOne(c.context, query).Err()
+	opts := options.FindOne().SetHint("HasMedtronicDirectData")
+	err := dataSetsCollection(c).FindOne(c.context, query, opts).Err()
 	if err != nil && err != mongo.ErrNoDocuments {
 		return false, err
 	}
@@ -574,7 +575,6 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 		"_active":     true,
 		"_userId":     userID,
 		"time":        bson.M{"$gte": dateTime},
-		"type":        "upload", // redundant since all types in collection is deviceDataSets is upload but just leaving the original query here.
 		"deviceModel": bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
 	}
 
