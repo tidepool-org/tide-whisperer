@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net"
 	"net/http"
 	"strings"
@@ -23,14 +24,35 @@ import (
 	"github.com/youmark/pkcs8"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
 	"go.mongodb.org/mongo-driver/event"
-	"go.mongodb.org/mongo-driver/internal"
+	"go.mongodb.org/mongo-driver/internal/httputil"
 	"go.mongodb.org/mongo-driver/mongo/readconcern"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
 	"go.mongodb.org/mongo-driver/tag"
 	"go.mongodb.org/mongo-driver/x/mongo/driver"
+	"go.mongodb.org/mongo-driver/x/mongo/driver/auth"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/wiremessage"
+)
+
+const (
+	// ServerMonitoringModeAuto indicates that the client will behave like "poll"
+	// mode when running on a FaaS (Function as a Service) platform, or like
+	// "stream" mode otherwise. The client detects its execution environment by
+	// following the rules for generating the "client.env" handshake metadata field
+	// as specified in the MongoDB Handshake specification. This is the default
+	// mode.
+	ServerMonitoringModeAuto = connstring.ServerMonitoringModeAuto
+
+	// ServerMonitoringModePoll indicates that the client will periodically check
+	// the server using a hello or legacy hello command and then sleep for
+	// heartbeatFrequencyMS milliseconds before running another check.
+	ServerMonitoringModePoll = connstring.ServerMonitoringModePoll
+
+	// ServerMonitoringModeStream indicates that the client will use a streaming
+	// protocol when the server supports it. The streaming protocol optimally
+	// reduces the time it takes for a client to discover server state changes.
+	ServerMonitoringModeStream = connstring.ServerMonitoringModeStream
 )
 
 // ContextDialer is an interface that can be implemented by types that can create connections. It should be used to
@@ -68,9 +90,9 @@ type ContextDialer interface {
 // The SERVICE_HOST and CANONICALIZE_HOST_NAME properties must not be used at the same time on Linux and Darwin
 // systems.
 //
-// AuthSource: the name of the database to use for authentication. This defaults to "$external" for MONGODB-X509,
-// GSSAPI, and PLAIN and "admin" for all other mechanisms. This can also be set through the "authSource" URI option
-// (e.g. "authSource=otherDb").
+// AuthSource: the name of the database to use for authentication. This defaults to "$external" for MONGODB-AWS,
+// MONGODB-OIDC, MONGODB-X509, GSSAPI, and PLAIN. It defaults to  "admin" for all other auth mechanisms. This can
+// also be set through the "authSource" URI option (e.g. "authSource=otherDb").
 //
 // Username: the username for authentication. This can also be set through the URI as a username:password pair before
 // the first @ character. For example, a URI for user "user", password "pwd", and host "localhost:27017" would be
@@ -90,6 +112,34 @@ type Credential struct {
 	Username                string
 	Password                string
 	PasswordSet             bool
+	OIDCMachineCallback     OIDCCallback
+	OIDCHumanCallback       OIDCCallback
+}
+
+// OIDCCallback is the type for both Human and Machine Callback flows.
+// RefreshToken will always be nil in the OIDCArgs for the Machine flow.
+type OIDCCallback func(context.Context, *OIDCArgs) (*OIDCCredential, error)
+
+// OIDCArgs contains the arguments for the OIDC callback.
+type OIDCArgs struct {
+	Version      int
+	IDPInfo      *IDPInfo
+	RefreshToken *string
+}
+
+// OIDCCredential contains the access token and refresh token.
+type OIDCCredential struct {
+	AccessToken  string
+	ExpiresAt    *time.Time
+	RefreshToken *string
+}
+
+// IDPInfo contains the information needed to perform OIDC authentication with
+// an Identity Provider.
+type IDPInfo struct {
+	Issuer        string
+	ClientID      string
+	RequestScopes []string
 }
 
 // BSONOptions are optional BSON marshaling and unmarshaling behaviors.
@@ -206,6 +256,7 @@ type ClientOptions struct {
 	RetryReads               *bool
 	RetryWrites              *bool
 	ServerAPIOptions         *ServerAPIOptions
+	ServerMonitoringMode     *string
 	ServerSelectionTimeout   *time.Duration
 	SRVMaxHosts              *int
 	SRVServiceName           *string
@@ -216,7 +267,6 @@ type ClientOptions struct {
 	ZstdLevel                *int
 
 	err error
-	uri string
 	cs  *connstring.ConnString
 
 	// AuthenticateToAnything skips server type checks when deciding if authentication is possible.
@@ -249,7 +299,7 @@ type ClientOptions struct {
 // Client creates a new ClientOptions instance.
 func Client() *ClientOptions {
 	return &ClientOptions{
-		HTTPClient: internal.DefaultHTTPClient,
+		HTTPClient: httputil.DefaultHTTPClient,
 	}
 }
 
@@ -287,37 +337,76 @@ func (c *ClientOptions) validate() error {
 	// Validation for load-balanced mode.
 	if c.LoadBalanced != nil && *c.LoadBalanced {
 		if len(c.Hosts) > 1 {
-			return internal.ErrLoadBalancedWithMultipleHosts
+			return connstring.ErrLoadBalancedWithMultipleHosts
 		}
 		if c.ReplicaSet != nil {
-			return internal.ErrLoadBalancedWithReplicaSet
+			return connstring.ErrLoadBalancedWithReplicaSet
 		}
 		if c.Direct != nil && *c.Direct {
-			return internal.ErrLoadBalancedWithDirectConnection
+			return connstring.ErrLoadBalancedWithDirectConnection
 		}
 	}
 
 	// Validation for srvMaxHosts.
 	if c.SRVMaxHosts != nil && *c.SRVMaxHosts > 0 {
 		if c.ReplicaSet != nil {
-			return internal.ErrSRVMaxHostsWithReplicaSet
+			return connstring.ErrSRVMaxHostsWithReplicaSet
 		}
 		if c.LoadBalanced != nil && *c.LoadBalanced {
-			return internal.ErrSRVMaxHostsWithLoadBalanced
+			return connstring.ErrSRVMaxHostsWithLoadBalanced
 		}
 	}
+
+	if mode := c.ServerMonitoringMode; mode != nil && !connstring.IsValidServerMonitoringMode(*mode) {
+		return fmt.Errorf("invalid server monitoring mode: %q", *mode)
+	}
+
+	// OIDC Validation
+	if c.Auth != nil && c.Auth.AuthMechanism == auth.MongoDBOIDC {
+		if c.Auth.Password != "" {
+			return fmt.Errorf("password must not be set for the %s auth mechanism", auth.MongoDBOIDC)
+		}
+		if c.Auth.OIDCMachineCallback != nil && c.Auth.OIDCHumanCallback != nil {
+			return fmt.Errorf("cannot set both OIDCMachineCallback and OIDCHumanCallback, only one may be specified")
+		}
+		if c.Auth.OIDCHumanCallback == nil && c.Auth.AuthMechanismProperties[auth.AllowedHostsProp] != "" {
+			return fmt.Errorf("Cannot specify ALLOWED_HOSTS without an OIDCHumanCallback")
+		}
+		if env, ok := c.Auth.AuthMechanismProperties[auth.EnvironmentProp]; ok {
+			switch env {
+			case auth.GCPEnvironmentValue, auth.AzureEnvironmentValue:
+				if c.Auth.OIDCMachineCallback != nil {
+					return fmt.Errorf("OIDCMachineCallback cannot be specified with the %s %q", env, auth.EnvironmentProp)
+				}
+				if c.Auth.OIDCHumanCallback != nil {
+					return fmt.Errorf("OIDCHumanCallback cannot be specified with the %s %q", env, auth.EnvironmentProp)
+				}
+				if c.Auth.AuthMechanismProperties[auth.ResourceProp] == "" {
+					return fmt.Errorf("%q must be set for the %s %q", auth.ResourceProp, env, auth.EnvironmentProp)
+				}
+			default:
+				if c.Auth.AuthMechanismProperties[auth.ResourceProp] != "" {
+					return fmt.Errorf("%q must not be set for the %s %q", auth.ResourceProp, env, auth.EnvironmentProp)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
 // GetURI returns the original URI used to configure the ClientOptions instance. If ApplyURI was not called during
 // construction, this returns "".
 func (c *ClientOptions) GetURI() string {
-	return c.uri
+	if c.cs == nil {
+		return ""
+	}
+	return c.cs.Original
 }
 
 // ApplyURI parses the given URI and sets options accordingly. The URI can contain host names, IPv4/IPv6 literals, or
 // an SRV record that will be resolved when the Client is created. When using an SRV record, TLS support is
-// implictly enabled. Specify the "tls=false" URI option to override this.
+// implicitly enabled. Specify the "tls=false" URI option to override this.
 //
 // If the connection string contains any options that have previously been set, it will overwrite them. Options that
 // correspond to multiple URI parameters, such as WriteConcern, will be completely overwritten if any of the query
@@ -334,13 +423,12 @@ func (c *ClientOptions) ApplyURI(uri string) *ClientOptions {
 		return c
 	}
 
-	c.uri = uri
 	cs, err := connstring.ParseAndValidate(uri)
 	if err != nil {
 		c.err = err
 		return c
 	}
-	c.cs = &cs
+	c.cs = cs
 
 	if cs.AppName != "" {
 		c.AppName = &cs.AppName
@@ -573,7 +661,7 @@ func (c *ClientOptions) SetAuth(auth Credential) *ClientOptions {
 // 3. "zstd" - requires server version >= 4.2, and driver version >= 1.2.0 with cgo support enabled or driver
 // version >= 1.3.0 without cgo.
 //
-// If this option is specified, the driver will perform a negotiation with the server to determine a common list of of
+// If this option is specified, the driver will perform a negotiation with the server to determine a common list of
 // compressors and will use the first one in that list when performing operations. See
 // https://www.mongodb.com/docs/manual/reference/program/mongod/#cmdoption-mongod-networkmessagecompressors for more
 // information about configuring compression on the server and the server-side defaults.
@@ -586,18 +674,17 @@ func (c *ClientOptions) SetCompressors(comps []string) *ClientOptions {
 	return c
 }
 
-// SetConnectTimeout specifies a timeout that is used for creating connections to the server. If a custom Dialer is
-// specified through SetDialer, this option must not be used. This can be set through ApplyURI with the
-// "connectTimeoutMS" (e.g "connectTimeoutMS=30") option. If set to 0, no timeout will be used. The default is 30
-// seconds.
+// SetConnectTimeout specifies a timeout that is used for creating connections to the server. This can be set through
+// ApplyURI with the "connectTimeoutMS" (e.g "connectTimeoutMS=30") option. If set to 0, no timeout will be used. The
+// default is 30 seconds.
 func (c *ClientOptions) SetConnectTimeout(d time.Duration) *ClientOptions {
 	c.ConnectTimeout = &d
 	return c
 }
 
-// SetDialer specifies a custom ContextDialer to be used to create new connections to the server. The default is a
-// net.Dialer with the Timeout field set to ConnectTimeout. See https://golang.org/pkg/net/#Dialer for more information
-// about the net.Dialer type.
+// SetDialer specifies a custom ContextDialer to be used to create new connections to the server. This method overrides
+// the default net.Dialer, so dialer options such as Timeout, KeepAlive, Resolver, etc can be set.
+// See https://golang.org/pkg/net/#Dialer for more information about the net.Dialer type.
 func (c *ClientOptions) SetDialer(d ContextDialer) *ClientOptions {
 	c.Dialer = d
 	return c
@@ -872,7 +959,7 @@ func (c *ClientOptions) SetTLSConfig(cfg *tls.Config) *ClientOptions {
 
 // SetHTTPClient specifies the http.Client to be used for any HTTP requests.
 //
-// This should only be used to set custom HTTP client configurations. By default, the connection will use an internal.DefaultHTTPClient.
+// This should only be used to set custom HTTP client configurations. By default, the connection will use an httputil.DefaultHTTPClient.
 func (c *ClientOptions) SetHTTPClient(client *http.Client) *ClientOptions {
 	c.HTTPClient = client
 	return c
@@ -943,6 +1030,16 @@ func (c *ClientOptions) SetDisableOCSPEndpointCheck(disableCheck bool) *ClientOp
 // options.
 func (c *ClientOptions) SetServerAPIOptions(opts *ServerAPIOptions) *ClientOptions {
 	c.ServerAPIOptions = opts
+	return c
+}
+
+// SetServerMonitoringMode specifies the server monitoring protocol to use. See
+// the helper constants ServerMonitoringModeAuto, ServerMonitoringModePoll, and
+// ServerMonitoringModeStream for more information about valid server
+// monitoring modes.
+func (c *ClientOptions) SetServerMonitoringMode(mode string) *ClientOptions {
+	c.ServerMonitoringMode = &mode
+
 	return c
 }
 
@@ -1099,14 +1196,14 @@ func MergeClientOptions(opts ...*ClientOptions) *ClientOptions {
 		if opt.err != nil {
 			c.err = opt.err
 		}
-		if opt.uri != "" {
-			c.uri = opt.uri
-		}
 		if opt.cs != nil {
 			c.cs = opt.cs
 		}
 		if opt.LoggerOptions != nil {
 			c.LoggerOptions = opt.LoggerOptions
+		}
+		if opt.ServerMonitoringMode != nil {
+			c.ServerMonitoringMode = opt.ServerMonitoringMode
 		}
 	}
 
@@ -1141,7 +1238,19 @@ func addClientCertFromSeparateFiles(cfg *tls.Config, keyFile, certFile, keyPassw
 		return "", err
 	}
 
-	data := make([]byte, 0, len(keyData)+len(certData)+1)
+	keySize := len(keyData)
+	if keySize > 64*1024*1024 {
+		return "", errors.New("X.509 key must be less than 64 MiB")
+	}
+	certSize := len(certData)
+	if certSize > 64*1024*1024 {
+		return "", errors.New("X.509 certificate must be less than 64 MiB")
+	}
+	dataSize := keySize + certSize + 1
+	if dataSize > math.MaxInt {
+		return "", errors.New("size overflow")
+	}
+	data := make([]byte, 0, dataSize)
 	data = append(data, keyData...)
 	data = append(data, '\n')
 	data = append(data, certData...)
@@ -1209,7 +1318,10 @@ func addClientCertFromBytes(cfg *tls.Config, data []byte, keyPasswd string) (str
 					}
 				}
 				var encoded bytes.Buffer
-				pem.Encode(&encoded, &pem.Block{Type: currentBlock.Type, Bytes: keyBytes})
+				err = pem.Encode(&encoded, &pem.Block{Type: currentBlock.Type, Bytes: keyBytes})
+				if err != nil {
+					return "", fmt.Errorf("error encoding private key as PEM: %w", err)
+				}
 				keyBlock := encoded.Bytes()
 				keyBlocks = append(keyBlocks, keyBlock)
 				start = len(data) - len(remaining)

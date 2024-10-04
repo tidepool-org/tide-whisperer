@@ -14,6 +14,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 	"go.mongodb.org/mongo-driver/event"
+	"go.mongodb.org/mongo-driver/internal/driverutil"
 	"go.mongodb.org/mongo-driver/internal/logger"
 	"go.mongodb.org/mongo-driver/mongo/description"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
@@ -24,6 +25,7 @@ import (
 
 // Insert performs an insert operation.
 type Insert struct {
+	authenticator            driver.Authenticator
 	bypassDocumentValidation *bool
 	comment                  bsoncore.Value
 	documents                []bsoncore.Document
@@ -57,8 +59,7 @@ func buildInsertResult(response bsoncore.Document) (InsertResult, error) {
 	}
 	ir := InsertResult{}
 	for _, element := range elements {
-		switch element.Key() {
-		case "n":
+		if element.Key() == "n" {
 			var ok bool
 			ir.N, ok = element.Value().AsInt64OK()
 			if !ok {
@@ -113,6 +114,8 @@ func (i *Insert) Execute(ctx context.Context) error {
 		ServerAPI:         i.serverAPI,
 		Timeout:           i.timeout,
 		Logger:            i.logger,
+		Name:              driverutil.InsertOp,
+		Authenticator:     i.authenticator,
 	}.Execute(ctx)
 
 }
@@ -302,5 +305,15 @@ func (i *Insert) Logger(logger *logger.Logger) *Insert {
 	}
 
 	i.logger = logger
+	return i
+}
+
+// Authenticator sets the authenticator to use for this operation.
+func (i *Insert) Authenticator(authenticator driver.Authenticator) *Insert {
+	if i == nil {
+		i = new(Insert)
+	}
+
+	i.authenticator = authenticator
 	return i
 }

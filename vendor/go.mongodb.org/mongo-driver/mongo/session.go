@@ -13,7 +13,6 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/internal"
 	"go.mongodb.org/mongo-driver/mongo/description"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/bsonx/bsoncore"
@@ -196,7 +195,7 @@ func (s *sessionImpl) WithTransaction(ctx context.Context, fn func(ctx SessionCo
 			if s.clientSession.TransactionRunning() {
 				// Wrap the user-provided Context in a new one that behaves like context.Background() for deadlines and
 				// cancellations, but forwards Value requests to the original one.
-				_ = s.AbortTransaction(internal.NewBackgroundContext(ctx))
+				_ = s.AbortTransaction(newBackgroundContext(ctx))
 			}
 
 			select {
@@ -228,13 +227,13 @@ func (s *sessionImpl) WithTransaction(ctx context.Context, fn func(ctx SessionCo
 		if ctx.Err() != nil {
 			// Wrap the user-provided Context in a new one that behaves like context.Background() for deadlines and
 			// cancellations, but forwards Value requests to the original one.
-			_ = s.AbortTransaction(internal.NewBackgroundContext(ctx))
+			_ = s.AbortTransaction(newBackgroundContext(ctx))
 			return nil, ctx.Err()
 		}
 
 	CommitLoop:
 		for {
-			err = s.CommitTransaction(ctx)
+			err = s.CommitTransaction(newBackgroundContext(ctx))
 			// End when error is nil, as transaction has been committed.
 			if err == nil {
 				return res, nil
@@ -297,7 +296,8 @@ func (s *sessionImpl) AbortTransaction(ctx context.Context) error {
 	_ = operation.NewAbortTransaction().Session(s.clientSession).ClusterClock(s.client.clock).Database("admin").
 		Deployment(s.deployment).WriteConcern(s.clientSession.CurrentWc).ServerSelector(selector).
 		Retry(driver.RetryOncePerCommand).CommandMonitor(s.client.monitor).
-		RecoveryToken(bsoncore.Document(s.clientSession.RecoveryToken)).ServerAPI(s.client.serverAPI).Execute(ctx)
+		RecoveryToken(bsoncore.Document(s.clientSession.RecoveryToken)).ServerAPI(s.client.serverAPI).
+		Authenticator(s.client.authenticator).Execute(ctx)
 
 	s.clientSession.Aborting = false
 	_ = s.clientSession.AbortTransaction()
@@ -329,7 +329,7 @@ func (s *sessionImpl) CommitTransaction(ctx context.Context) error {
 		Session(s.clientSession).ClusterClock(s.client.clock).Database("admin").Deployment(s.deployment).
 		WriteConcern(s.clientSession.CurrentWc).ServerSelector(selector).Retry(driver.RetryOncePerCommand).
 		CommandMonitor(s.client.monitor).RecoveryToken(bsoncore.Document(s.clientSession.RecoveryToken)).
-		ServerAPI(s.client.serverAPI).MaxTime(s.clientSession.CurrentMct)
+		ServerAPI(s.client.serverAPI).MaxTime(s.clientSession.CurrentMct).Authenticator(s.client.authenticator)
 
 	err = op.Execute(ctx)
 	// Return error without updating transaction state if it is a timeout, as the transaction has not

@@ -14,6 +14,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/event"
+	"go.mongodb.org/mongo-driver/internal/driverutil"
 	"go.mongodb.org/mongo-driver/mongo/description"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"go.mongodb.org/mongo-driver/x/bsonx/bsoncore"
@@ -23,6 +24,7 @@ import (
 
 // ListDatabases performs a listDatabases operation.
 type ListDatabases struct {
+	authenticator       driver.Authenticator
 	filter              bsoncore.Document
 	authorizedDatabases *bool
 	nameOnly            *bool
@@ -163,6 +165,8 @@ func (ld *ListDatabases) Execute(ctx context.Context) error {
 		Crypt:          ld.crypt,
 		ServerAPI:      ld.serverAPI,
 		Timeout:        ld.timeout,
+		Name:           driverutil.ListDatabasesOp,
+		Authenticator:  ld.authenticator,
 	}.Execute(ctx)
 
 }
@@ -323,5 +327,15 @@ func (ld *ListDatabases) Timeout(timeout *time.Duration) *ListDatabases {
 	}
 
 	ld.timeout = timeout
+	return ld
+}
+
+// Authenticator sets the authenticator to use for this operation.
+func (ld *ListDatabases) Authenticator(authenticator driver.Authenticator) *ListDatabases {
+	if ld == nil {
+		ld = new(ListDatabases)
+	}
+
+	ld.authenticator = authenticator
 	return ld
 }

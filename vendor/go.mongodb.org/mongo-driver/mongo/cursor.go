@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/bsoncodec"
@@ -159,13 +160,13 @@ func (c *Cursor) next(ctx context.Context, nonBlocking bool) bool {
 		ctx = context.Background()
 	}
 	doc, err := c.batch.Next()
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		// Consume the next document in the current batch.
 		c.batchLength--
 		c.Current = bson.Raw(doc)
 		return true
-	case io.EOF: // Need to do a getMore
+	case errors.Is(err, io.EOF): // Need to do a getMore
 	default:
 		c.err = err
 		return false
@@ -203,12 +204,12 @@ func (c *Cursor) next(ctx context.Context, nonBlocking bool) bool {
 		c.batch = c.bc.Batch()
 		c.batchLength = c.batch.DocumentCount()
 		doc, err = c.batch.Next()
-		switch err {
-		case nil:
+		switch {
+		case err == nil:
 			c.batchLength--
 			c.Current = bson.Raw(doc)
 			return true
-		case io.EOF: // Empty batch so we continue
+		case errors.Is(err, io.EOF): // Empty batch so we continue
 		default:
 			c.err = err
 			return false
@@ -285,8 +286,9 @@ func (c *Cursor) Close(ctx context.Context) error {
 }
 
 // All iterates the cursor and decodes each document into results. The results parameter must be a pointer to a slice.
-// The slice pointed to by results will be completely overwritten. This method will close the cursor after retrieving
-// all documents. If the cursor has been iterated, any previously iterated documents will not be included in results.
+// The slice pointed to by results will be completely overwritten. A nil slice pointer will not be modified if the cursor
+// has been closed, exhausted, or is empty. This method will close the cursor after retrieving all documents. If the
+// cursor has been iterated, any previously iterated documents will not be included in results.
 //
 // This method requires driver version >= 1.1.0.
 func (c *Cursor) All(ctx context.Context, results interface{}) error {
@@ -387,6 +389,22 @@ func (c *Cursor) closeImplicitSession() {
 // document batches fetched from the database.
 func (c *Cursor) SetBatchSize(batchSize int32) {
 	c.bc.SetBatchSize(batchSize)
+}
+
+// SetMaxTime will set the maximum amount of time the server will allow the
+// operations to execute. The server will error if this field is set but the
+// cursor is not configured with awaitData=true.
+//
+// The time.Duration value passed by this setter will be converted and rounded
+// down to the nearest millisecond.
+func (c *Cursor) SetMaxTime(dur time.Duration) {
+	c.bc.SetMaxTime(dur)
+}
+
+// SetComment will set a user-configurable comment that can be used to identify
+// the operation in server logs.
+func (c *Cursor) SetComment(comment interface{}) {
+	c.bc.SetComment(comment)
 }
 
 // BatchCursorFromCursor returns a driver.BatchCursor for the given Cursor. If there is no underlying

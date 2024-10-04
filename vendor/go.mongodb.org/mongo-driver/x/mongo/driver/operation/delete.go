@@ -14,6 +14,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson/bsontype"
 	"go.mongodb.org/mongo-driver/event"
+	"go.mongodb.org/mongo-driver/internal/driverutil"
 	"go.mongodb.org/mongo-driver/internal/logger"
 	"go.mongodb.org/mongo-driver/mongo/description"
 	"go.mongodb.org/mongo-driver/mongo/writeconcern"
@@ -24,25 +25,26 @@ import (
 
 // Delete performs a delete operation
 type Delete struct {
-	comment      bsoncore.Value
-	deletes      []bsoncore.Document
-	ordered      *bool
-	session      *session.Client
-	clock        *session.ClusterClock
-	collection   string
-	monitor      *event.CommandMonitor
-	crypt        driver.Crypt
-	database     string
-	deployment   driver.Deployment
-	selector     description.ServerSelector
-	writeConcern *writeconcern.WriteConcern
-	retry        *driver.RetryMode
-	hint         *bool
-	result       DeleteResult
-	serverAPI    *driver.ServerAPIOptions
-	let          bsoncore.Document
-	timeout      *time.Duration
-	logger       *logger.Logger
+	authenticator driver.Authenticator
+	comment       bsoncore.Value
+	deletes       []bsoncore.Document
+	ordered       *bool
+	session       *session.Client
+	clock         *session.ClusterClock
+	collection    string
+	monitor       *event.CommandMonitor
+	crypt         driver.Crypt
+	database      string
+	deployment    driver.Deployment
+	selector      description.ServerSelector
+	writeConcern  *writeconcern.WriteConcern
+	retry         *driver.RetryMode
+	hint          *bool
+	result        DeleteResult
+	serverAPI     *driver.ServerAPIOptions
+	let           bsoncore.Document
+	timeout       *time.Duration
+	logger        *logger.Logger
 }
 
 // DeleteResult represents a delete result returned by the server.
@@ -58,8 +60,7 @@ func buildDeleteResult(response bsoncore.Document) (DeleteResult, error) {
 	}
 	dr := DeleteResult{}
 	for _, element := range elements {
-		switch element.Key() {
-		case "n":
+		if element.Key() == "n" {
 			var ok bool
 			dr.N, ok = element.Value().AsInt64OK()
 			if !ok {
@@ -114,6 +115,8 @@ func (d *Delete) Execute(ctx context.Context) error {
 		ServerAPI:         d.serverAPI,
 		Timeout:           d.timeout,
 		Logger:            d.logger,
+		Name:              driverutil.DeleteOp,
+		Authenticator:     d.authenticator,
 	}.Execute(ctx)
 
 }
@@ -324,5 +327,15 @@ func (d *Delete) Logger(logger *logger.Logger) *Delete {
 
 	d.logger = logger
 
+	return d
+}
+
+// Authenticator sets the authenticator to use for this operation.
+func (d *Delete) Authenticator(authenticator driver.Authenticator) *Delete {
+	if d == nil {
+		d = new(Delete)
+	}
+
+	d.authenticator = authenticator
 	return d
 }
