@@ -398,6 +398,7 @@ func (c *MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 	query := bson.M{
 		"_userId": userID,
 		"_state":  "closed",
+		"type":    "upload",
 		"_active": true,
 		"deletedTime": bson.M{
 			"$exists": false,
@@ -515,6 +516,7 @@ func (c *MongoStoreClient) GetLoopableMedtronicDirectUploadIdsAfter(userID strin
 		"_active":     true,
 		"_userId":     userID,
 		"time":        bson.M{"$gte": dateTime},
+		"type":        "upload",
 		"deviceModel": bson.M{"$in": []string{"523", "523K", "554", "723", "723K", "754"}},
 	}
 
