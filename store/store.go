@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -378,6 +379,15 @@ func generateMongoQuery(p *Params) bson.M {
 	return groupDataQuery
 }
 
+func generateMongoQueryDataSets(p *Params) bson.M {
+	qry := generateMongoQuery(p)
+	if len(p.Types) > 0 && slices.Contains(p.Types, "upload") {
+		// Remove any unnecessary "type": "$in" and replace w/ just "type": "upload" for dataSets
+		qry["type"] = "upload"
+	}
+	return qry
+}
+
 // Ping the MongoDB database
 func (c *MongoStoreClient) Ping() error {
 	// do we have a store session
@@ -598,7 +608,7 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 	case len(p.Types) == 1 && p.Types[0] == "upload":
 		return dataSetsCollection(c).Find(c.context, generateMongoQuery(p), opts)
 	// Have to check for empty string as sometimes that is the type sent.
-	case len(p.Types) > 0 && !contains("upload", p.Types) && p.Types[0] != "":
+	case len(p.Types) > 0 && !slices.Contains(p.Types, "upload") && p.Types[0] != "":
 		return dataCollection(c).Find(c.context, generateMongoQuery(p), opts)
 	}
 
@@ -607,7 +617,7 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 	if err != nil {
 		return nil, err
 	}
-	dataSetIter, err := dataSetsCollection(c).Find(c.context, generateMongoQuery(p), opts)
+	dataSetIter, err := dataSetsCollection(c).Find(c.context, generateMongoQueryDataSets(p), opts)
 	if err != nil {
 		return nil, err
 	}
@@ -659,15 +669,6 @@ func (l *multiStorageIterator) Close(ctx context.Context) error {
 		}
 	}
 	return nil
-}
-
-func contains(needle string, haystack []string) bool {
-	for _, x := range haystack {
-		if needle == x {
-			return true
-		}
-	}
-	return false
 }
 
 // DebugString returns a simple "shape" of a Params used for debugging requests.
