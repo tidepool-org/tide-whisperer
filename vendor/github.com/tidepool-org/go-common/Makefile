@@ -38,7 +38,7 @@ generate: $(SWAGGER_CLI) $(OAPI_CODEGEN)
 	cd clients/summary && go generate ./...
 
 $(OAPI_CODEGEN):
-	GOBIN=$(shell pwd)/$(TOOLS_BIN) go install github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@v2.0.0
+	GOBIN=$(shell pwd)/$(TOOLS_BIN) go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.3.0
 
 $(SWAGGER_CLI): npm-tools
 
