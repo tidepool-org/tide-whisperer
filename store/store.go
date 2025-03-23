@@ -61,15 +61,16 @@ type (
 		SubTypes []string
 		Date
 		*SchemaVersion
-		Carelink           bool
-		Dexcom             bool
-		DexcomDataSource   bson.M
-		DeviceID           string
-		Latest             bool
-		Medtronic          bool
-		MedtronicDate      string
-		MedtronicUploadIds []string
-		UploadID           string
+		Carelink              bool
+		Dexcom                bool
+		DexcomDataSource      bson.M
+		DeviceID              string
+		Latest                bool
+		Medtronic             bool
+		MedtronicDate         string
+		MedtronicUploadIds    []string
+		UploadID              string
+		SampleIntervalMinimum int
 	}
 
 	// Date struct
@@ -163,20 +164,33 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		}
 	}
 
+	var sampleIntervalMinimum int
+	if values, ok := q["sampleIntervalMinimum"]; ok {
+		if len(values) < 1 {
+			return nil, errors.New("sampleIntervalMinimum parameter not valid")
+		}
+		value, err := strconv.ParseInt(values[len(values)-1], 10, 32)
+		if err != nil {
+			return nil, errors.New("sampleIntervalMinimum parameter not valid")
+		}
+		sampleIntervalMinimum = int(value)
+	}
+
 	p := &Params{
 		UserID:   q.Get(":userID"),
 		DeviceID: q.Get("deviceId"),
 		UploadID: q.Get("uploadId"),
-		//the query params for type and subtype can contain multiple values seperated
+		//the query params for type and subtype can contain multiple values separated
 		//by a comma e.g. "type=smbg,cbg" so split them out into an array of values
-		Types:         strings.Split(q.Get("type"), ","),
-		SubTypes:      strings.Split(q.Get("subType"), ","),
-		Date:          Date{startDate, endDate},
-		SchemaVersion: schema,
-		Carelink:      carelink,
-		Dexcom:        dexcom,
-		Latest:        latest,
-		Medtronic:     medtronic,
+		Types:                 strings.Split(q.Get("type"), ","),
+		SubTypes:              strings.Split(q.Get("subType"), ","),
+		Date:                  Date{startDate, endDate},
+		SchemaVersion:         schema,
+		Carelink:              carelink,
+		Dexcom:                dexcom,
+		Latest:                latest,
+		Medtronic:             medtronic,
+		SampleIntervalMinimum: sampleIntervalMinimum,
 	}
 
 	return p, nil
@@ -375,6 +389,14 @@ func generateMongoQuery(p *Params) bson.M {
 		}
 	}
 
+	if p.SampleIntervalMinimum > 0 {
+		groupDataQuery["$or"] = []bson.M{
+			{"type": bson.M{"$ne": "cbg"}},
+			{"sampleInterval": bson.M{"$exist": false}},
+			{"sampleInterval": bson.M{"$gte": p.SampleIntervalMinimum}},
+		}
+	}
+
 	return groupDataQuery
 }
 
@@ -547,7 +569,7 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 
 	// _schemaVersion is still in the list of fields to remove. Although we don't query for it, data can still exist for it
 	// until BACK-1281 is done.
-	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0, "_migrationMarker": 0}
+	removeFieldsForReturn := bson.M{"_id": 0, "_userId": 0, "_groupId": 0, "_version": 0, "_active": 0, "_schemaVersion": 0, "createdTime": 0, "modifiedTime": 0, "_migrationMarker": 0, "provenance": 0}
 
 	if p.Latest {
 		latest := &latestIterator{pos: -1}
