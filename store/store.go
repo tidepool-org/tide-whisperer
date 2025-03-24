@@ -392,7 +392,7 @@ func generateMongoQuery(p *Params) bson.M {
 	if p.SampleIntervalMinimum > 0 {
 		groupDataQuery["$or"] = []bson.M{
 			{"type": bson.M{"$ne": "cbg"}},
-			{"sampleInterval": bson.M{"$exist": false}},
+			{"sampleInterval": bson.M{"$exists": false}},
 			{"sampleInterval": bson.M{"$gte": p.SampleIntervalMinimum}},
 		}
 	}

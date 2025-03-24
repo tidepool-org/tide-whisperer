@@ -3,17 +3,16 @@ package store
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"github.com/google/go-cmp/cmp"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"net/url"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	tpMongo "github.com/tidepool-org/go-common/clients/mongo"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 var testingConfig = &tpMongo.Config{ConnectionString: "mongodb://127.0.0.1/data_test", Database: "data_test"}
@@ -38,6 +37,7 @@ type TestDataSchema struct {
 	UploadId            *string    `bson:"uploadId,omitempty"`
 	Value               *float64   `bson:"value,omitempty"`
 	Origin              *bson.M    `bson:"origin,omitempty"`
+	SampleInterval      *int       `bson:"sampleInterval,omitempty"`
 }
 
 func before(t *testing.T, docs ...interface{}) *MongoStoreClient {
@@ -87,23 +87,6 @@ func getErrString(mongoQuery, expectedQuery bson.M) string {
 func formatForReading(toFormat interface{}) string {
 	formatted, _ := json.MarshalIndent(toFormat, "", "  ")
 	return string(formatted)
-}
-
-func getCursors(exPlans interface{}) []string {
-	var cursors []string
-
-	if exPlans != nil {
-
-		plans := exPlans.([]interface{})
-
-		if plans != nil {
-			for i := range plans {
-				p := plans[i].(map[string]interface{})
-				cursors = append(cursors, p["cursor"].(string))
-			}
-		}
-	}
-	return cursors
 }
 
 func basicQuery() bson.M {
@@ -266,9 +249,7 @@ func dropInternalKeys(inputData TestDataSchema) TestDataSchema {
 	return outputData
 }
 
-func storeDataForLatestTests() []interface{} {
-	testData := testDataForLatestTests()
-
+func storeDataForLatestTests(testData map[string]TestDataSchema) []interface{} {
 	storeData := make([]interface{}, len(testData))
 	index := 0
 	for _, v := range testData {
@@ -349,7 +330,7 @@ func TestStore_EnsureIndexes(t *testing.T) {
 
 	eq := reflect.DeepEqual(indexes, expectedIndexes)
 	if !eq {
-		t.Error(fmt.Sprintf("expected:\n%+#v\ngot:\n%+#v\n", expectedIndexes, indexes))
+		t.Errorf("expected:\n%+#v\ngot:\n%+#v\n", expectedIndexes, indexes)
 	}
 }
 
@@ -434,13 +415,12 @@ func TestStore_EnsureDataSetsIndexes(t *testing.T) {
 
 	eq := reflect.DeepEqual(indexes, expectedIndexes)
 	if !eq {
-		t.Error(fmt.Sprintf("expected:\n%+#v\ngot:\n%+#v\n", expectedIndexes, indexes))
+		t.Errorf("expected:\n%+#v\ngot:\n%+#v\n", expectedIndexes, indexes)
 	}
 }
 
 func TestStore_generateMongoQuery_basic(t *testing.T) {
 
-	time.Now()
 	query := basicQuery()
 
 	expectedQuery := bson.M{
@@ -656,7 +636,7 @@ func TestStore_GetParams_Empty(t *testing.T) {
 		t.Error("should not have received error, but got one")
 	}
 	if !reflect.DeepEqual(params, expectedParams) {
-		t.Error(fmt.Sprintf("params %#v do not equal expected params %#v", params, expectedParams))
+		t.Errorf("params %#v do not equal expected params %#v", params, expectedParams)
 	}
 }
 
@@ -681,7 +661,7 @@ func TestStore_GetParams_Medtronic(t *testing.T) {
 		t.Error("should not have received error, but got one")
 	}
 	if !reflect.DeepEqual(params, expectedParams) {
-		t.Error(fmt.Sprintf("params %#v do not equal expected params %#v", params, expectedParams))
+		t.Errorf("params %#v do not equal expected params %#v", params, expectedParams)
 	}
 }
 
@@ -706,7 +686,7 @@ func TestStore_GetParams_UploadId(t *testing.T) {
 		t.Error("should not have received error, but got one")
 	}
 	if !reflect.DeepEqual(params, expectedParams) {
-		t.Error(fmt.Sprintf("params %#v do not equal expected params %#v", params, expectedParams))
+		t.Errorf("params %#v do not equal expected params %#v", params, expectedParams)
 	}
 }
 
@@ -1294,7 +1274,7 @@ func TestStore_GetLoopableMedtronicDirectUploadIdsAfter_Found(t *testing.T) {
 
 func TestStore_LatestNoFilter(t *testing.T) {
 	testData := testDataForLatestTests()
-	storeData := storeDataForLatestTests()
+	storeData := storeDataForLatestTests(testData)
 
 	store := before(t, storeData...)
 
@@ -1345,7 +1325,7 @@ func TestStore_LatestNoFilter(t *testing.T) {
 
 func TestStore_LatestTypeFilter(t *testing.T) {
 	testData := testDataForLatestTests()
-	storeData := storeDataForLatestTests()
+	storeData := storeDataForLatestTests(testData)
 
 	store := before(t, storeData...)
 
@@ -1389,7 +1369,7 @@ func TestStore_LatestTypeFilter(t *testing.T) {
 
 func TestStore_LatestUploadIdFilter(t *testing.T) {
 	testData := testDataForLatestTests()
-	storeData := storeDataForLatestTests()
+	storeData := storeDataForLatestTests(testData)
 
 	store := before(t, storeData...)
 
@@ -1441,7 +1421,7 @@ func TestStore_LatestUploadIdFilter(t *testing.T) {
 
 func TestStore_LatestDeviceIdFilter(t *testing.T) {
 	testData := testDataForLatestTests()
-	storeData := storeDataForLatestTests()
+	storeData := storeDataForLatestTests(testData)
 
 	store := before(t, storeData...)
 
@@ -1489,4 +1469,189 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 	if processedResults.cbg == false || processedResults.upload == false {
 		t.Error("Not enough results when requesting latest data")
 	}
+}
+
+func testDataForSampleIntervalTests(interval int, intervalTwo *int) map[string]TestDataSchema {
+	if intervalTwo == nil {
+		intervalTwo = &interval
+	}
+	date1, _ := time.Parse(time.RFC3339, "2019-03-15T01:24:28.000Z")
+	date2, _ := time.Parse(time.RFC3339, "2019-03-15T00:42:51.902Z")
+	date3 := date2.Add(time.Minute * time.Duration(*intervalTwo))
+	date4 := date3.Add(time.Minute * time.Duration(interval))
+
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
+	testData := map[string]TestDataSchema{
+		"upload1": {
+			Active:        ptr(true),
+			UserId:        ptr("abc123"),
+			SchemaVersion: ptr(1),
+			Time:          ptr(date1),
+			Type:          ptr("upload"),
+			DeviceId:      ptr("dev123"),
+			UploadId:      ptr("9244bb16e27c4973c2f37af81784a05d"),
+		},
+		"cbg1": {
+			Active:         ptr(true),
+			UserId:         ptr("abc123"),
+			SchemaVersion:  ptr(1),
+			Time:           ptr(date2),
+			Type:           ptr("cbg"),
+			Units:          ptr("mmol/L"),
+			DeviceId:       ptr("dev123"),
+			UploadId:       ptr("9244bb16e27c4973c2f37af81784a05d"),
+			Value:          ptr(12.82223),
+			SampleInterval: ptr(interval),
+		},
+		"cbg2": {
+			Active:         ptr(true),
+			UserId:         ptr("abc123"),
+			SchemaVersion:  ptr(1),
+			Time:           ptr(date3),
+			Type:           ptr("cbg"),
+			Units:          ptr("mmol/L"),
+			DeviceId:       ptr("dev123"),
+			UploadId:       ptr("9244bb16e27c4973c2f37af81784a05d"),
+			Value:          ptr(9.7213),
+			SampleInterval: intervalTwo,
+		},
+		"cbg3": {
+			Active:         ptr(true),
+			UserId:         ptr("abc123"),
+			SchemaVersion:  ptr(1),
+			Time:           ptr(date4),
+			Type:           ptr("cbg"),
+			Units:          ptr("mmol/L"),
+			DeviceId:       ptr("dev123"),
+			UploadId:       ptr("9244bb16e27c4973c2f37af81784a05d"),
+			Value:          ptr(7.1237),
+			SampleInterval: ptr(interval),
+		},
+	}
+	return testData
+}
+
+func TestStore_SampleIntervalFilter_FiveMinute(t *testing.T) {
+
+	fiveMinInterval := 5
+
+	testData := testDataForSampleIntervalTests(fiveMinInterval, ptr(1))
+	storeData := storeDataForLatestTests(testData)
+
+	store := before(t, storeData...)
+
+	qParams := &Params{
+		UserID:                "abc123",
+		DeviceID:              "dev123",
+		Types:                 []string{"cbg"},
+		SchemaVersion:         &SchemaVersion{Maximum: 2, Minimum: 0},
+		SampleIntervalMinimum: fiveMinInterval,
+	}
+
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Errorf("Error %s querying Mongo", err.Error())
+	}
+
+	results := []TestDataSchema{}
+
+	for iter.Next(store.context) {
+		var result TestDataSchema
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
+		results = append(results, result)
+	}
+
+	if len(results) != 2 {
+		t.Errorf("Expected 2 but got %d cbg", len(results))
+	}
+
+	for _, res := range results {
+		if !(*res.SampleInterval >= fiveMinInterval) {
+			t.Errorf("Expected %d to be gte %d ", *res.SampleInterval, fiveMinInterval)
+		}
+	}
+
+}
+
+func TestStore_SampleIntervalFilter_FifeteenMinute(t *testing.T) {
+
+	fifeteenMinInterval := 15
+
+	testData := testDataForSampleIntervalTests(fifeteenMinInterval, ptr(5))
+	storeData := storeDataForLatestTests(testData)
+
+	store := before(t, storeData...)
+
+	qParams := &Params{
+		UserID:                "abc123",
+		DeviceID:              "dev123",
+		Types:                 []string{"cbg"},
+		SchemaVersion:         &SchemaVersion{Maximum: 2, Minimum: 0},
+		SampleIntervalMinimum: fifeteenMinInterval,
+	}
+
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Errorf("Error %s querying Mongo", err.Error())
+	}
+
+	results := []TestDataSchema{}
+
+	for iter.Next(store.context) {
+		var result TestDataSchema
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
+		results = append(results, result)
+	}
+
+	if len(results) != 2 {
+		t.Errorf("Expected 2 but got %d cbg", len(results))
+	}
+
+	for _, res := range results {
+		if !(*res.SampleInterval >= fifeteenMinInterval) {
+			t.Errorf("Expected %d to be gte %d ", *res.SampleInterval, fifeteenMinInterval)
+		}
+	}
+}
+
+func TestStore_SampleIntervalFilter_NotSet(t *testing.T) {
+
+	testData := testDataForSampleIntervalTests(5, ptr(1))
+	storeData := storeDataForLatestTests(testData)
+
+	store := before(t, storeData...)
+
+	qParams := &Params{
+		UserID:        "abc123",
+		DeviceID:      "dev123",
+		Types:         []string{"cbg"},
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+	}
+
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Errorf("Error %s querying Mongo", err.Error())
+	}
+
+	results := []TestDataSchema{}
+
+	for iter.Next(store.context) {
+		var result TestDataSchema
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
+		results = append(results, result)
+	}
+
+	if len(results) != 3 {
+		t.Errorf("Expected 3 but got %d cbg", len(results))
+	}
+
 }
