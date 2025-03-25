@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"reflect"
 	"strings"
@@ -688,6 +689,36 @@ func TestStore_GetParams_UploadId(t *testing.T) {
 	if !reflect.DeepEqual(params, expectedParams) {
 		t.Errorf("params %#v do not equal expected params %#v", params, expectedParams)
 	}
+}
+
+func TestStore_GetParams_SampleInterval(t *testing.T) {
+
+	query := url.Values{
+		":userID":               []string{"1122334455"},
+		"type":                  []string{"cbg,smbg,basal,bolus,wizard,food,cgmSettings,deviceEvent,dosingDecision,insulin,physicalActivity,pumpSettings,reportedState,upload,water"},
+		"sampleIntervalMinimum": []string{fmt.Sprintf("%d", fifeteenMinSampleIntervalMS)},
+	}
+	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
+
+	expectedParams := &Params{
+		Types:                 []string{"cbg", "smbg", "basal", "bolus", "wizard", "food", "cgmSettings", "deviceEvent", "dosingDecision", "insulin", "physicalActivity", "pumpSettings", "reportedState", "upload", "water"},
+		SampleIntervalMinimum: fifeteenMinSampleIntervalMS,
+	}
+
+	params, err := GetParams(query, schema)
+
+	if err != nil {
+		t.Error("should not have received error, but got one")
+	}
+
+	if diff := cmp.Diff(params.SampleIntervalMinimum, expectedParams.SampleIntervalMinimum); diff != "" {
+		t.Errorf("Unexpected 'sampleIntervalMinimum' result when getting query params (-want +have):\n%s", diff)
+	}
+
+	if diff := cmp.Diff(params.Types, expectedParams.Types); diff != "" {
+		t.Errorf("Unexpected 'types' result when getting query params (-want +have):\n%s", diff)
+	}
+
 }
 
 func TestStore_HasMedtronicDirectData_UserID_Missing(t *testing.T) {
@@ -1471,14 +1502,14 @@ func TestStore_LatestDeviceIdFilter(t *testing.T) {
 	}
 }
 
-func testDataForSampleIntervalTests(interval int, intervalTwo *int) map[string]TestDataSchema {
-	if intervalTwo == nil {
-		intervalTwo = &interval
+func testDataForSampleIntervalTests(intervalMS int, intervalTwoMS *int) map[string]TestDataSchema {
+	if intervalTwoMS == nil {
+		intervalTwoMS = &intervalMS
 	}
 	date1, _ := time.Parse(time.RFC3339, "2019-03-15T01:24:28.000Z")
 	date2, _ := time.Parse(time.RFC3339, "2019-03-15T00:42:51.902Z")
-	date3 := date2.Add(time.Minute * time.Duration(*intervalTwo))
-	date4 := date3.Add(time.Minute * time.Duration(interval))
+	date3 := date2.Add(time.Millisecond * time.Duration(*intervalTwoMS))
+	date4 := date3.Add(time.Millisecond * time.Duration(intervalMS))
 
 	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	testData := map[string]TestDataSchema{
@@ -1501,7 +1532,7 @@ func testDataForSampleIntervalTests(interval int, intervalTwo *int) map[string]T
 			DeviceId:       ptr("dev123"),
 			UploadId:       ptr("9244bb16e27c4973c2f37af81784a05d"),
 			Value:          ptr(12.82223),
-			SampleInterval: ptr(interval),
+			SampleInterval: ptr(intervalMS),
 		},
 		"cbg2": {
 			Active:         ptr(true),
@@ -1513,7 +1544,7 @@ func testDataForSampleIntervalTests(interval int, intervalTwo *int) map[string]T
 			DeviceId:       ptr("dev123"),
 			UploadId:       ptr("9244bb16e27c4973c2f37af81784a05d"),
 			Value:          ptr(9.7213),
-			SampleInterval: intervalTwo,
+			SampleInterval: intervalTwoMS,
 		},
 		"cbg3": {
 			Active:         ptr(true),
@@ -1525,17 +1556,19 @@ func testDataForSampleIntervalTests(interval int, intervalTwo *int) map[string]T
 			DeviceId:       ptr("dev123"),
 			UploadId:       ptr("9244bb16e27c4973c2f37af81784a05d"),
 			Value:          ptr(7.1237),
-			SampleInterval: ptr(interval),
+			SampleInterval: ptr(intervalMS),
 		},
 	}
 	return testData
 }
 
+const oneMinSampleIntervalMS = 6000
+const fiveMinSampleIntervalMS = 300000
+const fifeteenMinSampleIntervalMS = 900000
+
 func TestStore_SampleIntervalFilter_FiveMinute(t *testing.T) {
 
-	fiveMinInterval := 5
-
-	testData := testDataForSampleIntervalTests(fiveMinInterval, ptr(1))
+	testData := testDataForSampleIntervalTests(fiveMinSampleIntervalMS, ptr(oneMinSampleIntervalMS))
 	storeData := storeDataForLatestTests(testData)
 
 	store := before(t, storeData...)
@@ -1545,7 +1578,7 @@ func TestStore_SampleIntervalFilter_FiveMinute(t *testing.T) {
 		DeviceID:              "dev123",
 		Types:                 []string{"cbg"},
 		SchemaVersion:         &SchemaVersion{Maximum: 2, Minimum: 0},
-		SampleIntervalMinimum: fiveMinInterval,
+		SampleIntervalMinimum: fiveMinSampleIntervalMS,
 	}
 
 	iter, err := store.GetDeviceData(qParams)
@@ -1569,8 +1602,51 @@ func TestStore_SampleIntervalFilter_FiveMinute(t *testing.T) {
 	}
 
 	for _, res := range results {
-		if !(*res.SampleInterval >= fiveMinInterval) {
-			t.Errorf("Expected %d to be gte %d ", *res.SampleInterval, fiveMinInterval)
+		if !(*res.SampleInterval >= fiveMinSampleIntervalMS) {
+			t.Errorf("Expected %d to be gte %d ", *res.SampleInterval, fiveMinSampleIntervalMS)
+		}
+	}
+
+}
+
+func TestStore_SampleIntervalFilter_Minute(t *testing.T) {
+
+	testData := testDataForSampleIntervalTests(oneMinSampleIntervalMS, ptr(fiveMinSampleIntervalMS))
+	storeData := storeDataForLatestTests(testData)
+
+	store := before(t, storeData...)
+
+	qParams := &Params{
+		UserID:                "abc123",
+		DeviceID:              "dev123",
+		Types:                 []string{"cbg"},
+		SchemaVersion:         &SchemaVersion{Maximum: 2, Minimum: 0},
+		SampleIntervalMinimum: oneMinSampleIntervalMS,
+	}
+
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Errorf("Error %s querying Mongo", err.Error())
+	}
+
+	results := []TestDataSchema{}
+
+	for iter.Next(store.context) {
+		var result TestDataSchema
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
+		results = append(results, result)
+	}
+
+	if len(results) != 3 {
+		t.Errorf("Expected 3 but got %d cbg", len(results))
+	}
+
+	for _, res := range results {
+		if !(*res.SampleInterval >= oneMinSampleIntervalMS) {
+			t.Errorf("Expected %d to be gte %d ", *res.SampleInterval, oneMinSampleIntervalMS)
 		}
 	}
 
@@ -1578,9 +1654,7 @@ func TestStore_SampleIntervalFilter_FiveMinute(t *testing.T) {
 
 func TestStore_SampleIntervalFilter_FifeteenMinute(t *testing.T) {
 
-	fifeteenMinInterval := 15
-
-	testData := testDataForSampleIntervalTests(fifeteenMinInterval, ptr(5))
+	testData := testDataForSampleIntervalTests(fifeteenMinSampleIntervalMS, ptr(fiveMinSampleIntervalMS))
 	storeData := storeDataForLatestTests(testData)
 
 	store := before(t, storeData...)
@@ -1590,7 +1664,7 @@ func TestStore_SampleIntervalFilter_FifeteenMinute(t *testing.T) {
 		DeviceID:              "dev123",
 		Types:                 []string{"cbg"},
 		SchemaVersion:         &SchemaVersion{Maximum: 2, Minimum: 0},
-		SampleIntervalMinimum: fifeteenMinInterval,
+		SampleIntervalMinimum: fifeteenMinSampleIntervalMS,
 	}
 
 	iter, err := store.GetDeviceData(qParams)
@@ -1614,8 +1688,8 @@ func TestStore_SampleIntervalFilter_FifeteenMinute(t *testing.T) {
 	}
 
 	for _, res := range results {
-		if !(*res.SampleInterval >= fifeteenMinInterval) {
-			t.Errorf("Expected %d to be gte %d ", *res.SampleInterval, fifeteenMinInterval)
+		if !(*res.SampleInterval >= fifeteenMinSampleIntervalMS) {
+			t.Errorf("Expected %d to be gte %d ", *res.SampleInterval, fifeteenMinSampleIntervalMS)
 		}
 	}
 }
