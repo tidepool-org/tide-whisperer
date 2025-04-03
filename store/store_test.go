@@ -696,13 +696,13 @@ func TestStore_GetParams_SampleInterval(t *testing.T) {
 	query := url.Values{
 		":userID":               []string{"1122334455"},
 		"type":                  []string{"cbg,smbg,basal,bolus,wizard,food,cgmSettings,deviceEvent,dosingDecision,insulin,physicalActivity,pumpSettings,reportedState,upload,water"},
-		"sampleIntervalMinimum": []string{fmt.Sprintf("%d", fifeteenMinSampleIntervalMS)},
+		"sampleIntervalMinimum": []string{fmt.Sprintf("%d", fifteenMinSampleIntervalMS)},
 	}
 	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
 
 	expectedParams := &Params{
 		Types:                 []string{"cbg", "smbg", "basal", "bolus", "wizard", "food", "cgmSettings", "deviceEvent", "dosingDecision", "insulin", "physicalActivity", "pumpSettings", "reportedState", "upload", "water"},
-		SampleIntervalMinimum: fifeteenMinSampleIntervalMS,
+		SampleIntervalMinimum: fifteenMinSampleIntervalMS,
 	}
 
 	params, err := GetParams(query, schema)
@@ -1510,6 +1510,7 @@ func testDataForSampleIntervalTests(intervalMS int, intervalTwoMS *int) map[stri
 	date2, _ := time.Parse(time.RFC3339, "2019-03-15T00:42:51.902Z")
 	date3 := date2.Add(time.Millisecond * time.Duration(*intervalTwoMS))
 	date4 := date3.Add(time.Millisecond * time.Duration(intervalMS))
+	date5 := date4.Add(time.Millisecond * time.Duration(intervalMS))
 
 	// We keep _schemaVersion in the test data until BACK-1281 is completed.
 	testData := map[string]TestDataSchema{
@@ -1558,13 +1559,25 @@ func testDataForSampleIntervalTests(intervalMS int, intervalTwoMS *int) map[stri
 			Value:          ptr(7.1237),
 			SampleInterval: ptr(intervalMS),
 		},
+		"cbg4": {
+			Active:         ptr(true),
+			UserId:         ptr("abc123"),
+			SchemaVersion:  ptr(1),
+			Time:           ptr(date5),
+			Type:           ptr("cbg"),
+			Units:          ptr("mmol/L"),
+			DeviceId:       ptr("dev123"),
+			UploadId:       ptr("9244bb16e27c4973c2f37af81784a05d"),
+			Value:          ptr(6.4302),
+			SampleInterval: nil,
+		},
 	}
 	return testData
 }
 
-const oneMinSampleIntervalMS = 6000
-const fiveMinSampleIntervalMS = 300000
-const fifeteenMinSampleIntervalMS = 900000
+const oneMinSampleIntervalMS = 60 * 1000
+const fiveMinSampleIntervalMS = 5 * oneMinSampleIntervalMS
+const fifteenMinSampleIntervalMS = 15 * oneMinSampleIntervalMS
 
 func TestStore_SampleIntervalFilter_FiveMinute(t *testing.T) {
 
@@ -1597,12 +1610,12 @@ func TestStore_SampleIntervalFilter_FiveMinute(t *testing.T) {
 		results = append(results, result)
 	}
 
-	if len(results) != 2 {
-		t.Errorf("Expected 2 but got %d cbg", len(results))
+	if len(results) != 3 {
+		t.Errorf("Expected 3 but got %d cbg", len(results))
 	}
 
 	for _, res := range results {
-		if !(*res.SampleInterval >= fiveMinSampleIntervalMS) {
+		if !(res.SampleInterval == nil || *res.SampleInterval >= fiveMinSampleIntervalMS) {
 			t.Errorf("Expected %d to be gte %d ", *res.SampleInterval, fiveMinSampleIntervalMS)
 		}
 	}
@@ -1640,21 +1653,21 @@ func TestStore_SampleIntervalFilter_Minute(t *testing.T) {
 		results = append(results, result)
 	}
 
-	if len(results) != 3 {
-		t.Errorf("Expected 3 but got %d cbg", len(results))
+	if len(results) != 4 {
+		t.Errorf("Expected 4 but got %d cbg", len(results))
 	}
 
 	for _, res := range results {
-		if !(*res.SampleInterval >= oneMinSampleIntervalMS) {
+		if !(res.SampleInterval == nil || *res.SampleInterval >= oneMinSampleIntervalMS) {
 			t.Errorf("Expected %d to be gte %d ", *res.SampleInterval, oneMinSampleIntervalMS)
 		}
 	}
 
 }
 
-func TestStore_SampleIntervalFilter_FifeteenMinute(t *testing.T) {
+func TestStore_SampleIntervalFilter_FifteenMinute(t *testing.T) {
 
-	testData := testDataForSampleIntervalTests(fifeteenMinSampleIntervalMS, ptr(fiveMinSampleIntervalMS))
+	testData := testDataForSampleIntervalTests(fifteenMinSampleIntervalMS, ptr(fiveMinSampleIntervalMS))
 	storeData := storeDataForLatestTests(testData)
 
 	store := before(t, storeData...)
@@ -1664,7 +1677,7 @@ func TestStore_SampleIntervalFilter_FifeteenMinute(t *testing.T) {
 		DeviceID:              "dev123",
 		Types:                 []string{"cbg"},
 		SchemaVersion:         &SchemaVersion{Maximum: 2, Minimum: 0},
-		SampleIntervalMinimum: fifeteenMinSampleIntervalMS,
+		SampleIntervalMinimum: fifteenMinSampleIntervalMS,
 	}
 
 	iter, err := store.GetDeviceData(qParams)
@@ -1683,13 +1696,13 @@ func TestStore_SampleIntervalFilter_FifeteenMinute(t *testing.T) {
 		results = append(results, result)
 	}
 
-	if len(results) != 2 {
-		t.Errorf("Expected 2 but got %d cbg", len(results))
+	if len(results) != 3 {
+		t.Errorf("Expected 3 but got %d cbg", len(results))
 	}
 
 	for _, res := range results {
-		if !(*res.SampleInterval >= fifeteenMinSampleIntervalMS) {
-			t.Errorf("Expected %d to be gte %d ", *res.SampleInterval, fifeteenMinSampleIntervalMS)
+		if !(res.SampleInterval == nil || *res.SampleInterval >= fifteenMinSampleIntervalMS) {
+			t.Errorf("Expected %d to be gte %d ", *res.SampleInterval, fifteenMinSampleIntervalMS)
 		}
 	}
 }
@@ -1724,8 +1737,8 @@ func TestStore_SampleIntervalFilter_NotSet(t *testing.T) {
 		results = append(results, result)
 	}
 
-	if len(results) != 3 {
-		t.Errorf("Expected 3 but got %d cbg", len(results))
+	if len(results) != 4 {
+		t.Errorf("Expected 4 but got %d cbg", len(results))
 	}
 
 }
