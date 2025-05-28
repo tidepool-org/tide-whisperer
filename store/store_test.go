@@ -39,6 +39,7 @@ type TestDataSchema struct {
 	Value               *float64   `bson:"value,omitempty"`
 	Origin              *bson.M    `bson:"origin,omitempty"`
 	SampleInterval      *int       `bson:"sampleInterval,omitempty"`
+	Reason              *string    `bson:"reason,omitempty"`
 }
 
 func before(t *testing.T, docs ...interface{}) *MongoStoreClient {
@@ -625,10 +626,11 @@ func TestStore_GetParams_Empty(t *testing.T) {
 	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
 
 	expectedParams := &Params{
-		UserID:        "1122334455",
-		SchemaVersion: schema,
-		Types:         []string{""},
-		SubTypes:      []string{""},
+		UserID:          "1122334455",
+		SchemaVersion:   schema,
+		Types:           []string{""},
+		SubTypes:        []string{""},
+		TypeFieldFilter: TypeFieldFilter{},
 	}
 
 	params, err := GetParams(query, schema)
@@ -649,11 +651,12 @@ func TestStore_GetParams_Medtronic(t *testing.T) {
 	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
 
 	expectedParams := &Params{
-		UserID:        "1122334455",
-		SchemaVersion: schema,
-		Types:         []string{""},
-		SubTypes:      []string{""},
-		Medtronic:     true,
+		UserID:          "1122334455",
+		SchemaVersion:   schema,
+		Types:           []string{""},
+		SubTypes:        []string{""},
+		Medtronic:       true,
+		TypeFieldFilter: TypeFieldFilter{},
 	}
 
 	params, err := GetParams(query, schema)
@@ -674,11 +677,12 @@ func TestStore_GetParams_UploadId(t *testing.T) {
 	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
 
 	expectedParams := &Params{
-		UserID:        "1122334455",
-		SchemaVersion: schema,
-		Types:         []string{""},
-		SubTypes:      []string{""},
-		UploadID:      "xyz123",
+		UserID:          "1122334455",
+		SchemaVersion:   schema,
+		Types:           []string{""},
+		SubTypes:        []string{""},
+		UploadID:        "xyz123",
+		TypeFieldFilter: TypeFieldFilter{},
 	}
 
 	params, err := GetParams(query, schema)
@@ -713,6 +717,41 @@ func TestStore_GetParams_SampleInterval(t *testing.T) {
 
 	if diff := cmp.Diff(params.SampleIntervalMinimum, expectedParams.SampleIntervalMinimum); diff != "" {
 		t.Errorf("Unexpected 'sampleIntervalMinimum' result when getting query params (-want +have):\n%s", diff)
+	}
+
+	if diff := cmp.Diff(params.Types, expectedParams.Types); diff != "" {
+		t.Errorf("Unexpected 'types' result when getting query params (-want +have):\n%s", diff)
+	}
+
+}
+
+func TestStore_GetParams_DosingDecisionReason(t *testing.T) {
+
+	query := url.Values{
+		":userID":               []string{"1122334455"},
+		"type":                  []string{"cbg,dosingDecision"},
+		"dosingDecision.reason": []string{"simpleBolus,normalBolus"},
+		"cbg.sampleInterval":    []string{"100000"},
+	}
+	schema := &SchemaVersion{Minimum: 1, Maximum: 3}
+
+	expectedParams := &Params{
+		Types: []string{"cbg", "dosingDecision"},
+		TypeFieldFilter: TypeFieldFilter{
+			"dosingDecision": FieldFilter{
+				"reason": []string{"simpleBolus", "normalBolus"},
+			},
+		},
+	}
+
+	params, err := GetParams(query, schema)
+
+	if err != nil {
+		t.Error("should not have received error, but got one")
+	}
+
+	if diff := cmp.Diff(params.TypeFieldFilter, expectedParams.TypeFieldFilter); diff != "" {
+		t.Errorf("Unexpected 'TypeFieldFilter' result when getting query params (-want +have):\n%s", diff)
 	}
 
 	if diff := cmp.Diff(params.Types, expectedParams.Types); diff != "" {
@@ -1741,4 +1780,145 @@ func TestStore_SampleIntervalFilter_NotSet(t *testing.T) {
 		t.Errorf("Expected 4 but got %d cbg", len(results))
 	}
 
+}
+
+func testDataForTypeFieldFilters() map[string]TestDataSchema {
+	date1, _ := time.Parse(time.RFC3339, "2019-03-15T01:24:28.000Z")
+	date2, _ := time.Parse(time.RFC3339, "2019-03-15T00:42:51.902Z")
+
+	// We keep _schemaVersion in the test data until BACK-1281 is completed.
+	testData := map[string]TestDataSchema{
+		"upload1": {
+			Active:        ptr(true),
+			UserId:        ptr("abc123"),
+			SchemaVersion: ptr(1),
+			Time:          ptr(date1),
+			Type:          ptr("upload"),
+			DeviceId:      ptr("dev123"),
+			UploadId:      ptr("9244bb16e27c4973c2f37af81784a05d"),
+		},
+		"cbg1": {
+			Active:        ptr(true),
+			UserId:        ptr("abc123"),
+			SchemaVersion: ptr(1),
+			Time:          ptr(date2),
+			Type:          ptr("cbg"),
+			Units:         ptr("mmol/L"),
+			DeviceId:      ptr("dev123"),
+			UploadId:      ptr("9244bb16e27c4973c2f37af81784a05d"),
+			Value:         ptr(12.82223),
+		},
+		"dosingDecision1": {
+			Active:        ptr(true),
+			UserId:        ptr("abc123"),
+			SchemaVersion: ptr(1),
+			Time:          ptr(date2),
+			Type:          ptr("dosingDecision"),
+			Reason:        ptr("normalBolus"),
+			DeviceId:      ptr("dev123"),
+			UploadId:      ptr("9244bb16e27c4973c2f37af81784a05d"),
+			Value:         ptr(12.82223),
+		},
+		"dosingDecision2": {
+			Active:        ptr(true),
+			UserId:        ptr("abc123"),
+			SchemaVersion: ptr(1),
+			Time:          ptr(date2),
+			Type:          ptr("dosingDecision"),
+			Reason:        ptr("simpleBolus"),
+			DeviceId:      ptr("dev123"),
+			UploadId:      ptr("9244bb16e27c4973c2f37af81784a05d"),
+			Value:         ptr(12.82223),
+		},
+	}
+	return testData
+}
+
+func TestStore_TypeFieldFilters_NoTypesAndDosingDecisionReasonFilter(t *testing.T) {
+	testData := testDataForTypeFieldFilters()
+	storeData := storeDataForLatestTests(testData)
+
+	store := before(t, storeData...)
+
+	qParams := &Params{
+		UserID:        "abc123",
+		DeviceID:      "dev123",
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		TypeFieldFilter: TypeFieldFilter{
+			"dosingDecision": FieldFilter{
+				"reason": []string{"simpleBolus"},
+			},
+		},
+	}
+
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Errorf("Error %s querying Mongo", err.Error())
+	}
+
+	results := []TestDataSchema{}
+
+	for iter.Next(store.context) {
+		var result TestDataSchema
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
+		results = append(results, result)
+	}
+
+	if len(results) != 3 {
+		t.Errorf("Expected 3 but got %d", len(results))
+	}
+
+	for _, res := range results {
+		if *res.Type == "dosingDecision" && *res.Reason != "simpleBolus" {
+			t.Errorf("Expected %s to be %s", *res.Reason, "simpleBolus")
+		}
+	}
+}
+
+func TestStore_TypeFieldFilters_TypesAndDosingDecisionFilter(t *testing.T) {
+	testData := testDataForTypeFieldFilters()
+	storeData := storeDataForLatestTests(testData)
+
+	store := before(t, storeData...)
+
+	qParams := &Params{
+		UserID:        "abc123",
+		DeviceID:      "dev123",
+		Types:         []string{"cbg", "dosingDecision"},
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		TypeFieldFilter: TypeFieldFilter{
+			"dosingDecision": FieldFilter{
+				"reason": []string{"simpleBolus"},
+			},
+		},
+	}
+
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Errorf("Error %s querying Mongo", err.Error())
+	}
+
+	results := []TestDataSchema{}
+
+	for iter.Next(store.context) {
+		var result TestDataSchema
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
+		results = append(results, result)
+	}
+
+	if len(results) != 2 {
+		t.Errorf("Expected 2 but got %d", len(results))
+	}
+
+	for _, res := range results {
+		if *res.Type == "dosingDecision" && *res.Reason != "simpleBolus" {
+			t.Errorf("Expected %s to be %s ", *res.Reason, "simpleBolus")
+		}
+	}
 }
