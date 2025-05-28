@@ -58,12 +58,8 @@ type (
 var (
 	errorStatusCheck       = detailedError{Status: http.StatusInternalServerError, Code: "data_status_check", Message: "checking of the status endpoint showed an error"}
 	errorNoViewPermission  = detailedError{Status: http.StatusForbidden, Code: "data_cant_view", Message: "user is not authorized to view data"}
-	errorNoPermissions     = detailedError{Status: http.StatusInternalServerError, Code: "data_perms_error", Message: "error finding permissions for user"}
 	errorRunningQuery      = detailedError{Status: http.StatusInternalServerError, Code: "data_store_error", Message: "internal server error"}
-	errorLoadingEvents     = detailedError{Status: http.StatusInternalServerError, Code: "data_marshal_error", Message: "internal server error"}
 	errorInvalidParameters = detailedError{Status: http.StatusInternalServerError, Code: "invalid_parameters", Message: "one or more parameters are invalid"}
-
-	storage store.Storage
 
 	slowDataCheckCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "tidepool_tide_whisperer_slow_data_check_count",
@@ -82,7 +78,7 @@ const (
 	slowQueryDuration         = 0.1 // seconds
 )
 
-//set the intenal message that we will use for logging
+// set the internal message that we will use for logging
 func (d detailedError) setInternalMessage(internal error) detailedError {
 	d.InternalMessage = internal.Error()
 	return d
@@ -172,7 +168,7 @@ func main() {
 
 		err.ID = uuid.New().String()
 
-		log.Println(dataAPIPrefix, fmt.Sprintf("[%s][%s] failed after [%.3f]secs with error [%s][%s] ", err.ID, err.Code, time.Now().Sub(startedAt).Seconds(), err.Message, err.InternalMessage))
+		log.Println(dataAPIPrefix, fmt.Sprintf("[%s][%s] failed after [%.3f]secs with error [%s][%s] ", err.ID, err.Code, time.Since(startedAt).Seconds(), err.Message, err.InternalMessage))
 
 		jsonErr, _ := json.Marshal(err)
 
@@ -204,7 +200,6 @@ func main() {
 			return
 		}
 		res.Write([]byte("OK\n"))
-		return
 	}))
 
 	router.Add("GET", "/status", http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
@@ -214,7 +209,6 @@ func main() {
 			return
 		}
 		res.Write([]byte("OK\n"))
-		return
 	}))
 
 	f := httpgzip.NewHandler(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
@@ -257,24 +251,24 @@ func main() {
 			} else if !hasMedtronicDirectData {
 				queryParams.Carelink = true
 			}
-			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
+			if queryDuration := time.Since(queryStart).Seconds(); queryDuration > slowQueryDuration {
 				slowDataCheckCount.WithLabelValues("medtronic", "direct").Inc()
 				log.Printf("%s request %s user %s HasMedtronicDirectData took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
 		}
-		if !queryParams.Dexcom {
-			dexcomDataSource, dexcomErr := storageWithCtx.GetDexcomDataSource(queryParams.UserID)
-			if dexcomErr != nil {
-				log.Printf("%s request %s user %s GetDexcomDataSource returned error: %s", dataAPIPrefix, requestID, userID, dexcomErr)
+		if queryParams.CBGFilter {
+			cbgCloudDataSources, cbgCloudErr := storageWithCtx.GetCBGCloudDataSources(queryParams.UserID)
+			if cbgCloudErr != nil {
+				log.Printf("%s request %s user %s GetCBGCloudDataSources returned error: %s", dataAPIPrefix, requestID, userID, cbgCloudErr)
 				jsonError(res, errorRunningQuery, start)
 				return
 			}
-			queryParams.DexcomDataSource = dexcomDataSource
+			queryParams.CBGCloudDataSources = cbgCloudDataSources
 
-			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
-				slowDataCheckCount.WithLabelValues("dexcom", "datasource").Inc()
-				log.Printf("%s request %s user %s GetDexcomDataSource took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
+			if queryDuration := time.Since(queryStart).Seconds(); queryDuration > slowQueryDuration {
+				slowDataCheckCount.WithLabelValues("cbg", "cloud", "data_sources").Inc()
+				log.Printf("%s request %s user %s GetCBGCloudDataSources took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
 			}
 			queryStart = time.Now()
 		}
@@ -288,7 +282,7 @@ func main() {
 			if !hasMedtronicLoopData {
 				queryParams.Medtronic = true
 			}
-			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
+			if queryDuration := time.Since(queryStart).Seconds(); queryDuration > slowQueryDuration {
 				slowDataCheckCount.WithLabelValues("medtronic", "loop_data").Inc()
 				log.Printf("%s request %s user %s HasMedtronicLoopDataAfter took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
 			}
@@ -304,7 +298,7 @@ func main() {
 			queryParams.MedtronicDate = medtronicLoopBoundaryDate
 			queryParams.MedtronicUploadIds = medtronicUploadIds
 
-			if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
+			if queryDuration := time.Since(queryStart).Seconds(); queryDuration > slowQueryDuration {
 				slowDataCheckCount.WithLabelValues("medtronic", "loop_direct_upload_ids").Inc()
 				log.Printf("%s request %s user %s GetLoopableMedtronicDirectUploadIdsAfter took %.3fs", dataAPIPrefix, requestID, userID, queryDuration)
 			}
@@ -353,11 +347,11 @@ func main() {
 		}
 		res.Write([]byte("]"))
 
-		if queryDuration := time.Now().Sub(queryStart).Seconds(); queryDuration > slowQueryDuration {
+		if queryDuration := time.Since(queryStart).Seconds(); queryDuration > slowQueryDuration {
 			// XXX use metrics
 			//log.Printf("%s request %s user %s GetDeviceData took %.3fs", DATA_API_PREFIX, requestID, userID, queryDuration)
 		}
-		log.Printf("%s request %s user %s took %.3fs returned %d records", dataAPIPrefix, requestID, userID, time.Now().Sub(start).Seconds(), writeCount)
+		log.Printf("%s request %s user %s took %.3fs returned %d records", dataAPIPrefix, requestID, userID, time.Since(start).Seconds(), writeCount)
 	}))
 
 	// The /data/userId endpoint retrieves device/health data for a user based on a set of parameters
