@@ -69,8 +69,8 @@ type (
 		Date
 		*SchemaVersion
 		Carelink              bool
-		Dexcom                bool
-		DexcomDataSource      bson.M
+		CBGFilter             bool
+		CBGCloudDataSources   []bson.M
 		DeviceID              string
 		Latest                bool
 		Medtronic             bool
@@ -144,15 +144,24 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		}
 	}
 
-	dexcom := false
-	if values, ok := q["dexcom"]; ok {
+	cbgFilter := true
+	if values, ok := q["cbgFilter"]; ok {
+		if len(values) < 1 {
+			return nil, errors.New("cbgFilter parameter not valid")
+		}
+		cbgFilter, err = strconv.ParseBool(values[len(values)-1])
+		if err != nil {
+			return nil, errors.New("cbgFilter parameter not valid")
+		}
+	} else if values, ok := q["dexcom"]; ok { // Legacy
 		if len(values) < 1 {
 			return nil, errors.New("dexcom parameter not valid")
 		}
-		dexcom, err = strconv.ParseBool(values[len(values)-1])
+		dexcom, err := strconv.ParseBool(values[len(values)-1])
 		if err != nil {
 			return nil, errors.New("dexcom parameter not valid")
 		}
+		cbgFilter = !dexcom // Inverted logic for backwards compatibility
 	}
 
 	latest := false
@@ -201,7 +210,7 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		Date:                  Date{startDate, endDate},
 		SchemaVersion:         schema,
 		Carelink:              carelink,
-		Dexcom:                dexcom,
+		CBGFilter:             cbgFilter,
 		Latest:                latest,
 		Medtronic:             medtronic,
 		SampleIntervalMinimum: sampleIntervalMinimum,
@@ -384,24 +393,34 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["uploadId"] = p.UploadID
 	} else {
 		andQuery := []bson.M{}
-		if !p.Dexcom && p.DexcomDataSource != nil {
-			dexcomQuery := []bson.M{
-				{"type": bson.M{"$ne": "cbg"}},
-				{"uploadId": bson.M{"$in": p.DexcomDataSource["dataSetIds"]}},
+		if p.CBGFilter {
+			cloudDataSetIds := primitive.A{}
+			cloudDataTimeRanges := []bson.M{}
+			for _, dataSource := range p.CBGCloudDataSources {
+				if dataSetIds, ok := dataSource["dataSetIds"].(primitive.A); ok && len(dataSetIds) > 0 {
+					cloudDataSetIds = append(cloudDataSetIds, dataSetIds...)
+					if earliestDataTime, ok := dataSource["earliestDataTime"].(primitive.DateTime); ok {
+						if latestDataTime, ok := dataSource["latestDataTime"].(primitive.DateTime); ok {
+							cloudDataTimeRanges = append(cloudDataTimeRanges, bson.M{
+								"time": bson.M{"$gte": earliestDataTime.Time().UTC(), "$lte": latestDataTime.Time().UTC()},
+							})
+						}
+					}
+				}
 			}
 
-			// more redundant OR query for multiple date field types
-			earliestDataTime := p.DexcomDataSource["earliestDataTime"].(primitive.DateTime).Time().UTC()
-			dexcomQuery = append(dexcomQuery,
-				bson.M{"time": bson.M{"$lt": earliestDataTime}},
-			)
+			cloudQuery := []bson.M{}
+			if len(cloudDataSetIds) > 0 {
+				cloudQuery = append(cloudQuery, bson.M{"uploadId": bson.M{"$in": cloudDataSetIds}})
+			}
+			if len(cloudDataTimeRanges) > 0 {
+				cloudQuery = append(cloudQuery, bson.M{"$nor": cloudDataTimeRanges})
+			}
 
-			latestDataTime := p.DexcomDataSource["latestDataTime"].(primitive.DateTime).Time().UTC()
-			dexcomQuery = append(dexcomQuery,
-				bson.M{"time": bson.M{"$gt": latestDataTime}},
-			)
-
-			andQuery = append(andQuery, bson.M{"$or": dexcomQuery})
+			if len(cloudQuery) > 0 {
+				cloudQuery = append(cloudQuery, bson.M{"type": bson.M{"$ne": "cbg"}})
+				andQuery = append(andQuery, bson.M{"$or": cloudQuery})
+			}
 		}
 
 		if !p.Medtronic && len(p.MedtronicUploadIds) > 0 {
@@ -493,8 +512,8 @@ func (c *MongoStoreClient) HasMedtronicDirectData(userID string) (bool, error) {
 	return err == nil, err
 }
 
-// GetDexcomDataSource - get
-func (c *MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
+// GetCBGCloudDataSources - get
+func (c *MongoStoreClient) GetCBGCloudDataSources(userID string) ([]bson.M, error) {
 	if userID == "" {
 		return nil, errors.New("user id is missing")
 	}
@@ -502,9 +521,7 @@ func (c *MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 	// `earliestDataTime` and `latestDataTime` are bson.Date fields. Internally, they are int64's
 	// so if they exist, the must be set to something, even if 0 (ie Unix epoch)
 	query := bson.M{
-		"userId":       userID,
-		"providerType": "oauth",
-		"providerName": "dexcom",
+		"userId": userID,
 		"dataSetIds": bson.M{
 			"$exists": true,
 			"$not": bson.M{
@@ -519,17 +536,21 @@ func (c *MongoStoreClient) GetDexcomDataSource(userID string) (bson.M, error) {
 		},
 	}
 
-	dataSource := bson.M{}
-	err := c.client.Database("tidepool").Collection("data_sources").FindOne(c.context, query).Decode(&dataSource)
-	if err == mongo.ErrNoDocuments {
-		return nil, nil
+	cursor, err := c.client.Database("tidepool").Collection("data_sources").Find(c.context, query)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, nil
+		} else {
+			return nil, err
+		}
 	}
 
-	if err != nil {
+	dataSources := []bson.M{}
+	if err = cursor.All(c.context, &dataSources); err != nil {
 		return nil, err
 	}
 
-	return dataSource, nil
+	return dataSources, nil
 }
 
 // HasMedtronicLoopDataAfter checks the database to see if Loop data exists for `userID` that originated
@@ -665,21 +686,23 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 
 	opts := options.Find().SetProjection(removeFieldsForReturn)
 
+	mongoQuery := generateMongoQuery(p)
+
 	// If query only needs to read from one collection use the collection directly.
 	switch {
 	case len(p.Types) == 1 && p.Types[0] == "upload":
-		return dataSetsCollection(c).Find(c.context, generateMongoQuery(p), opts)
+		return dataSetsCollection(c).Find(c.context, mongoQuery, opts)
 	// Have to check for empty string as sometimes that is the type sent.
 	case len(p.Types) > 0 && !contains("upload", p.Types) && p.Types[0] != "":
-		return dataCollection(c).Find(c.context, generateMongoQuery(p), opts)
+		return dataCollection(c).Find(c.context, mongoQuery, opts)
 	}
 
 	// Otherwise query needs to read from both deviceData and deviceDataSets collection.
-	dataIter, err := dataCollection(c).Find(c.context, generateMongoQuery(p), opts)
+	dataIter, err := dataCollection(c).Find(c.context, mongoQuery, opts)
 	if err != nil {
 		return nil, err
 	}
-	dataSetIter, err := dataSetsCollection(c).Find(c.context, generateMongoQuery(p), opts)
+	dataSetIter, err := dataSetsCollection(c).Find(c.context, mongoQuery, opts)
 	if err != nil {
 		return nil, err
 	}

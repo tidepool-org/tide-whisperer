@@ -52,7 +52,7 @@ func before(t *testing.T, docs ...interface{}) *MongoStoreClient {
 	dataSetsCollection(store).Drop(context.TODO())
 
 	if len(docs) > 0 {
-		// Once uploads are migrated, we have to mimic the behaviour of the
+		// Once uploads are migrated, we have to mimic the behavior of the
 		// production services where they write uploads to the deviceDataSets
 		// collection and data to the deviceData collection
 		for _, docRaw := range docs {
@@ -95,7 +95,6 @@ func basicQuery() bson.M {
 	qParams := &Params{
 		UserID:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
-		Dexcom:        true,
 		Medtronic:     true,
 	}
 
@@ -117,11 +116,18 @@ func allParams() *Params {
 		Types:         []string{"smbg", "cbg"},
 		SubTypes:      []string{"stuff"},
 		Carelink:      true,
-		Dexcom:        false,
-		DexcomDataSource: bson.M{
-			"dataSetIds":       []string{"123", "456"},
-			"earliestDataTime": primitive.NewDateTimeFromTime(earliestDataTime),
-			"latestDataTime":   primitive.NewDateTimeFromTime(latestDataTime),
+		CBGFilter:     true,
+		CBGCloudDataSources: []bson.M{
+			{
+				"dataSetIds":       primitive.A{"123", "456"},
+				"earliestDataTime": primitive.NewDateTimeFromTime(earliestDataTime.Add(-24 * time.Hour)),
+				"latestDataTime":   primitive.NewDateTimeFromTime(latestDataTime.Add(-24 * time.Hour)),
+			},
+			{
+				"dataSetIds":       primitive.A{"789", "ABC"},
+				"earliestDataTime": primitive.NewDateTimeFromTime(earliestDataTime.Add(24 * time.Hour)),
+				"latestDataTime":   primitive.NewDateTimeFromTime(latestDataTime.Add(24 * time.Hour)),
+			},
 		},
 		Latest:             false,
 		Medtronic:          false,
@@ -147,7 +153,6 @@ func typeAndSubtypeQuery() bson.M {
 		SchemaVersion:      &SchemaVersion{Maximum: 2, Minimum: 0},
 		Types:              []string{"smbg", "cbg"},
 		SubTypes:           []string{"stuff"},
-		Dexcom:             true,
 		Medtronic:          false,
 		MedtronicDate:      "2017-01-01",
 		MedtronicUploadIds: []string{"555666777", "888999000"},
@@ -447,8 +452,8 @@ func TestStore_generateMongoQuery_allParams(t *testing.T) {
 	timeStart, _ := time.Parse(time.RFC3339, "2015-10-07T15:00:00.00Z")
 	timeEnd, _ := time.Parse(time.RFC3339, "2015-10-11T15:00:00.00Z")
 
-	dexcomStart, _ := time.Parse(time.RFC3339, "2015-10-07T15:00:00Z")
-	dexcomEnd, _ := time.Parse(time.RFC3339, "2016-12-13T02:00:00Z")
+	earliestDataTime, _ := time.Parse(time.RFC3339, "2015-10-07T15:00:00Z")
+	latestDataTime, _ := time.Parse(time.RFC3339, "2016-12-13T02:00:00Z")
 
 	medtronicEnd, _ := time.Parse(time.RFC3339, "2017-01-01T00:00:00Z")
 
@@ -461,10 +466,12 @@ func TestStore_generateMongoQuery_allParams(t *testing.T) {
 		"time":     bson.M{"$gte": timeStart, "$lte": timeEnd},
 		"$and": []bson.M{
 			{"$or": []bson.M{
+				{"uploadId": bson.M{"$in": primitive.A{"123", "456", "789", "ABC"}}},
+				{"$nor": []bson.M{
+					{"time": bson.M{"$gte": earliestDataTime.Add(-24 * time.Hour), "$lte": latestDataTime.Add(-24 * time.Hour)}},
+					{"time": bson.M{"$gte": earliestDataTime.Add(24 * time.Hour), "$lte": latestDataTime.Add(24 * time.Hour)}},
+				}},
 				{"type": bson.M{"$ne": "cbg"}},
-				{"uploadId": bson.M{"$in": []string{"123", "456"}}},
-				{"time": bson.M{"$lt": dexcomStart}},
-				{"time": bson.M{"$gt": dexcomEnd}},
 			}},
 			{"$or": []bson.M{
 				{"time": bson.M{"$lt": medtronicEnd}},
@@ -630,7 +637,8 @@ func TestStore_GetParams_Empty(t *testing.T) {
 		SchemaVersion:   schema,
 		Types:           []string{""},
 		SubTypes:        []string{""},
-		TypeFieldFilter: TypeFieldFilter{},
+		CBGFilter:       true,
+    TypeFieldFilter: TypeFieldFilter{},
 	}
 
 	params, err := GetParams(query, schema)
@@ -655,8 +663,9 @@ func TestStore_GetParams_Medtronic(t *testing.T) {
 		SchemaVersion:   schema,
 		Types:           []string{""},
 		SubTypes:        []string{""},
+		CBGFilter:       true,
 		Medtronic:       true,
-		TypeFieldFilter: TypeFieldFilter{},
+    TypeFieldFilter: TypeFieldFilter{},
 	}
 
 	params, err := GetParams(query, schema)
@@ -681,8 +690,9 @@ func TestStore_GetParams_UploadId(t *testing.T) {
 		SchemaVersion:   schema,
 		Types:           []string{""},
 		SubTypes:        []string{""},
+		CBGFilter:       true,
 		UploadID:        "xyz123",
-		TypeFieldFilter: TypeFieldFilter{},
+    TypeFieldFilter: TypeFieldFilter{},
 	}
 
 	params, err := GetParams(query, schema)
