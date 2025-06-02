@@ -467,7 +467,7 @@ func generateMongoQuery(p *Params) bson.M {
 	}
 
 	if len(orQueries) > 0 {
-		groupDataQuery["$or"] = orQueries
+		groupDataQuery["$and"] = orQueries
 	}
 
 	return groupDataQuery

@@ -1932,3 +1932,49 @@ func TestStore_TypeFieldFilters_TypesAndDosingDecisionFilter(t *testing.T) {
 		}
 	}
 }
+
+func TestStore_TypeFieldFilters_TypesAndDosingDecisionFilterSampleInterfacel(t *testing.T) {
+	testData := testDataForTypeFieldFilters()
+	storeData := storeDataForLatestTests(testData)
+
+	store := before(t, storeData...)
+
+	qParams := &Params{
+		UserID:        "abc123",
+		DeviceID:      "dev123",
+		Types:         []string{"cbg", "dosingDecision"},
+		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
+		TypeFieldFilter: TypeFieldFilter{
+			"dosingDecision": FieldFilter{
+				"reason": []string{"simpleBolus"},
+			},
+		},
+		SampleIntervalMinimum: fiveMinSampleIntervalMS,
+	}
+
+	iter, err := store.GetDeviceData(qParams)
+	if err != nil {
+		t.Errorf("Error %s querying Mongo", err.Error())
+	}
+
+	results := []TestDataSchema{}
+
+	for iter.Next(store.context) {
+		var result TestDataSchema
+		err := iter.Decode(&result)
+		if err != nil {
+			t.Error("Mongo Decode error")
+		}
+		results = append(results, result)
+	}
+
+	if len(results) != 2 {
+		t.Errorf("Expected 2 but got %d", len(results))
+	}
+
+	for _, res := range results {
+		if *res.Type == "dosingDecision" && *res.Reason != "simpleBolus" {
+			t.Errorf("Expected %s to be %s ", *res.Reason, "simpleBolus")
+		}
+	}
+}
