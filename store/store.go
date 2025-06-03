@@ -474,12 +474,6 @@ func (c *MongoStoreClient) GetCBGCloudDataSources(userID string) ([]bson.M, erro
 				"$size": 0,
 			},
 		},
-		"earliestDataTime": bson.M{
-			"$exists": true,
-		},
-		"latestDataTime": bson.M{
-			"$exists": true,
-		},
 	}
 
 	cursor, err := c.client.Database("tidepool").Collection("data_sources").Find(c.context, query)
