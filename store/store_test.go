@@ -123,7 +123,18 @@ func allParams() *Params {
 				"latestDataTime":   primitive.NewDateTimeFromTime(latestDataTime.Add(-24 * time.Hour)),
 			},
 			{
-				"dataSetIds":       primitive.A{"789", "ABC"},
+				"dataSetIds":       primitive.A{"789"},
+				"earliestDataTime": primitive.NewDateTimeFromTime(earliestDataTime.Add(30 * time.Hour)),
+			},
+			{
+				"dataSetIds": primitive.A{"ABC"},
+			},
+			{
+				"dataSetIds":     primitive.A{"DEF"},
+				"latestDataTime": primitive.NewDateTimeFromTime(latestDataTime.Add(30 * time.Hour)),
+			},
+			{
+				"dataSetIds":       primitive.A{"GHI", "JKL"},
 				"earliestDataTime": primitive.NewDateTimeFromTime(earliestDataTime.Add(24 * time.Hour)),
 				"latestDataTime":   primitive.NewDateTimeFromTime(latestDataTime.Add(24 * time.Hour)),
 			},
@@ -465,7 +476,7 @@ func TestStore_generateMongoQuery_allParams(t *testing.T) {
 		"time":     bson.M{"$gte": timeStart, "$lte": timeEnd},
 		"$and": []bson.M{
 			{"$or": []bson.M{
-				{"uploadId": bson.M{"$in": primitive.A{"123", "456", "789", "ABC"}}},
+				{"uploadId": bson.M{"$in": primitive.A{"123", "456", "789", "ABC", "DEF", "GHI", "JKL"}}},
 				{"$nor": []bson.M{
 					{"time": bson.M{"$gte": earliestDataTime.Add(-24 * time.Hour), "$lte": latestDataTime.Add(-24 * time.Hour)}},
 					{"time": bson.M{"$gte": earliestDataTime.Add(24 * time.Hour), "$lte": latestDataTime.Add(24 * time.Hour)}},
