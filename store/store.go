@@ -387,12 +387,13 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["deviceId"] = p.DeviceID
 	}
 
+	andQuery := []bson.M{}
+
 	// If we have an explicit upload ID to filter by, we don't need or want to apply any further
 	// data source-based filtering
 	if p.UploadID != "" {
 		groupDataQuery["uploadId"] = p.UploadID
 	} else {
-		andQuery := []bson.M{}
 		if p.CBGFilter {
 			cloudDataSetIds := primitive.A{}
 			cloudDataTimeRanges := []bson.M{}
@@ -435,10 +436,6 @@ func generateMongoQuery(p *Params) bson.M {
 			}
 			andQuery = append(andQuery, bson.M{"$or": medtronicQuery})
 		}
-
-		if len(andQuery) > 0 {
-			groupDataQuery["$and"] = andQuery
-		}
 	}
 
 	var orQueries []bson.M
@@ -467,7 +464,11 @@ func generateMongoQuery(p *Params) bson.M {
 	}
 
 	if len(orQueries) > 0 {
-		groupDataQuery["$and"] = orQueries
+		andQuery = append(andQuery, orQueries...)
+	}
+
+	if len(andQuery) > 0 {
+		groupDataQuery["$and"] = andQuery
 	}
 
 	return groupDataQuery

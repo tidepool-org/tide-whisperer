@@ -638,7 +638,7 @@ func TestStore_GetParams_Empty(t *testing.T) {
 		Types:           []string{""},
 		SubTypes:        []string{""},
 		CBGFilter:       true,
-    TypeFieldFilter: TypeFieldFilter{},
+		TypeFieldFilter: TypeFieldFilter{},
 	}
 
 	params, err := GetParams(query, schema)
@@ -665,7 +665,7 @@ func TestStore_GetParams_Medtronic(t *testing.T) {
 		SubTypes:        []string{""},
 		CBGFilter:       true,
 		Medtronic:       true,
-    TypeFieldFilter: TypeFieldFilter{},
+		TypeFieldFilter: TypeFieldFilter{},
 	}
 
 	params, err := GetParams(query, schema)
@@ -692,7 +692,7 @@ func TestStore_GetParams_UploadId(t *testing.T) {
 		SubTypes:        []string{""},
 		CBGFilter:       true,
 		UploadID:        "xyz123",
-    TypeFieldFilter: TypeFieldFilter{},
+		TypeFieldFilter: TypeFieldFilter{},
 	}
 
 	params, err := GetParams(query, schema)
