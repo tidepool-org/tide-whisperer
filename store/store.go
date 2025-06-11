@@ -54,11 +54,18 @@ type (
 		Maximum int
 	}
 
+	// FieldFilter is a map with field names and a list of values to filter by
+	FieldFilter map[string][]string
+
+	// TypeFieldFilter is a map with types to which to apply field filters
+	TypeFieldFilter map[string]FieldFilter
+
 	// Params struct
 	Params struct {
-		UserID   string
-		Types    []string
-		SubTypes []string
+		UserID          string
+		Types           []string
+		SubTypes        []string
+		TypeFieldFilter TypeFieldFilter
 		Date
 		*SchemaVersion
 		Carelink              bool
@@ -92,6 +99,12 @@ type (
 		currentIterIdx int
 	}
 )
+
+var AllowedFieldFilters = TypeFieldFilter{
+	"dosingDecision": FieldFilter{
+		"reason": nil,
+	},
+}
 
 func cleanDateString(dateString string) (time.Time, error) {
 	date := time.Time{}
@@ -193,6 +206,7 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		//by a comma e.g. "type=smbg,cbg" so split them out into an array of values
 		Types:                 strings.Split(q.Get("type"), ","),
 		SubTypes:              strings.Split(q.Get("subType"), ","),
+		TypeFieldFilter:       TypeFieldFilter{},
 		Date:                  Date{startDate, endDate},
 		SchemaVersion:         schema,
 		Carelink:              carelink,
@@ -200,6 +214,25 @@ func GetParams(q url.Values, schema *SchemaVersion) (*Params, error) {
 		Latest:                latest,
 		Medtronic:             medtronic,
 		SampleIntervalMinimum: sampleIntervalMinimum,
+	}
+
+	// Parse the allowed filters to further restrict the result set,
+	// e.g. "dosingDecision.reason=normalBolus,simpleBolus,watchBolus" to filter out dosing decisions
+	// which have a 'reason' field other than [normalBolus,simpleBolus,watchBolus]
+	for typ, fields := range AllowedFieldFilters {
+		for field, _ := range fields {
+			key := fmt.Sprintf("%s.%s", typ, field)
+			value := q.Get(key)
+			if len(value) > 0 {
+				f, ok := p.TypeFieldFilter[typ]
+				if !ok {
+					f = FieldFilter{}
+				}
+				f[field] = strings.Split(value, ",")
+				p.TypeFieldFilter[typ] = f
+			}
+
+		}
 	}
 
 	return p, nil
@@ -354,12 +387,13 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["deviceId"] = p.DeviceID
 	}
 
+	andQuery := []bson.M{}
+
 	// If we have an explicit upload ID to filter by, we don't need or want to apply any further
 	// data source-based filtering
 	if p.UploadID != "" {
 		groupDataQuery["uploadId"] = p.UploadID
 	} else {
-		andQuery := []bson.M{}
 		if p.CBGFilter {
 			cloudDataSetIds := primitive.A{}
 			cloudDataTimeRanges := []bson.M{}
@@ -402,18 +436,39 @@ func generateMongoQuery(p *Params) bson.M {
 			}
 			andQuery = append(andQuery, bson.M{"$or": medtronicQuery})
 		}
+	}
 
-		if len(andQuery) > 0 {
-			groupDataQuery["$and"] = andQuery
+	var orQueries []bson.M
+
+	if p.SampleIntervalMinimum > 0 {
+		orQueries = append(orQueries, bson.M{
+			"$or": []bson.M{
+				{"type": bson.M{"$ne": "cbg"}},
+				{"sampleInterval": bson.M{"$exists": false}},
+				{"sampleInterval": bson.M{"$gte": p.SampleIntervalMinimum}},
+			},
+		})
+	}
+
+	if len(p.TypeFieldFilter) > 0 {
+		for typ, fields := range p.TypeFieldFilter {
+			for field, values := range fields {
+				orQueries = append(orQueries, bson.M{
+					"$or": []bson.M{
+						{"type": bson.M{"$ne": typ}},
+						{field: bson.M{"$in": values}},
+					},
+				})
+			}
 		}
 	}
 
-	if p.SampleIntervalMinimum > 0 {
-		groupDataQuery["$or"] = []bson.M{
-			{"type": bson.M{"$ne": "cbg"}},
-			{"sampleInterval": bson.M{"$exists": false}},
-			{"sampleInterval": bson.M{"$gte": p.SampleIntervalMinimum}},
-		}
+	if len(orQueries) > 0 {
+		andQuery = append(andQuery, orQueries...)
+	}
+
+	if len(andQuery) > 0 {
+		groupDataQuery["$and"] = andQuery
 	}
 
 	return groupDataQuery
