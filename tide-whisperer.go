@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/tidepool-org/tide-whisperer/transform"
 	"log"
 	"net/http"
 	"os"
@@ -189,6 +190,11 @@ func main() {
 		storage.EnsureIndexes()
 	}
 
+	deviceNameTransformer, err := transform.NewDeviceNameTransformer()
+	if err != nil {
+		log.Fatalf("unable to create device name transformer: %v\n", err.Error())
+	}
+
 	router := pat.New()
 
 	router.Handle("/metrics", promhttp.Handler())
@@ -328,6 +334,8 @@ func main() {
 			}
 
 			if len(results) > 0 {
+				deviceNameTransformer.Transform(results)
+
 				if bytes, err := json.Marshal(results); err != nil {
 					mongoErrorCount.WithLabelValues("marshal").Inc()
 					log.Printf("%s request %s user %s Marshal returned error: %s", dataAPIPrefix, requestID, userID, err)
