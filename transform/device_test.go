@@ -16,7 +16,7 @@ func TestParseDevicesCSV(t *testing.T) {
 	}{
 		{
 			name: "valid CSV with header and data",
-			csvContent: `deviceModel,Friendly
+			csvContent: `deviceModel,friendlyName
 G6,Dexcom G6
 G7,Dexcom G7
 670G,MiniMed 670G
@@ -31,7 +31,7 @@ G7,Dexcom G7
 		},
 		{
 			name: "valid CSV with extra columns",
-			csvContent: `deviceModel,manufacturer,Friendly,type
+			csvContent: `deviceModel,manufacturer,friendlyName,type
 G6,Dexcom,Dexcom G6,CGM
 670G,Medtronic,MiniMed 670G,Pump`,
 			expected: map[string]string{
@@ -42,7 +42,7 @@ G6,Dexcom,Dexcom G6,CGM
 		},
 		{
 			name: "CSV with whitespace that should be trimmed",
-			csvContent: `deviceModel,Friendly
+			csvContent: `deviceModel,friendlyName
   G6  ,  Dexcom G6  
  670G , MiniMed 670G `,
 			expected: map[string]string{
@@ -53,7 +53,7 @@ G6,Dexcom,Dexcom G6,CGM
 		},
 		{
 			name: "CSV with empty values (should be skipped)",
-			csvContent: `deviceModel,Friendly
+			csvContent: `deviceModel,friendlyName
 G6,Dexcom G6
 ,
 670G,MiniMed 670G
@@ -73,25 +73,25 @@ G7,`,
 		},
 		{
 			name:        "CSV with only header",
-			csvContent:  "deviceModel,Friendly",
+			csvContent:  "deviceModel,friendlyName",
 			expected:    map[string]string{},
 			expectError: false,
 		},
 		{
 			name: "missing deviceModel header",
-			csvContent: `model,Friendly
+			csvContent: `model,friendlyName
 G6,Dexcom G6`,
 			expected:    nil,
 			expectError: true,
 			errorMsg:    "unable to find deviceModel header in csv",
 		},
 		{
-			name: "missing Friendly header",
+			name: "missing friendlyName header",
 			csvContent: `deviceModel,niceName
 G6,Dexcom G6`,
 			expected:    nil,
 			expectError: true,
-			errorMsg:    "unable to find Friendly header in csv",
+			errorMsg:    "unable to find friendlyName header in csv",
 		},
 		{
 			name: "malformed CSV",

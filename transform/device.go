@@ -44,10 +44,10 @@ func ParseDevicesCSV(content []byte) (map[string]string, error) {
 		return nil, fmt.Errorf("unable to find deviceModel header in csv")
 	}
 	friendlyNameIndex := slices.IndexFunc(records[0], func(c string) bool {
-		return strings.EqualFold(c, "Friendly")
+		return strings.EqualFold(c, "friendlyName")
 	})
 	if friendlyNameIndex == -1 {
-		return nil, fmt.Errorf("unable to find Friendly header in csv")
+		return nil, fmt.Errorf("unable to find friendlyName header in csv")
 	}
 
 	deviceModelToName := map[string]string{}
