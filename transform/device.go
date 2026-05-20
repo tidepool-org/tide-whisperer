@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 //go:embed device_names.csv
@@ -84,7 +85,7 @@ func (d *DeviceNameTransformer) Transform(datum map[string]any) {
 		return
 	}
 
-	name, exists := d.deviceModelToName[strings.TrimSpace(deviceModel)]
+	name, exists := findPrefixedDeviceName(deviceModel, d.deviceModelToName)
 	if !exists || name == "" {
 		return
 	}
@@ -102,4 +103,35 @@ func getMapValueAs[T any](key string, datum map[string]any) (result T, exists bo
 
 	result, exists = value.(T)
 	return
+}
+
+// findPrefixedDeviceName searches the device name to friendly name mapping
+// of deviceNames for any key that is a (not necessarily proper) prefix of the
+// input deviceModel. This is to handle cases where device models contain
+// miscellaneous suffixes such as hashes.
+func findPrefixedDeviceName(deviceModel string, deviceNames map[string]string) (friendlyName string, found bool) {
+	deviceModel = strings.ToLower(strings.TrimSpace(deviceModel))
+	// We could also just keep a sorted slice by deviceModel slice and do a
+	// binary search to find a device model key that is a prefix of the input
+	// deviceModel name but since there are only a couple hundred entries, not
+	// going to bother.
+
+	var longestDeviceName string
+	for modelName := range deviceNames {
+		// We have to loop through all names because there may exist names in
+		// deviceNames that are prefixes of each other. For example, given
+		// deviceNames of {"FreeStyle Libre 3": "Xyz", "FreeStyle Libre 3 Plus":
+		// "Abc"} and a deviceModel of "FreeStyle Libre 3 Plus some-suffix-here" we
+		// do not want to prematurely return the value mapped for "FreeStyle Libre
+		// 3" (Of couse now the binary search looks more appealing as it can handle
+		// this).
+		if strings.HasPrefix(deviceModel, strings.ToLower(modelName)) && (!found || utf8.RuneCountInString(modelName) > utf8.RuneCountInString(longestDeviceName)) {
+			found = true
+			longestDeviceName = modelName
+		}
+	}
+	if found {
+		return deviceNames[longestDeviceName], found
+	}
+	return "", false
 }
