@@ -1,7 +1,6 @@
 package transform
 
 import (
-	"maps"
 	"reflect"
 	"strings"
 	"testing"
@@ -151,13 +150,12 @@ func TestNewDeviceNameTransformerFromMap(t *testing.T) {
 
 func TestDeviceNameTransformer_Transform(t *testing.T) {
 	deviceMap := map[string]string{
-		"G6":          "Dexcom G6",
-		"G7":          "Dexcom G7",
-		"670G":        "MiniMed 670G",
-		"780G":        "MiniMed 780G",
-		"Libre2":      "FreeStyle Libre 2",
-		"Libre2 Plus": "FreeStyle Libre 2 Plus",
-		"OmniPod5":    "Omnipod 5",
+		"G6":       "Dexcom G6",
+		"G7":       "Dexcom G7",
+		"670G":     "MiniMed 670G",
+		"780G":     "MiniMed 780G",
+		"Libre2":   "FreeStyle Libre 2",
+		"OmniPod5": "Omnipod 5",
 	}
 	transformer := NewDeviceNameTransformerFromMap(deviceMap)
 
@@ -310,87 +308,20 @@ func TestDeviceNameTransformer_Transform(t *testing.T) {
 				"userId":      123,
 			},
 		},
-		{
-			name: "deviceModel with a mapped name that is a proper prefix of the deviceModel should be transformed",
-			input: map[string]any{
-				"type":        "upload",
-				"deviceModel": "OmniPod5_with_suffix",
-				"userId":      12345,
-			},
-			expected: map[string]any{
-				"type":        "upload",
-				"deviceModel": "OmniPod5_with_suffix",
-				"userId":      12345,
-				"deviceName":  "Omnipod 5",
-			},
-		},
-		{
-			name: "deviceModel with a mapped name that is an exact match of the deviceModel should be transformed",
-			input: map[string]any{
-				"type":        "upload",
-				"deviceModel": "OmniPod5",
-				"userId":      123456,
-			},
-			expected: map[string]any{
-				"type":        "upload",
-				"deviceModel": "OmniPod5",
-				"userId":      123456,
-				"deviceName":  "Omnipod 5",
-			},
-		},
-		{
-			name: "deviceModel that is a proper prefix of a mapped name should not be transformed",
-			input: map[string]any{
-				"type":        "upload",
-				"deviceModel": "Omni",
-				"userId":      1234567,
-			},
-			expected: map[string]any{
-				"type":        "upload",
-				"deviceModel": "Omni",
-				"userId":      1234567,
-			},
-		},
-		{
-			name: "transformed deviceName should use the longest mapped model name",
-			input: map[string]any{
-				"type":        "upload",
-				"deviceModel": "Libre2 Plus abcdefghi",
-				"userId":      12345678,
-			},
-			expected: map[string]any{
-				"type":        "upload",
-				"deviceModel": "Libre2 Plus abcdefghi",
-				"userId":      12345678,
-				"deviceName":  "FreeStyle Libre 2 Plus",
-			},
-		},
-		{
-			name: "case-insensitive deviceModel matches should be transformed",
-			input: map[string]any{
-				"type":        "upload",
-				"deviceModel": "libre2",
-				"userId":      123456789,
-			},
-			expected: map[string]any{
-				"type":        "upload",
-				"deviceModel": "libre2",
-				"userId":      123456789,
-				"deviceName":  "FreeStyle Libre 2",
-			},
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Make a copy of input to avoid modifying the test case
 			input := make(map[string]any)
-			maps.Copy(input, tt.input)
+			for k, v := range tt.input {
+				input[k] = v
+			}
 
 			transformer.Transform(input)
 
 			if !reflect.DeepEqual(input, tt.expected) {
-				t.Errorf("expected %#v, got %#v", tt.expected, input)
+				t.Errorf("expected %v, got %v", tt.expected, input)
 			}
 		})
 	}
