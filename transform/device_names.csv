@@ -13,6 +13,7 @@ HealthKit_DexUnknown: com.dexcom.G6.OUS.MMOL.R01,Dexcom G6
 923,Roche Accu-Chek Guide
 FreeStyle LibreLink,FreeStyle Libre
 897,Roche Accu-Chek Guide Me
+,Unknown
 Dash,Insulet Omnipod DASH
 Contour Next One,Ascensia Contour Next One
 Contour Next,Ascensia Contour Next
@@ -114,6 +115,7 @@ equil,MicroTech Equil Patch Insulin Pump
 Contour USB,Ascensia Contour
 498,Accu-Chek Aviva Connect
 Select Plus Flex,OneTouch Select Plus Flex
+1001357,
 weitaiupload,MicroTech Equil Patch Insulin Pump
 Nightscout,Unknown
 10037177,Unknown
@@ -149,6 +151,7 @@ pump:4628,Tandem t:slim G4
 Ultra Plus Reflect,OneTouch Ultra Plus Reflect
 Blucon,Unknown
 Disabled,Unknown
+,Unknown
 1742,Unknown
 166D1030,Unknown
 MMT-1711,Medtronic Insulin Pump
@@ -252,6 +255,7 @@ BlueReader,Unknown
 皺,Unknown
 Guardian 4,Unknown
 Libreview_PT,Unknown
+"Application FreeStyle LibreLink, édition spéciale",Unknown
 FreeStyle Libre2,Abbott FreeStyle Libre
 Libreview_DE,Abbott FreeStyle Libre
 1511,Unknown
@@ -266,3 +270,5 @@ Network G4 and Classic xDrip,Unknown
 Network LimiTTer,Unknown
 Medtronic Connect,Unknown
 Atom,Unknown
+Autocode,Prodigy AutoCode
+GK+ Meter,Keto Mojo one
