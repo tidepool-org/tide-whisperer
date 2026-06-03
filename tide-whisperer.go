@@ -53,7 +53,7 @@ type (
 		InternalMessage string `json:"-"` //used only for logging so we don't want to serialize it out
 	}
 	//generic type as device data can be comprised of many things
-	deviceData map[string]interface{}
+	deviceData map[string]any
 )
 
 var (
@@ -326,7 +326,7 @@ func main() {
 		res.Write([]byte("["))
 
 		for iter.Next(req.Context()) {
-			var results map[string]interface{}
+			var results map[string]any
 			err := iter.Decode(&results)
 			if err != nil {
 				mongoErrorCount.WithLabelValues("decode").Inc()

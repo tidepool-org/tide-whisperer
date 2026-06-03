@@ -37,24 +37,28 @@ func ParseDevicesCSV(content []byte) (map[string]string, error) {
 		return nil, fmt.Errorf("devices csv is empty")
 	}
 
-	deviceModelIndex := slices.Index(records[0], "deviceModel")
+	deviceModelIndex := slices.IndexFunc(records[0], func(c string) bool {
+		return strings.EqualFold(c, "deviceModel")
+	})
 	if deviceModelIndex == -1 {
 		return nil, fmt.Errorf("unable to find deviceModel header in csv")
 	}
-	deviceNiceNameIndex := slices.Index(records[0], "deviceNiceName")
-	if deviceNiceNameIndex == -1 {
-		return nil, fmt.Errorf("unable to find deviceNiceName header in csv")
+	friendlyNameIndex := slices.IndexFunc(records[0], func(c string) bool {
+		return strings.EqualFold(c, "friendlyName")
+	})
+	if friendlyNameIndex == -1 {
+		return nil, fmt.Errorf("unable to find friendlyName header in csv")
 	}
 
 	deviceModelToName := map[string]string{}
 	for i := 1; i < len(records); i++ {
 		record := records[i]
-		if deviceModelIndex >= len(record) || deviceNiceNameIndex >= len(record) {
-			return nil, fmt.Errorf("unable to find device mapping at row %v", i)
+		if deviceModelIndex >= len(record) || friendlyNameIndex >= len(record) {
+			return nil, fmt.Errorf("unable to find device mapping at row %v", i+1)
 		}
 
 		deviceModel := strings.TrimSpace(record[deviceModelIndex])
-		deviceNiceName := strings.TrimSpace(record[deviceNiceNameIndex])
+		deviceNiceName := strings.TrimSpace(record[friendlyNameIndex])
 		if deviceModel == "" || deviceNiceName == "" {
 			continue
 		}
