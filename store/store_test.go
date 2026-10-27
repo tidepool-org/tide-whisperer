@@ -91,14 +91,14 @@ func formatForReading(toFormat interface{}) string {
 	return string(formatted)
 }
 
-func basicQuery() bson.M {
+func basicQuery(targetDeviceDataSets bool) bson.M {
 	qParams := &Params{
 		UserID:        "abc123",
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		Medtronic:     true,
 	}
 
-	return generateMongoQuery(qParams)
+	return generateMongoQuery(qParams, targetDeviceDataSets)
 }
 
 func allParams() *Params {
@@ -147,18 +147,18 @@ func allParams() *Params {
 	}
 }
 
-func allParamsQuery() bson.M {
-	return generateMongoQuery(allParams())
+func allParamsQuery(targetDeviceDataSets bool) bson.M {
+	return generateMongoQuery(allParams(), targetDeviceDataSets)
 }
 
 func allParamsIncludingUploadIDQuery() bson.M {
 	qParams := allParams()
 	qParams.UploadID = "xyz123"
 
-	return generateMongoQuery(qParams)
+	return generateMongoQuery(qParams, false)
 }
 
-func typeAndSubtypeQuery() bson.M {
+func typeAndSubtypeQuery(targetDeviceSets bool) bson.M {
 	qParams := &Params{
 		UserID:             "abc123",
 		SchemaVersion:      &SchemaVersion{Maximum: 2, Minimum: 0},
@@ -168,7 +168,7 @@ func typeAndSubtypeQuery() bson.M {
 		MedtronicDate:      "2017-01-01",
 		MedtronicUploadIds: []string{"555666777", "888999000"},
 	}
-	return generateMongoQuery(qParams)
+	return generateMongoQuery(qParams, targetDeviceSets)
 }
 
 func uploadIDQuery() bson.M {
@@ -177,7 +177,7 @@ func uploadIDQuery() bson.M {
 		SchemaVersion: &SchemaVersion{Maximum: 2, Minimum: 0},
 		UploadID:      "xyz123",
 	}
-	return generateMongoQuery(qParams)
+	return generateMongoQuery(qParams, false)
 }
 
 func testDataForLatestTests() map[string]TestDataSchema {
@@ -429,6 +429,13 @@ func TestStore_EnsureDataSetsIndexes(t *testing.T) {
 			},
 			Name: "HasMedtronicDirectData",
 		},
+		{
+			Key: makeKeySlice("_userId", "uploadId"),
+			PartialFilterExpression: bson.D{
+				{Key: "_active", Value: true},
+			},
+			Name: "UserIdUploadId",
+		},
 	}
 
 	eq := reflect.DeepEqual(indexes, expectedIndexes)
@@ -439,7 +446,7 @@ func TestStore_EnsureDataSetsIndexes(t *testing.T) {
 
 func TestStore_generateMongoQuery_basic(t *testing.T) {
 
-	query := basicQuery()
+	query := basicQuery(false)
 
 	expectedQuery := bson.M{
 		"_userId": "abc123",
@@ -456,10 +463,8 @@ func TestStore_generateMongoQuery_basic(t *testing.T) {
 
 }
 
-func TestStore_generateMongoQuery_allParams(t *testing.T) {
-
-	query := allParamsQuery()
-
+func TestStore_generateMongoQuery_deviceData_allParams(t *testing.T) {
+	query := allParamsQuery(false)
 	timeStart, _ := time.Parse(time.RFC3339, "2015-10-07T15:00:00.00Z")
 	timeEnd, _ := time.Parse(time.RFC3339, "2015-10-11T15:00:00.00Z")
 
@@ -486,7 +491,45 @@ func TestStore_generateMongoQuery_allParams(t *testing.T) {
 			}},
 			{"$or": []bson.M{
 				{"time": bson.M{"$lt": medtronicEnd}},
+				{"uploadId": bson.M{"$nin": []string{"555666777", "888999000"}}},
 				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
+			}},
+		},
+	}
+
+	eq := reflect.DeepEqual(query, expectedQuery)
+	if !eq {
+		t.Error(getErrString(query, expectedQuery))
+	}
+}
+
+func TestStore_generateMongoQuery_deviceDataSets_allParams(t *testing.T) {
+	query := allParamsQuery(true)
+	timeStart, _ := time.Parse(time.RFC3339, "2015-10-07T15:00:00.00Z")
+	timeEnd, _ := time.Parse(time.RFC3339, "2015-10-11T15:00:00.00Z")
+
+	earliestDataTime, _ := time.Parse(time.RFC3339, "2015-10-07T15:00:00Z")
+	latestDataTime, _ := time.Parse(time.RFC3339, "2016-12-13T02:00:00Z")
+
+	medtronicEnd, _ := time.Parse(time.RFC3339, "2017-01-01T00:00:00Z")
+
+	expectedQuery := bson.M{
+		"_userId":  "abc123",
+		"deviceId": "device123",
+		"_active":  true,
+		"type":     bson.M{"$in": strings.Split("smbg,cbg", ",")},
+		"subType":  bson.M{"$in": strings.Split("stuff", ",")},
+		"time":     bson.M{"$gte": timeStart, "$lte": timeEnd},
+		"$and": []bson.M{
+			{"$or": []bson.M{
+				{"uploadId": bson.M{"$in": primitive.A{"123", "456", "789", "ABC", "DEF", "GHI", "JKL"}}},
+				{"$nor": []bson.M{
+					{"time": bson.M{"$gte": earliestDataTime.Add(-24 * time.Hour), "$lte": latestDataTime.Add(-24 * time.Hour)}},
+					{"time": bson.M{"$gte": earliestDataTime.Add(24 * time.Hour), "$lte": latestDataTime.Add(24 * time.Hour)}},
+				}},
+			}},
+			{"$or": []bson.M{
+				{"time": bson.M{"$lt": medtronicEnd}},
 				{"uploadId": bson.M{"$nin": []string{"555666777", "888999000"}}},
 			}},
 		},
@@ -540,9 +583,8 @@ func TestStore_generateMongoQuery_uploadId(t *testing.T) {
 	}
 }
 
-func TestStore_generateMongoQuery_noDates(t *testing.T) {
-
-	query := typeAndSubtypeQuery()
+func TestStore_generateMongoQuery_deviceData_noDates(t *testing.T) {
+	query := typeAndSubtypeQuery(false)
 
 	medtronicEnd, _ := time.Parse(time.RFC3339, "2017-01-01T00:00:00Z")
 
@@ -557,7 +599,34 @@ func TestStore_generateMongoQuery_noDates(t *testing.T) {
 		"$and": []bson.M{
 			{"$or": []bson.M{
 				{"time": bson.M{"$lt": medtronicEnd}},
+				{"uploadId": bson.M{"$nin": []string{"555666777", "888999000"}}},
 				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
+			}},
+		},
+	}
+
+	eq := reflect.DeepEqual(query, expectedQuery)
+	if !eq {
+		t.Error(getErrString(query, expectedQuery))
+	}
+}
+
+func TestStore_generateMongoQuery_deviceDataSets_noDates(t *testing.T) {
+	query := typeAndSubtypeQuery(true)
+
+	medtronicEnd, _ := time.Parse(time.RFC3339, "2017-01-01T00:00:00Z")
+
+	expectedQuery := bson.M{
+		"_userId": "abc123",
+		"_active": true,
+		"type":    bson.M{"$in": strings.Split("smbg,cbg", ",")},
+		"subType": bson.M{"$in": strings.Split("stuff", ",")},
+		"source": bson.M{
+			"$ne": "carelink",
+		},
+		"$and": []bson.M{
+			{"$or": []bson.M{
+				{"time": bson.M{"$lt": medtronicEnd}},
 				{"uploadId": bson.M{"$nin": []string{"555666777", "888999000"}}},
 			}},
 		},
