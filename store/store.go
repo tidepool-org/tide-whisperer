@@ -331,6 +331,19 @@ func (c *MongoStoreClient) EnsureIndexes() error {
 					},
 				),
 		},
+		{
+			Keys: bson.D{
+				{Key: "_userId", Value: 1},
+				{Key: "uploadId", Value: 1},
+			},
+			Options: options.Index().
+				SetName("UserIdUploadId").
+				SetPartialFilterExpression(
+					bson.D{
+						{Key: "_active", Value: true},
+					},
+				),
+		},
 	}
 
 	if _, err := dataSetsCollection(c).Indexes().CreateMany(context.Background(), dataSetsIndexes); err != nil {
@@ -351,14 +364,29 @@ func dataSetsCollection(msc *MongoStoreClient) *mongo.Collection {
 // generateMongoQuery takes in a number of parameters and constructs a mongo query
 // to retrieve objects from the Tidepool database. It is used by the router.Add("GET", "/{userID}"
 // endpoint, which implements the Tide-whisperer API. See that function for further documentation
-// on parameters
-func generateMongoQuery(p *Params) bson.M {
-
+// on parameters p.
+// targetDeviceDataSets should be true if the target collection for the query
+// "deviceDataSets" as opposed to "deviceData", though leaving it false while
+// querying against deviceDataSets should result in a semantically equivalent
+// (though not necessarily equal) query. targetDeviceDataSets is used to define
+// queries differently for query optimization reasons, e.g., deviceDataSets
+// always being of type "upload" makes certain type filters
+// unnecessary/redundant. To guard against incorrect results, even if the user
+// uses the returned querying with false for targetDeviceDataSets, the returned
+// query should still be equivalent (even if it has some redundant filters).
+// Because of that, inequality type filters `{type: $ne:{ ...}}` / `{$type:
+// $nin:{...}}` can be removed if targetDeviceDataSets but equality type
+// filters `{type: $in: {...}}` `{$type: ...}` must remain.
+func generateMongoQuery(p *Params, targetDeviceDataSets bool) bson.M {
 	groupDataQuery := bson.M{
 		"_userId": p.UserID,
 		"_active": true}
 
-	//if optional parameters are present, then add them to the query
+	// If optional parameters are present, then add them to the query.
+	// If targetDeviceDataSets is true, the type filter will just not
+	// match anything in deviceDataSets but this filter should remain here in
+	// case the caller runs this query against the deviceDataSets collection w/o
+	// setting setting targetDeviceDataSets.
 	if len(p.Types) > 0 && p.Types[0] != "" {
 		groupDataQuery["type"] = bson.M{"$in": p.Types}
 	}
@@ -419,7 +447,10 @@ func generateMongoQuery(p *Params) bson.M {
 			}
 
 			if len(cloudQuery) > 0 {
-				cloudQuery = append(cloudQuery, bson.M{"type": bson.M{"$ne": "cbg"}})
+				// type $ne is redundant if target collection is deviceDataSets
+				if !targetDeviceDataSets {
+					cloudQuery = append(cloudQuery, bson.M{"type": bson.M{"$ne": "cbg"}})
+				}
 				andQuery = append(andQuery, bson.M{"$or": cloudQuery})
 			}
 		}
@@ -431,8 +462,11 @@ func generateMongoQuery(p *Params) bson.M {
 			}
 			medtronicQuery := []bson.M{
 				{"time": bson.M{"$lt": medtronicDateTime}},
-				{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}},
 				{"uploadId": bson.M{"$nin": p.MedtronicUploadIds}},
+			}
+			// type $nin is redundant if target collection is deviceDataSets
+			if !targetDeviceDataSets {
+				medtronicQuery = append(medtronicQuery, bson.M{"type": bson.M{"$nin": []string{"basal", "bolus", "cbg"}}})
 			}
 			andQuery = append(andQuery, bson.M{"$or": medtronicQuery})
 		}
@@ -441,12 +475,15 @@ func generateMongoQuery(p *Params) bson.M {
 	var orQueries []bson.M
 
 	if p.SampleIntervalMinimum > 0 {
+		sampleOrQueries := []bson.M{
+			{"sampleInterval": bson.M{"$exists": false}},
+			{"sampleInterval": bson.M{"$gte": p.SampleIntervalMinimum}},
+		}
+		if !targetDeviceDataSets {
+			sampleOrQueries = append(sampleOrQueries, bson.M{"type": bson.M{"$ne": "cbg"}})
+		}
 		orQueries = append(orQueries, bson.M{
-			"$or": []bson.M{
-				{"type": bson.M{"$ne": "cbg"}},
-				{"sampleInterval": bson.M{"$exists": false}},
-				{"sampleInterval": bson.M{"$gte": p.SampleIntervalMinimum}},
-			},
+			"$or": sampleOrQueries,
 		})
 	}
 
@@ -472,6 +509,14 @@ func generateMongoQuery(p *Params) bson.M {
 	}
 
 	return groupDataQuery
+}
+
+func generateDeviceDataSetsMongoQuery(p *Params) bson.M {
+	return generateMongoQuery(p, true)
+}
+
+func generateDeviceDataMongoQuery(p *Params) bson.M {
+	return generateMongoQuery(p, false)
 }
 
 // Ping the MongoDB database
@@ -654,7 +699,7 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 		var err error
 
 		for _, theType := range typeRanges {
-			query := generateMongoQuery(p)
+			query := generateMongoQuery(p, theType == "upload")
 			query["type"] = theType
 			opts := options.FindOne().SetProjection(removeFieldsForReturn).SetSort(bson.M{"time": -1})
 			// collections to search. stop at first collection that has data.
@@ -681,23 +726,23 @@ func (c *MongoStoreClient) GetDeviceData(p *Params) (StorageIterator, error) {
 
 	opts := options.Find().SetProjection(removeFieldsForReturn)
 
-	mongoQuery := generateMongoQuery(p)
-
 	// If query only needs to read from one collection use the collection directly.
 	switch {
 	case len(p.Types) == 1 && p.Types[0] == "upload":
+		mongoQuery := generateDeviceDataSetsMongoQuery(p)
 		return dataSetsCollection(c).Find(c.context, mongoQuery, opts)
 	// Have to check for empty string as sometimes that is the type sent.
 	case len(p.Types) > 0 && !contains("upload", p.Types) && p.Types[0] != "":
+		mongoQuery := generateDeviceDataMongoQuery(p)
 		return dataCollection(c).Find(c.context, mongoQuery, opts)
 	}
 
 	// Otherwise query needs to read from both deviceData and deviceDataSets collection.
-	dataIter, err := dataCollection(c).Find(c.context, mongoQuery, opts)
+	dataIter, err := dataCollection(c).Find(c.context, generateDeviceDataMongoQuery(p), opts)
 	if err != nil {
 		return nil, err
 	}
-	dataSetIter, err := dataSetsCollection(c).Find(c.context, mongoQuery, opts)
+	dataSetIter, err := dataSetsCollection(c).Find(c.context, generateDeviceDataSetsMongoQuery(p), opts)
 	if err != nil {
 		return nil, err
 	}
