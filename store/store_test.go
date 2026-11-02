@@ -124,11 +124,11 @@ func allParams() *Params {
 				"latestDataTime":   primitive.NewDateTimeFromTime(latestDataTime.Add(-24 * time.Hour)),
 			},
 			{
-				"dataSetIds":       primitive.A{"789"},
+				"dataSetId":        "789",
 				"earliestDataTime": primitive.NewDateTimeFromTime(earliestDataTime.Add(30 * time.Hour)),
 			},
 			{
-				"dataSetIds": primitive.A{"ABC"},
+				"dataSetId": "ABC",
 			},
 			{
 				"dataSetIds":     primitive.A{"DEF"},
