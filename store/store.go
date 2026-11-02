@@ -395,24 +395,28 @@ func generateMongoQuery(p *Params) bson.M {
 		groupDataQuery["uploadId"] = p.UploadID
 	} else {
 		if p.CBGFilter {
-			cloudDataSetIds := primitive.A{}
+			cloudDataSetIDs := primitive.A{}
 			cloudDataTimeRanges := []bson.M{}
 			for _, dataSource := range p.CBGCloudDataSources {
-				if dataSetIds, ok := dataSource["dataSetIds"].(primitive.A); ok && len(dataSetIds) > 0 {
-					cloudDataSetIds = append(cloudDataSetIds, dataSetIds...)
-					if earliestDataTime, ok := dataSource["earliestDataTime"].(primitive.DateTime); ok {
-						if latestDataTime, ok := dataSource["latestDataTime"].(primitive.DateTime); ok {
-							cloudDataTimeRanges = append(cloudDataTimeRanges, bson.M{
-								"time": bson.M{"$gte": earliestDataTime.Time().UTC(), "$lte": latestDataTime.Time().UTC()},
-							})
-						}
+				if dataSetID, ok := dataSource["dataSetId"].(string); ok && len(dataSetID) > 0 {
+					cloudDataSetIDs = append(cloudDataSetIDs, dataSetID)
+				} else if dataSetIDs, ok := dataSource["dataSetIds"].(primitive.A); ok && len(dataSetIDs) > 0 {
+					cloudDataSetIDs = append(cloudDataSetIDs, dataSetIDs...)
+				} else {
+					continue
+				}
+				if earliestDataTime, ok := dataSource["earliestDataTime"].(primitive.DateTime); ok {
+					if latestDataTime, ok := dataSource["latestDataTime"].(primitive.DateTime); ok {
+						cloudDataTimeRanges = append(cloudDataTimeRanges, bson.M{
+							"time": bson.M{"$gte": earliestDataTime.Time().UTC(), "$lte": latestDataTime.Time().UTC()},
+						})
 					}
 				}
 			}
 
 			cloudQuery := []bson.M{}
-			if len(cloudDataSetIds) > 0 {
-				cloudQuery = append(cloudQuery, bson.M{"uploadId": bson.M{"$in": cloudDataSetIds}})
+			if len(cloudDataSetIDs) > 0 {
+				cloudQuery = append(cloudQuery, bson.M{"uploadId": bson.M{"$in": cloudDataSetIDs}})
 			}
 			if len(cloudDataTimeRanges) > 0 {
 				cloudQuery = append(cloudQuery, bson.M{"$nor": cloudDataTimeRanges})
@@ -523,10 +527,19 @@ func (c *MongoStoreClient) GetCBGCloudDataSources(userID string) ([]bson.M, erro
 	// so if they exist, the must be set to something, even if 0 (ie Unix epoch)
 	query := bson.M{
 		"userId": userID,
-		"dataSetIds": bson.M{
-			"$exists": true,
-			"$not": bson.M{
-				"$size": 0,
+		"$or": bson.A{
+			bson.M{
+				"dataSetId": bson.M{
+					"$exists": true,
+				},
+			},
+			bson.M{
+				"dataSetIds": bson.M{
+					"$exists": true,
+					"$not": bson.M{
+						"$size": 0,
+					},
+				},
 			},
 		},
 	}
